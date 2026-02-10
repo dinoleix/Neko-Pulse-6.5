@@ -1,0 +1,116 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- HELPER FUNCTIONS ---
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isManager() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/managers/$(request.auth.uid));
+    }
+
+    function isOwner(userIdField) {
+      return isAuthenticated() && request.resource.data[userIdField] == request.auth.uid;
+    }
+
+    // --- RULES ---
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /managers/{managerId} {
+      allow read: if isManager() || (isAuthenticated() && request.auth.uid == managerId);
+      allow write: if isManager(); 
+    }
+
+    match /crew/{crewId} {
+      allow read: if isManager() || (isAuthenticated() && request.auth.uid == crewId);
+      allow write: if isManager();
+    }
+
+    match /roles/{roleId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+
+    match /stores/{storeId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+
+    match /validations/{orderId} {
+      allow read: if isAuthenticated();
+      allow create: if isManager() || isOwner('validatedByCrewId');
+      allow update, delete: if isManager();
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+    match /taskTemplates/{templateId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+
+    match /taskLogs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isManager() || isOwner('crewId');
+      allow update: if isManager() || (isAuthenticated() && resource.data.crewId == request.auth.uid);
+      allow delete: if isManager();
+    }
+
+    match /attendanceLogs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isManager() || isOwner('crewId');
+      allow update, delete: if isManager();
+    }
+
+    match /leaveRequests/{requestId} {
+      allow read: if isAuthenticated();
+      allow create: if isManager() || isOwner('crewId');
+      allow update, delete: if isManager() || (isAuthenticated() && resource.data.crewId == request.auth.uid);
+    }
+
+    match /shifts/{shiftId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+    match /shiftAssignments/{assignId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+    
+    match /cafeHolidays/{holidayId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+
+    match /settings/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+    
+    match /eom_cycles/{docId} { allow read: if isAuthenticated(); allow write: if isManager(); }
+    match /eom_votes/{docId} { 
+      allow read: if isAuthenticated(); 
+      allow create: if isManager() || isOwner('voterId');
+    }
+    match /eom_scores/{docId} { allow read: if isAuthenticated(); allow write: if isManager(); }
+    
+    match /managerMeetings/{docId} { allow read: if isManager(); allow write: if isManager(); }
+    match /managerActionItems/{docId} { allow read: if isManager(); allow write: if isManager(); }
+    match /managerRecurringAgenda/{docId} { allow read: if isManager(); allow write: if isManager(); }
+
+    // NEW: Bluebook rules
+    match /bluebook_items/{itemId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+  }
+}

@@ -1,0 +1,72 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    
+    <!-- PWA Settings -->
+    <meta name="theme-color" content="#10b981" />
+    <meta name="description" content="Neko Pulse - Cafe Order Accuracy & Management System" />
+    
+    <!-- IDs added here for Dynamic Branding script -->
+    <link rel="manifest" id="app-manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" id="apple-icon" href="https://cdn-icons-png.flaticon.com/512/3050/3050257.png">
+    <link rel="icon" id="favicon" href="https://cdn-icons-png.flaticon.com/512/3050/3050257.png">
+    
+    <title>Neko Pulse</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #ecfdf5; /* emerald-50 */
+        -webkit-tap-highlight-color: transparent;
+      }
+      /* Custom scrollbar for chic look */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #a7f3d0; /* emerald-200 */
+        border-radius: 3px;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "recharts": "https://aistudiocdn.com/recharts@^3.4.1",
+    "date-fns": "https://aistudiocdn.com/date-fns@^4.1.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
+    "jsqr": "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/+esm",
+    "face-api.js": "https://aistudiocdn.com/face-api.js@^0.22.2"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+              console.log('SW registered: ', registration);
+            })
+            .catch(registrationError => {
+              console.log('SW registration failed: ', registrationError);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>

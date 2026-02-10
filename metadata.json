@@ -1,0 +1,7 @@
+{
+  "name": "Neko Pulse 6,5",
+  "description": "Restart work for improvements",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
