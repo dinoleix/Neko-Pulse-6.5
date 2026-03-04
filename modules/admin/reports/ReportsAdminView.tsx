@@ -536,7 +536,7 @@ export const ReportsAdminView: React.FC = () => {
                                                     <th className="p-3 text-left">Rank</th>
                                                     <th className="p-3 text-left">Employee</th>
                                                     <th className="p-3 text-center">Incidents ≤ 10m</th>
-                                                    <th className="p-3 text-center">Incidents > 10m</th>
+                                                    <th className="p-3 text-center">Incidents {'>'} 10m</th>
                                                     <th className="p-3 text-center">Total Late Time</th>
                                                 </tr>
                                             </thead>

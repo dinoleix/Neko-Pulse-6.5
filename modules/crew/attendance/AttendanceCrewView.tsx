@@ -1,12 +1,14 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { db } from '../../../firebaseConfig';
+// @fix: Added firebase to imports to fix "Cannot find name 'firebase'" error on line 174
+import { db, firebase } from '../../../firebaseConfig';
 import { attendanceService } from '../../../services/attendanceService';
 import { CurrentUser, AttendanceLog, LeaveRequest, ShiftAssignment, CrewMember, AttendanceConfig } from '../../../types';
 import { Button, Card, Input, Badge, Select, TextArea } from '../../../components/SharedComponents';
 import { QrCode, Camera, LogIn, LogOut, XCircle, Plus, Info, Calendar } from 'lucide-react';
-import { format, differenceInMinutes } from 'date-fns';
+import { format, differenceInMinutes, startOfDay, differenceInDays } from 'date-fns';
 import jsQR from 'jsqr';
-import { formatInTimeZone, getShiftedDate, DEFAULT_TIMEZONE } from '../../../utils/dateFormatter';
+import { formatInTimeZone, getShiftedDate, isTodayInTimeZone, DEFAULT_TIMEZONE } from '../../../utils/dateFormatter';
 
 export const AttendanceCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUser }) => {
    const [activeTab, setActiveTab] = useState<'LOGS' | 'LEAVES'>('LOGS');
@@ -29,6 +31,7 @@ export const AttendanceCrewView: React.FC<{ currentUser: CurrentUser }> = ({ cur
    const [isScanning, setIsScanning] = useState(false);
    const videoRef = useRef<HTMLVideoElement>(null);
    const scanIntervalRef = useRef<any>(null);
+   const isProcessingRef = useRef(false);
 
    useEffect(() => {
       attendanceService.getAppConfig().then(cfg => {
@@ -42,16 +45,19 @@ export const AttendanceCrewView: React.FC<{ currentUser: CurrentUser }> = ({ cur
    }, [currentUser]);
 
    const loadData = async () => {
-       const dbId = currentUser.dbId;
        const uid = currentUser.uid;
-       const targetId = dbId || uid;
+       const dbId = currentUser.dbId;
+       
+       // We'll try to fetch logs for both UID and DBID to be safe during migration
+       // but primarily we should move towards using UID for ownership-based records
+       const targetId = uid; 
 
        try {
            const [logsData, leavesData, shiftsData, crewData] = await Promise.all([
-               attendanceService.getCrewLogs(targetId),
-               attendanceService.getCrewLeaves(targetId),
+               attendanceService.getCrewLogs(uid, 20, dbId),
+               attendanceService.getCrewLeaves(uid, 20, dbId),
                attendanceService.getCrewShifts(dbId, uid),
-               db.collection('crew').doc(targetId).get()
+               db.collection('crew').doc(dbId || uid).get()
            ]);
 
            setLogs(logsData);
@@ -67,6 +73,7 @@ export const AttendanceCrewView: React.FC<{ currentUser: CurrentUser }> = ({ cur
 
    // --- SCANNER LOGIC ---
    const startScanner = async () => {
+       isProcessingRef.current = false;
        setIsScanning(true);
        setScanStatus("Camera Starting...");
        try {
@@ -85,22 +92,36 @@ export const AttendanceCrewView: React.FC<{ currentUser: CurrentUser }> = ({ cur
                scanIntervalRef.current = setInterval(() => {
                    if (!videoRef.current) return;
                    const canvas = document.createElement('canvas');
-                   canvas.width = videoRef.current.videoWidth;
-                   canvas.height = videoRef.current.videoHeight;
+                   // Downscale for performance
+                   const scale = Math.min(1, 640 / videoRef.current.videoWidth);
+                   canvas.width = videoRef.current.videoWidth * scale;
+                   canvas.height = videoRef.current.videoHeight * scale;
+                   
                    if (canvas.width === 0) return;
                    const ctx = canvas.getContext('2d');
                    if (!ctx) return;
                    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                   const decoder = (jsQR as any).default || jsQR;
-                   if (decoder) {
+                   
+                   // Robust decoder detection
+                   let decoder = jsQR;
+                   if ((jsQR as any).default) decoder = (jsQR as any).default;
+                   
+                   if (decoder && typeof decoder === 'function') {
                        const code = decoder(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
-                       if (code) handleScanResult(code.data);
-                       else setScanStatus("Scanning...");
+                       if (code) {
+                           handleScanResult(code.data);
+                       } else {
+                           setScanStatus("Scanning...");
+                       }
+                   } else {
+                       console.error("jsQR decoder not found or not a function", decoder, jsQR);
+                       setScanStatus("Scanner Error: jsQR missing");
                    }
                }, 500);
            }
        } catch (e) {
+           console.error("Camera Access Error:", e);
            alert("Could not access camera.");
            setIsScanning(false);
        }
@@ -115,49 +136,120 @@ export const AttendanceCrewView: React.FC<{ currentUser: CurrentUser }> = ({ cur
    };
 
    const handleScanResult = async (data: string) => {
+       if (isProcessingRef.current) return;
+       
        try {
+           console.log("QR Data detected:", data);
            const payload = JSON.parse(data);
            if (payload.type === 'NEKO_KIOSK_AUTH' && payload.timestamp) {
                if (Math.abs(Date.now() - payload.timestamp) > 60000) {
                    setScanStatus("Expired QR. Refresh Kiosk.");
                    return;
                }
-               stopScanner();
+               
+               isProcessingRef.current = true;
+               setScanStatus("QR Recognized! Processing...");
+               
                await logAttendance(payload.outletId);
+               stopScanner();
+           } else {
+               setScanStatus("Invalid Neko QR");
            }
-       } catch (e) {}
+       } catch (e) {
+           console.error("QR Parse Error:", e);
+           setScanStatus("Scan Error: Invalid QR format");
+           isProcessingRef.current = false;
+       }
    };
 
    const logAttendance = async (outletId: string) => {
-       const targetId = currentUser.dbId || currentUser.uid;
+       const uid = currentUser.uid;
+       const dbId = currentUser.dbId;
        
-       // Option 1: 5-minute cooldown guardrail
-       if (logs.length > 0) {
-           const lastLogTime = logs[0].timestamp?.toDate ? logs[0].timestamp.toDate() : new Date();
-           if (differenceInMinutes(new Date(), lastLogTime) < 5) {
-               alert("Already logged recently! Please wait 5 minutes between check-in/out actions.");
-               return;
-           }
-       }
-
-       let type: 'CHECK_IN' | 'CHECK_OUT' = 'CHECK_IN';
-       if (logs.length > 0 && logs[0].type === 'CHECK_IN') {
-           const lastTime = logs[0].timestamp?.toDate ? logs[0].timestamp.toDate() : new Date();
-           if (differenceInMinutes(new Date(), lastTime) < 960) type = 'CHECK_OUT';
-       }
-
+       console.log("Logging attendance (16h mode) for UID:", uid, "DBID:", dbId);
+       
        try {
-           await attendanceService.logAttendance({
-               crewId: targetId,
-               crewName: currentUser.name,
-               outletId: outletId,
-               type: type,
-               method: 'QR_SCAN', 
-           });
+           setScanStatus("Processing...");
+           
+           // Fetch last 5 logs to determine state
+           const recentLogs = await attendanceService.getCrewLogs(uid, 5, dbId);
+           
+           // 5-minute cooldown guardrail
+           if (recentLogs.length > 0) {
+               const lastLog = recentLogs[0];
+               const lastLogTime = lastLog.timestamp?.toDate ? lastLog.timestamp.toDate() : new Date(lastLog.timestamp);
+               if (differenceInMinutes(new Date(), lastLogTime) < 5) {
+                   setScanStatus("Cooldown active (5m)");
+                   alert("Already scanned recently! Please wait 5 minutes between actions.");
+                   return;
+               }
+           }
+
+           let type: 'CHECK_IN' | 'CHECK_OUT' = 'CHECK_IN';
+           let docToUpdateId: string | null = null;
+
+           if (recentLogs.length > 0) {
+               const lastLog = recentLogs[0];
+               const lastLogTime = lastLog.timestamp?.toDate ? lastLog.timestamp.toDate() : new Date(lastLog.timestamp);
+               const minsSinceLast = differenceInMinutes(new Date(), lastLogTime);
+
+               if (lastLog.type === 'CHECK_IN') {
+                   // If last was IN and < 14 hours ago, this is an OUT
+                   if (minsSinceLast < 840) {
+                       type = 'CHECK_OUT';
+                   } else {
+                       // Forgot to check out for > 14 hours, start new IN
+                       type = 'CHECK_IN';
+                   }
+               } else if (lastLog.type === 'CHECK_OUT') {
+                   // If last was OUT, check the IN that preceded it
+                   const precedingIn = recentLogs.find(l => l.type === 'CHECK_IN');
+                   if (precedingIn) {
+                       const inTime = precedingIn.timestamp?.toDate ? precedingIn.timestamp.toDate() : new Date(precedingIn.timestamp);
+                       // If the original check-in was < 14 hours ago, update the existing OUT (Last-Out logic)
+                       if (differenceInMinutes(new Date(), inTime) < 840) {
+                           type = 'CHECK_OUT';
+                           docToUpdateId = lastLog.id!;
+                       }
+                   }
+               }
+           }
+
+           setScanStatus("Saving to database...");
+
+           if (docToUpdateId) {
+               try {
+                   await db.collection('attendanceLogs').doc(docToUpdateId).update({
+                       timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                       method: 'QR_SCAN'
+                   });
+               } catch (updateErr: any) {
+                   console.warn("Update failed, creating new log instead.");
+                   await attendanceService.logAttendance({
+                       crewId: uid,
+                       crewName: currentUser.name,
+                       outletId: outletId,
+                       type: type,
+                       method: 'QR_SCAN', 
+                   });
+               }
+           } else {
+               await attendanceService.logAttendance({
+                   crewId: uid,
+                   crewName: currentUser.name,
+                   outletId: outletId,
+                   type: type,
+                   method: 'QR_SCAN', 
+               });
+           }
+           
+           setScanStatus("Success!");
            alert(type === 'CHECK_IN' ? "Welcome! Checked In." : "Goodbye! Checked Out.");
            loadData();
-       } catch (e) {
-           alert("Failed to log attendance.");
+       } catch (e: any) {
+           console.error("Attendance Log Error:", e);
+           setScanStatus("Error saving log");
+           alert("Failed to log attendance: " + (e.message || "Unknown error"));
        }
    };
 
@@ -166,6 +258,17 @@ export const AttendanceCrewView: React.FC<{ currentUser: CurrentUser }> = ({ cur
            alert("Please fill all fields");
            return;
        }
+
+       // 3-day advance notice rule
+       const today = startOfDay(new Date());
+       const start = startOfDay(new Date(newLeave.startDate));
+       const diff = differenceInDays(start, today);
+       
+       if (diff < 3) {
+           alert("Leave requests must be submitted at least 3 days in advance. Please contact your manager for urgent requests.");
+           return;
+       }
+
        setIsLoading(true);
        try {
            await attendanceService.submitLeave({

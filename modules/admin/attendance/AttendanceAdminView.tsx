@@ -89,6 +89,17 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
    // PIN Restriction State
    const [pinSearchQuery, setPinSearchQuery] = useState('');
 
+   // Admin Log Leave State
+   const [isLoggingLeave, setIsLoggingLeave] = useState(false);
+   const [adminLeave, setAdminLeave] = useState<Partial<LeaveRequest>>({
+      crewId: '',
+      type: 'CASUAL',
+      startDate: '',
+      endDate: '',
+      reason: ''
+   });
+   const [isSubmittingAdminLeave, setIsSubmittingAdminLeave] = useState(false);
+
    useEffect(() => { loadData(); }, []);
    useEffect(() => { if (activeTab === 'REPORT') generateReport(); }, [activeTab, reportFilter, selectedEmployee, logs, assignments, timezone]);
 
@@ -287,6 +298,37 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
        const current = [...(kioskConfig.permittedPinCrewIds || [])];
        const updated = current.includes(id) ? current.filter(cid => cid !== id) : [...current, id];
        setKioskConfig({ ...kioskConfig, permittedPinCrewIds: updated });
+   };
+
+   const submitAdminLeave = async () => {
+       if (!adminLeave.crewId || !adminLeave.startDate || !adminLeave.endDate || !adminLeave.reason) {
+           alert("Please fill all fields");
+           return;
+       }
+       const employee = crew.find(c => c.id === adminLeave.crewId);
+       if (!employee) return;
+
+       setIsSubmittingAdminLeave(true);
+       try {
+           await attendanceService.submitLeave({
+               crewId: employee.id!,
+               crewName: employee.crewName,
+               outletId: employee.outletId,
+               type: adminLeave.type as any,
+               startDate: adminLeave.startDate!,
+               endDate: adminLeave.endDate!,
+               reason: adminLeave.reason!,
+               status: 'APPROVED'
+           });
+           setIsLoggingLeave(false);
+           setAdminLeave({ crewId: '', type: 'CASUAL', startDate: '', endDate: '', reason: '' });
+           loadData();
+           alert("Leave logged successfully");
+       } catch (e) {
+           alert("Error logging leave");
+       } finally {
+           setIsSubmittingAdminLeave(false);
+       }
    };
 
    const crewWithOverrides = crew.filter(c => c.leaveBalanceOverride !== undefined && c.leaveBalanceOverride !== null);
@@ -698,6 +740,62 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
 
          {activeTab === 'DASHBOARD' && (
             <div className="space-y-6 animate-in fade-in">
+               <div className="flex justify-end">
+                  <Button 
+                    variant={isLoggingLeave ? "secondary" : "primary"}
+                    className="!w-auto" 
+                    onClick={() => setIsLoggingLeave(!isLoggingLeave)}
+                  >
+                     {isLoggingLeave ? <X className="w-4 h-4 mr-2"/> : <Plus className="w-4 h-4 mr-2"/>}
+                     {isLoggingLeave ? "Cancel Logging" : "Log Leave on Behalf"}
+                  </Button>
+               </div>
+
+               {isLoggingLeave && (
+                  <Card title="Log Leave for Staff" className="border-2 border-indigo-500 animate-in slide-in-from-top-4">
+                     <div className="grid md:grid-cols-3 gap-4">
+                        <div>
+                           <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Employee</label>
+                           <Select value={adminLeave.crewId} onChange={e => setAdminLeave({...adminLeave, crewId: e.target.value})}>
+                              <option value="">Select Employee...</option>
+                              {crew.filter(c => c.active).map(c => <option key={c.id} value={c.id}>{c.crewName}</option>)}
+                           </Select>
+                        </div>
+                        <div>
+                           <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Leave Type</label>
+                           <Select value={adminLeave.type} onChange={e => setAdminLeave({...adminLeave, type: e.target.value as any})}>
+                              <option value="CASUAL">Casual Leave</option>
+                              <option value="SICK">Sick Leave</option>
+                              <option value="VACATION">Vacation</option>
+                           </Select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                           <div>
+                              <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">From</label>
+                              <Input type="date" value={adminLeave.startDate} onChange={e => setAdminLeave({...adminLeave, startDate: e.target.value})} />
+                           </div>
+                           <div>
+                              <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">To</label>
+                              <Input type="date" value={adminLeave.endDate} onChange={e => setAdminLeave({...adminLeave, endDate: e.target.value})} />
+                           </div>
+                        </div>
+                     </div>
+                     <div className="mt-4">
+                        <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Reason / Manager Note</label>
+                        <TextArea 
+                           placeholder="Reason for logging on behalf..." 
+                           value={adminLeave.reason} 
+                           onChange={e => setAdminLeave({...adminLeave, reason: e.target.value})} 
+                        />
+                     </div>
+                     <div className="mt-4 flex justify-end">
+                        <Button className="!w-auto" onClick={submitAdminLeave} isLoading={isSubmittingAdminLeave}>
+                           Confirm & Log Leave
+                        </Button>
+                     </div>
+                  </Card>
+               )}
+
                <div className="grid md:grid-cols-2 gap-6">
                   <Card title="Today's Logs">
                      <div className="max-h-[300px] overflow-y-auto">

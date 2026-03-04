@@ -858,7 +858,8 @@ export const TaskAdminView: React.FC = () => {
                               <Select value={newTask.outletId} onChange={e => setNewTask({...newTask, outletId: e.target.value, assignedCrewIds: []})}>
                                  <option value="">Select a Store</option>
                                  {stores.map(s => (
-                                    <option key={s.id} value={s.outletId}>{s.name} ({s.outletId})</option>)}
+                                    <option key={s.id} value={s.outletId}>{s.name} ({s.outletId})</option>
+                                 ))}
                               </Select>
                            </div>
                            {newTask.outletId && (

@@ -66,7 +66,7 @@ export const SettingsAdminView: React.FC = () => {
         setCutoffDate(cutoff);
 
         try {
-            let query = db.collection(config.id);
+            let query: any = db.collection(config.id);
             
             if (config.type === 'TIMESTAMP') {
                 query = query.where(config.dateField, '<', cutoff);

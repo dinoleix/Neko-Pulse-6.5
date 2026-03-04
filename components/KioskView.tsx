@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { db, storage, firebase, auth } from '../firebaseConfig';
 import { AttendanceConfig, CrewMember, AttendanceLog, CurrentUser } from '../types';
 import { Clock, RefreshCw, LogIn, LogOut, XCircle, ChevronLeft, Lock, ShieldCheck, Grid3x3, MapPin } from 'lucide-react';
-import { format, differenceInMinutes } from 'date-fns';
+import { format, differenceInMinutes, startOfDay } from 'date-fns';
 import { Input, Button } from './SharedComponents';
 import { getShiftedDate, DEFAULT_TIMEZONE } from '../utils/dateFormatter';
 
@@ -139,47 +139,63 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
           return;
       }
       
-      // 3. Determine IN or OUT
-      const logSnap = await db.collection('attendanceLogs').where('crewId', '==', user.id).get();
+      // 3. Determine IN or OUT for TODAY (First-In, Last-Out)
+      const nowInTz = getShiftedDate(new Date(), timezone);
+      const startOfToday = startOfDay(nowInTz);
       
+      const logSnap = await db.collection('attendanceLogs')
+          .where('crewId', '==', user.id)
+          .where('timestamp', '>=', startOfToday)
+          .get();
+      
+      const todayLogs = logSnap.docs.map(d => ({ ...d.data(), id: d.id } as AttendanceLog));
+      // Sort by timestamp asc
+      todayLogs.sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
+
+      const existingIn = todayLogs.find(l => l.type === 'CHECK_IN');
+      const existingOut = todayLogs.find(l => l.type === 'CHECK_OUT');
+
       let type: 'CHECK_IN' | 'CHECK_OUT' = 'CHECK_IN';
-      if (!logSnap.empty) {
-         const logsList = logSnap.docs.map(d => d.data() as AttendanceLog);
-         logsList.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-         const lastLog = logsList[0];
-         const lastTime = lastLog.timestamp?.toDate ? lastLog.timestamp.toDate() : new Date();
+      let docToUpdateId: string | null = null;
 
-         // Option 1: 5-minute cooldown guardrail
-         if (differenceInMinutes(new Date(), lastTime) < 5) {
-             setMessage("Double scan detected. Please wait 5 minutes.");
-             setMode('ERROR');
-             setTimeout(() => {
-                  setMode('PIN');
-                  setIdentifiedUser(null);
-             }, 3000);
-             return;
-         }
+      if (existingIn) {
+          type = 'CHECK_OUT';
+          
+          // Cooldown check against the last scan of any type today
+          const lastLog = todayLogs[todayLogs.length - 1];
+          const lastTime = lastLog.timestamp?.toDate ? lastLog.timestamp.toDate() : new Date();
+          if (differenceInMinutes(new Date(), lastTime) < 5) {
+              setMessage("Please wait 5 mins between scans.");
+              setMode('ERROR');
+              setTimeout(() => { setMode('PIN'); setIdentifiedUser(null); }, 3000);
+              return;
+          }
 
-        if (lastLog.type === 'CHECK_IN') {
-           const now = new Date();
-           const diffHours = (now.getTime() - lastTime.getTime()) / (1000 * 60 * 60);
-           if (diffHours < 16) {
-              type = 'CHECK_OUT';
-           }
-        }
+          if (existingOut) {
+              // We have both IN and OUT. We update the OUT to the new "Last Scan".
+              docToUpdateId = existingOut.id!;
+          }
       }
+
       setAttendanceType(type);
       setIdentifiedUser(user);
 
-      // 4. Save Log
-      await db.collection('attendanceLogs').add({
-        crewId: user.id,
-        crewName: user.crewName,
-        outletId: defaultOutletId || 'Unknown',
-        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-        type: type,
-        method: 'PIN', 
-      });
+      // 4. Save or Update Log
+      if (docToUpdateId) {
+          await db.collection('attendanceLogs').doc(docToUpdateId).update({
+              timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+              method: 'PIN'
+          });
+      } else {
+          await db.collection('attendanceLogs').add({
+            crewId: user.id,
+            crewName: user.crewName,
+            outletId: defaultOutletId || 'Unknown',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            type: type,
+            method: 'PIN', 
+          });
+      }
 
       setMode('SUCCESS');
       

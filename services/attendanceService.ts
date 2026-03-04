@@ -105,12 +105,24 @@ export const attendanceService = {
     },
 
     // --- CREW: SPECIFIC FETCHING ---
-    getCrewLogs: async (crewId: string, limit: number = 20): Promise<AttendanceLog[]> => {
-        const snap = await db.collection('attendanceLogs')
+    getCrewLogs: async (crewId: string, limit: number = 20, altId?: string): Promise<AttendanceLog[]> => {
+        let snap = await db.collection('attendanceLogs')
             .where('crewId', '==', crewId)
             .get();
             
         let logs = snap.docs.map(d => ({...d.data(), id: d.id} as AttendanceLog));
+
+        if (altId && altId !== crewId) {
+            const snap2 = await db.collection('attendanceLogs')
+                .where('crewId', '==', altId)
+                .get();
+            const logs2 = snap2.docs.map(d => ({...d.data(), id: d.id} as AttendanceLog));
+            // Merge and de-duplicate
+            const existingIds = new Set(logs.map(l => l.id));
+            logs2.forEach(l => {
+                if (!existingIds.has(l.id)) logs.push(l);
+            });
+        }
         
         logs.sort((a, b) => {
             const tA = a.timestamp?.seconds || 0;
@@ -121,12 +133,23 @@ export const attendanceService = {
         return logs.slice(0, limit);
     },
 
-    getCrewLeaves: async (crewId: string, limit: number = 20): Promise<LeaveRequest[]> => {
-        const snap = await db.collection('leaveRequests')
+    getCrewLeaves: async (crewId: string, limit: number = 20, altId?: string): Promise<LeaveRequest[]> => {
+        let snap = await db.collection('leaveRequests')
             .where('crewId', '==', crewId)
             .get();
             
         let leaves = snap.docs.map(d => ({...d.data(), id: d.id} as LeaveRequest));
+
+        if (altId && altId !== crewId) {
+            const snap2 = await db.collection('leaveRequests')
+                .where('crewId', '==', altId)
+                .get();
+            const leaves2 = snap2.docs.map(d => ({...d.data(), id: d.id} as LeaveRequest));
+            const existingIds = new Set(leaves.map(l => l.id));
+            leaves2.forEach(l => {
+                if (!existingIds.has(l.id)) leaves.push(l);
+            });
+        }
         
         leaves.sort((a, b) => {
             const tA = a.appliedAt?.seconds || 0;
