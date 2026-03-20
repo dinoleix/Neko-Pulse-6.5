@@ -34,16 +34,18 @@ export const DynamicBranding: React.FC = () => {
             const newManifest = {
               ...originalManifest,
               icons: [
-                {
-                  src: logoUrl,
-                  sizes: "192x192",
-                  type: "image/png" // Assuming PNG or JPEG, browser usually handles it
-                },
-                {
-                  src: logoUrl,
-                  sizes: "512x512",
-                  type: "image/png"
-                }
+                  {
+                    src: logoUrl,
+                    sizes: "192x192",
+                    type: "image/png",
+                    purpose: "any maskable"
+                  },
+                  {
+                    src: logoUrl,
+                    sizes: "512x512",
+                    type: "image/png",
+                    purpose: "any maskable"
+                  }
               ]
             };
 
