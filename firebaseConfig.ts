@@ -5,14 +5,14 @@ import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 import 'firebase/compat/storage';
 
-// Your web app's Firebase configuration
+// Firebase configuration — values loaded from .env.local (never commit credentials)
 export const firebaseConfig = {
-  apiKey: "AIzaSyDoZogEDkVR__NC8XDcSlG1QyR_LtulrJg",
-  authDomain: "order-accuracy-ce844.firebaseapp.com",
-  projectId: "order-accuracy-ce844",
-  storageBucket: "order-accuracy-ce844.firebasestorage.app",
-  messagingSenderId: "937707312616",
-  appId: "1:937707312616:web:7a43b01af87dfd4602005d"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 // Initialize Firebase
