@@ -4,7 +4,7 @@ import { db } from '../../../firebaseConfig';
 import { loginLogService } from '../../../services/loginLogService';
 import { LoginLog } from '../../../types';
 import { Card, Badge, Input, Select, Button } from '../../../components/SharedComponents';
-import { LogIn, RefreshCw, Search, Users, Activity, Shield, Smartphone } from 'lucide-react';
+import { LogIn, RefreshCw, Search, Users, Activity, Shield, Smartphone, MapPin } from 'lucide-react';
 import { formatInTimeZone, isTodayInTimeZone, DEFAULT_TIMEZONE } from '../../../utils/dateFormatter';
 
 export const LoginActivityAdminView: React.FC = () => {
@@ -117,7 +117,7 @@ export const LoginActivityAdminView: React.FC = () => {
                         <div className="col-span-3">User</div>
                         <div className="col-span-2">Role</div>
                         <div className="col-span-2">Outlet</div>
-                        <div className="col-span-2">Device</div>
+                        <div className="col-span-2">Device / Location</div>
                         <div className="col-span-3 text-right">When</div>
                     </div>
 
@@ -142,10 +142,18 @@ export const LoginActivityAdminView: React.FC = () => {
                             {/* Outlet */}
                             <div className="md:col-span-2 text-sm text-slate-600 truncate">{l.outletId || '—'}</div>
 
-                            {/* Device */}
-                            <div className="md:col-span-2 text-xs text-slate-500 flex items-center gap-1 truncate">
-                                <Smartphone className="w-3 h-3 flex-shrink-0 text-slate-300"/>
-                                <span className="truncate">{l.device || '—'}</span>
+                            {/* Device / Location */}
+                            <div className="md:col-span-2 text-xs text-slate-500 min-w-0">
+                                <div className="flex items-center gap-1 truncate">
+                                    <Smartphone className="w-3 h-3 flex-shrink-0 text-slate-300"/>
+                                    <span className="truncate">{l.device || '—'}</span>
+                                </div>
+                                {l.location && (
+                                    <div className="flex items-center gap-1 truncate text-[11px] text-slate-400 mt-0.5">
+                                        <MapPin className="w-3 h-3 flex-shrink-0 text-slate-300"/>
+                                        <span className="truncate">{l.location}</span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* When */}

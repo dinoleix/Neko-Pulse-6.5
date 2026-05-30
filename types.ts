@@ -391,6 +391,8 @@ export interface LoginLog {
   loginMethod: 'STAFF_CODE' | 'MANAGER_EMAIL';
   device?: string;       // Human-readable device summary
   userAgent?: string;    // Raw UA string for debugging
+  location?: string;     // Approximate IP-based location, e.g. "Imphal, Manipur, IN"
+  ip?: string;           // IP address the login came from
   timestamp: any;
 }
 
