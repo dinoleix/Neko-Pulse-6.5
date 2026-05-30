@@ -114,30 +114,29 @@ export const attendanceService = {
 
     // --- CREW: SPECIFIC FETCHING ---
     getCrewLogs: async (crewId: string, limit: number = 20, altId?: string): Promise<AttendanceLog[]> => {
-        let snap = await db.collection('attendanceLogs')
-            .where('crewId', '==', crewId)
+        // Server-side ordering + limit so we read at most `limit` docs (×2 if a
+        // legacy altId is also queried), instead of the crew member's whole history.
+        // Requires composite index: attendanceLogs (crewId ASC, timestamp DESC).
+        const fetch = (id: string) => db.collection('attendanceLogs')
+            .where('crewId', '==', id)
+            .orderBy('timestamp', 'desc')
+            .limit(limit)
             .get();
-            
-        let logs = snap.docs.map(d => ({...d.data(), id: d.id} as AttendanceLog));
 
-        if (altId && altId !== crewId) {
-            const snap2 = await db.collection('attendanceLogs')
-                .where('crewId', '==', altId)
-                .get();
-            const logs2 = snap2.docs.map(d => ({...d.data(), id: d.id} as AttendanceLog));
-            // Merge and de-duplicate
-            const existingIds = new Set(logs.map(l => l.id));
-            logs2.forEach(l => {
-                if (!existingIds.has(l.id)) logs.push(l);
-            });
-        }
-        
-        logs.sort((a, b) => {
-            const tA = a.timestamp?.seconds || 0;
-            const tB = b.timestamp?.seconds || 0;
-            return tB - tA;
-        });
-        
+        const snaps = await Promise.all(
+            altId && altId !== crewId ? [fetch(crewId), fetch(altId)] : [fetch(crewId)]
+        );
+
+        const seen = new Set<string>();
+        const logs: AttendanceLog[] = [];
+        snaps.forEach(snap => snap.docs.forEach(d => {
+            if (!seen.has(d.id)) {
+                seen.add(d.id);
+                logs.push({ ...d.data(), id: d.id } as AttendanceLog);
+            }
+        }));
+
+        logs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
         return logs.slice(0, limit);
     },
 

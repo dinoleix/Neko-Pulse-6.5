@@ -74,18 +74,15 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
                setCanViewRecipe(conf[MODULE_IDS.CREW_RECIPE] ? conf[MODULE_IDS.CREW_RECIPE].includes(role) : false);
             }
 
-            const crewSnap = await db.collection('crew').where('active', '==', true).get();
-            const today = new Date();
-            const m = today.getMonth() + 1;
-            const d = today.getDate();
-            
+            // Cheap birthday lookup: query only people whose birthday is today
+            // via the denormalized birthMMDD field (single-field index, ~0-2 reads)
+            // instead of reading the whole active-crew collection.
+            const todayMMDD = format(new Date(), 'MM-dd');
+            const crewSnap = await db.collection('crew').where('birthMMDD', '==', todayMMDD).get();
+
             const bdayMatches = crewSnap.docs
                 .map(doc => ({...doc.data(), id: doc.id} as CrewMember))
-                .filter(c => {
-                    if(!c.dateOfBirth) return false;
-                    const [y, bm, bd] = c.dateOfBirth.split('-').map(Number);
-                    return bm === m && bd === d;
-                });
+                .filter(c => c.active !== false);
             setBirthdays(bdayMatches);
 
             if (currentUser.outletId) {

@@ -299,6 +299,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
             outletId: newCrew.outletId,
             isMobile: newCrew.isMobile || false,
             dateOfBirth: newCrew.dateOfBirth || null,
+            birthMMDD: newCrew.dateOfBirth ? newCrew.dateOfBirth.slice(5, 10) : null,
             dateOfJoining: newCrew.dateOfJoining || null,
             dateOfLeaving: newCrew.dateOfLeaving || null,
             leaveBalanceOverride: leaveBalancePayload,

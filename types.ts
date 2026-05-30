@@ -111,7 +111,8 @@ export interface CrewMember {
   role?: string;
   gender?: 'Male' | 'Female' | 'Others';
   createdAt?: any;
-  dateOfBirth?: string;   
+  dateOfBirth?: string;
+  birthMMDD?: string;     // "MM-DD" derived from dateOfBirth, for cheap birthday lookups
   dateOfJoining?: string; 
   dateOfLeaving?: string; 
   documents?: CrewDocument[];
