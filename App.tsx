@@ -66,6 +66,14 @@ function App() {
             }
 
             if (userProfile) {
+                // Block accounts explicitly marked inactive, even on session restore.
+                if (userProfile.active === false) {
+                    console.warn("Inactive account session blocked.");
+                    await auth.signOut();
+                    setCurrentUser(null);
+                    setInit(false);
+                    return;
+                }
                 accessRole = userProfile.role;
                 outletId = userProfile.outletId;
                 name = userProfile.crewName;

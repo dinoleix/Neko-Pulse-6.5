@@ -77,8 +77,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
          throw new Error("Account exists but profile data is missing. Please ask an Admin to 'Regenerate Login' for this user in the Employee tab.");
       }
       
-      if (!userProfile.active) {
-         throw new Error("Account is inactive.");
+      if (userProfile.active === false) {
+         await auth.signOut();
+         throw new Error("Account is inactive. Please contact your administrator.");
       }
 
       const resolvedRole = foundInCollection === 'managers' ? UserRole.ADMIN : UserRole.CREW;
@@ -141,6 +142,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         }
 
         const managerData = managerDoc.data() as CrewMember;
+
+        if (managerData.active === false) {
+          await auth.signOut();
+          throw new Error("Account is inactive. Please contact your administrator.");
+        }
 
         loginLogService.record({
           userId: uid,
