@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '../firebaseConfig';
 import { Button } from './SharedComponents';
-import { LogOut, ArrowLeft, CheckCircle, ClipboardList, Users, Store as StoreIcon, ShieldCheck, CalendarClock, Calendar, Briefcase, Lock, FileBarChart, Trophy, MessageSquare, Settings as SettingsIcon, BookOpen, Camera, ChefHat, LogIn } from 'lucide-react';
+import { LogOut, ArrowLeft, CheckCircle, ClipboardList, Users, Store as StoreIcon, ShieldCheck, CalendarClock, Calendar, Briefcase, Lock, FileBarChart, Trophy, MessageSquare, Settings as SettingsIcon, BookOpen, ChefHat, LogIn } from 'lucide-react';
 import { MODULE_IDS, CurrentUser, AccessConfig } from '../types';
 import { OrderAdminView } from '../modules/admin/orders/OrderAdminView'; 
 import { TaskAdminView } from '../modules/admin/tasks/TaskAdminView'; 
@@ -17,7 +17,6 @@ import { EOMAdminView } from '../modules/admin/eom/EOMAdminView';
 import { ManagerMeetAdminView } from '../modules/admin/meetings/ManagerMeetAdminView'; 
 import { SettingsAdminView } from '../modules/admin/settings/SettingsAdminView';
 import { BluebookAdminView } from '../modules/admin/bluebook/BluebookAdminView';
-import { TableMonitorAdminView } from '../modules/admin/tablemonitor/TableMonitorAdminView';
 import { RecipeAdminView } from '../modules/admin/recipes/RecipeAdminView';
 import { LoginActivityAdminView } from '../modules/admin/loginactivity/LoginActivityAdminView';
 
@@ -84,7 +83,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
            {hasAccess(MODULE_IDS.SHIFTS) && <ModuleCard title="Shift Management" icon={<Calendar/>} color="bg-blue-500" onClick={() => setActiveModule(MODULE_IDS.SHIFTS)}/>}
            {hasAccess(MODULE_IDS.BLUEBOOK) && <ModuleCard title="Bluebook Training" icon={<BookOpen/>} color="bg-blue-700" onClick={() => setActiveModule(MODULE_IDS.BLUEBOOK)}/>}
            {hasAccess(MODULE_IDS.RECIPE) && <ModuleCard title="Kitchen Recipes" icon={<ChefHat/>} color="bg-orange-500" onClick={() => setActiveModule(MODULE_IDS.RECIPE)}/>}
-           {hasAccess(MODULE_IDS.TABLE_MONITOR) && <ModuleCard title="Table Monitor" icon={<Camera/>} color="bg-violet-500" onClick={() => setActiveModule(MODULE_IDS.TABLE_MONITOR)}/>}
            {hasAccess(MODULE_IDS.ATTENDANCE) && <ModuleCard title="Attendance" icon={<CalendarClock/>} color="bg-orange-500" onClick={() => setActiveModule(MODULE_IDS.ATTENDANCE)}/>}
            {hasAccess(MODULE_IDS.MANAGER_MEET) && <ModuleCard title="Manager Meetings" icon={<MessageSquare/>} color="bg-teal-600" onClick={() => setActiveModule(MODULE_IDS.MANAGER_MEET)}/>}
            {hasAccess(MODULE_IDS.REPORTS) && <ModuleCard title="Reports" icon={<FileBarChart/>} color="bg-pink-600" onClick={() => setActiveModule(MODULE_IDS.REPORTS)}/>}
@@ -127,7 +125,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
           {activeModule === MODULE_IDS.BLUEBOOK && <BluebookAdminView />}
           {activeModule === MODULE_IDS.RECIPE && <RecipeAdminView />}
           {activeModule === MODULE_IDS.LOGIN_ACTIVITY && <LoginActivityAdminView />}
-          {activeModule === MODULE_IDS.TABLE_MONITOR && <TableMonitorAdminView />}
           {activeModule === MODULE_IDS.HR && <HRAdminView />}
           {activeModule === MODULE_IDS.REPORTS && <ReportsAdminView />}
           {activeModule === MODULE_IDS.EOM && <EOMAdminView />}

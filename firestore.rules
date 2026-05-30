@@ -96,17 +96,6 @@ service cloud.firestore {
       allow write: if isManager();
     }
 
-    match /tableMonitoring/{docId} {
-      allow read: if isAuthenticated();
-      allow write: if isManager();
-    }
-
-    match /tableAlerts/{alertId} {
-      allow read: if isAuthenticated();
-      allow create, delete: if isManager();
-      allow update: if isAuthenticated();
-    }
-    
     match /eom_cycles/{docId} { allow read: if isAuthenticated(); allow write: if isManager(); }
     match /eom_votes/{docId} { 
       allow read: if isAuthenticated(); 

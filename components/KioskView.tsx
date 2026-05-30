@@ -1,13 +1,11 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { db, storage, firebase, auth } from '../firebaseConfig';
-import { AttendanceConfig, CrewMember, AttendanceLog, CurrentUser, TableAlertDoc } from '../types';
-import { Clock, RefreshCw, LogIn, LogOut, XCircle, ChevronLeft, Lock, ShieldCheck, Grid3x3, MapPin, AlertCircle, CheckCircle } from 'lucide-react';
+import { AttendanceConfig, CrewMember, AttendanceLog, CurrentUser } from '../types';
+import { Clock, RefreshCw, LogIn, LogOut, XCircle, ChevronLeft, Lock, ShieldCheck, Grid3x3, MapPin } from 'lucide-react';
 import { format, differenceInMinutes, startOfDay } from 'date-fns';
 import { Input, Button } from './SharedComponents';
 import { getShiftedDate, DEFAULT_TIMEZONE } from '../utils/dateFormatter';
-import { tableMonitorService } from '../services/tableMonitorService';
-import { SOUND_LIBRARY } from '../utils/soundLibrary';
 
 interface KioskViewProps {
   onExit: () => void;
@@ -33,8 +31,6 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
   
   // Configuration State
   const [kioskConfig, setKioskConfig] = useState<AttendanceConfig>({ enableQrScan: true, enablePinCode: true, permittedPinCrewIds: [] });
-  const [dirtyTableAlerts, setDirtyTableAlerts] = useState<(TableAlertDoc & { id: string })[]>([]);
-  const previousAlertCountRef = useRef(0);
 
   // Dynamic QR State
   const [qrUrl, setQrUrl] = useState('');
@@ -68,34 +64,6 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
   useEffect(() => {
       setIsLocked(!currentUser);
   }, [currentUser]);
-
-  useEffect(() => {
-      if (!defaultOutletId || isLocked) {
-          setDirtyTableAlerts([]);
-          return;
-      }
-
-      const unsubscribe = tableMonitorService.subscribeToActiveAlerts(defaultOutletId, alerts => {
-          setDirtyTableAlerts(alerts);
-          if (alerts.length > previousAlertCountRef.current) {
-              tableMonitorService.getConfig().then(config => {
-                  if (!config.alertEnabled) return;
-                  const sound = SOUND_LIBRARY.find(item => item.id === config.alertSoundId);
-                  if (sound) new Audio(sound.url).play().catch(() => {});
-              });
-          }
-          previousAlertCountRef.current = alerts.length;
-      });
-
-      return () => {
-          unsubscribe();
-      };
-  }, [defaultOutletId, isLocked]);
-
-  const acknowledgeDirtyTable = async (alertId: string) => {
-      const crewId = currentUser?.dbId || currentUser?.uid || 'kiosk';
-      await tableMonitorService.acknowledgeAlert(alertId, crewId);
-  };
 
   // QR Rotator (Every 10 seconds)
   useEffect(() => {
@@ -317,31 +285,6 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
          </div>
       </div>
 
-      {dirtyTableAlerts.length > 0 && (
-        <div className="absolute top-0 left-0 right-0 z-50 bg-red-600 text-white shadow-2xl border-b border-red-400">
-          <div className="max-w-5xl mx-auto p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center">
-                <AlertCircle className="w-7 h-7" />
-              </div>
-              <div>
-                <h2 className="text-xl font-black">{dirtyTableAlerts.length} table{dirtyTableAlerts.length === 1 ? '' : 's'} need clearing</h2>
-                <p className="text-red-100 text-sm">
-                  {dirtyTableAlerts.map(alert => alert.tableName).join(', ')}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {dirtyTableAlerts.slice(0, 3).map(alert => (
-                <button key={alert.id} onClick={() => acknowledgeDirtyTable(alert.id)} className="px-4 py-2 rounded-xl bg-white text-red-700 font-black text-sm flex items-center gap-2 shadow-lg">
-                  <CheckCircle className="w-4 h-4" />
-                  {alert.tableName} Done
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Main Content */}
       <div className="flex-1 flex items-center justify-center p-6 relative">

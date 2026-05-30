@@ -12,7 +12,6 @@ dist
 dist-ssr
 *.local
 firebase-service-account.json
-table_monitor_config.local.json
 
 # Editor directories and files
 .vscode/*
