@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../../../firebaseConfig';
+import { getCachedSettingsDoc } from '../../../services/configCache';
 import { shiftService } from '../../../services/shiftService';
 import { Shift, ShiftAssignment, CrewMember, Store, LeaveRequest, CafeHoliday } from '../../../types';
 import { Button, Card, Input, Select, Badge } from '../../../components/SharedComponents';
@@ -56,8 +57,8 @@ export const ShiftAdminView: React.FC = () => {
   const [sharePeriod, setSharePeriod] = useState<'TODAY' | 'TOMORROW' | 'WEEK'>('TODAY');
 
   useEffect(() => {
-    db.collection('settings').doc('appConfig').get().then(doc => {
-        const tz = doc.exists ? doc.data()?.timezone : DEFAULT_TIMEZONE;
+    getCachedSettingsDoc('appConfig').then(cfg => {
+        const tz = cfg?.timezone;
         setTimezone(tz || DEFAULT_TIMEZONE);
         const nowTz = getCurrentTimeInTimeZone(tz || DEFAULT_TIMEZONE);
         setCurrentWeekStart(startOfWeek(nowTz, { weekStartsOn: 1 }));

@@ -11,6 +11,7 @@ import { EOMCrewView } from '../modules/crew/eom/EOMCrewView';
 import { BluebookCrewView } from '../modules/crew/bluebook/BluebookCrewView';
 import { RecipeCrewView } from '../modules/crew/recipes/RecipeCrewView';
 import { shiftService } from '../services/shiftService';
+import { getCachedSettingsDoc } from '../services/configCache';
 import { getCurrentTimeInTimeZone, DEFAULT_TIMEZONE } from '../utils/dateFormatter';
 import { format } from 'date-fns';
 
@@ -58,10 +59,9 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
         try {
             const role = currentUser.accessRole;
             
-            const confDoc = await db.collection('settings').doc('accessConfig').get();
-            if(confDoc.exists && role) {
-               const conf = confDoc.data() as AccessConfig;
-               
+            const conf = (await getCachedSettingsDoc('accessConfig')) as AccessConfig | null;
+            if(conf && role) {
+
                const allowed = Object.entries(conf)
                     .filter(([key, roles]) => roles.includes(role) && !key.startsWith('CREW_')) 
                     .map(([k]) => k);
@@ -86,8 +86,8 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
             setBirthdays(bdayMatches);
 
             if (currentUser.outletId) {
-                const appConfigDoc = await db.collection('settings').doc('appConfig').get();
-                const tz = appConfigDoc.exists ? appConfigDoc.data()?.timezone : DEFAULT_TIMEZONE;
+                const appCfg = await getCachedSettingsDoc('appConfig');
+                const tz = appCfg?.timezone || DEFAULT_TIMEZONE;
                 const nowTz = getCurrentTimeInTimeZone(tz);
                 const dateStr = format(nowTz, 'yyyy-MM-dd');
                 const pilotAssignment = await shiftService.getDailyPilot(currentUser.outletId, dateStr);

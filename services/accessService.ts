@@ -1,6 +1,7 @@
 
 import { db } from '../firebaseConfig';
 import { AccessConfig, RoleDef } from '../types';
+import { getCachedSettingsDoc, invalidateSettingsDoc } from './configCache';
 
 export const accessService = {
     getRoles: async (): Promise<string[]> => {
@@ -11,11 +12,12 @@ export const accessService = {
     },
 
     getAccessConfig: async (): Promise<AccessConfig> => {
-        const cSnap = await db.collection('settings').doc('accessConfig').get();
-        return cSnap.exists ? (cSnap.data() as AccessConfig) : {};
+        return ((await getCachedSettingsDoc('accessConfig')) as AccessConfig) || {};
     },
 
     saveAccessConfig: async (config: AccessConfig) => {
-        return await db.collection('settings').doc('accessConfig').set(config);
+        const res = await db.collection('settings').doc('accessConfig').set(config);
+        invalidateSettingsDoc('accessConfig');
+        return res;
     }
 };
