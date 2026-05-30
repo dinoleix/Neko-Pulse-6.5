@@ -1,14 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
-import { CurrentUser, MODULE_IDS, AccessConfig, CrewMember, ShiftAssignment, PILOT_CAT_IMAGE } from '../types';
+import { CurrentUser, MODULE_IDS, AccessConfig, CrewMember, ShiftAssignment, TableAlertDoc } from '../types';
 import { db } from '../firebaseConfig';
-import { ClipboardList, CalendarClock, Shield, ArrowRight, Lock, Calendar, Trophy, Gift, PartyPopper, X, Clock, BookOpen, Plane, ShieldCheck } from 'lucide-react';
+import { ClipboardList, CalendarClock, Shield, ArrowRight, Lock, Calendar, Trophy, Gift, PartyPopper, X, Clock, BookOpen, Plane, ShieldCheck, AlertCircle, CheckCircle, ChefHat } from 'lucide-react';
 import { OrderCrewView } from '../modules/crew/orders/OrderCrewView'; 
 import { TaskCrewView } from '../modules/crew/tasks/TaskCrewView'; 
 import { AttendanceCrewView } from '../modules/crew/attendance/AttendanceCrewView'; 
 import { ShiftCrewView } from '../modules/crew/shifts/ShiftCrewView'; 
 import { EOMCrewView } from '../modules/crew/eom/EOMCrewView'; 
 import { BluebookCrewView } from '../modules/crew/bluebook/BluebookCrewView';
+import { RecipeCrewView } from '../modules/crew/recipes/RecipeCrewView';
 import { shiftService } from '../services/shiftService';
 import { getCurrentTimeInTimeZone, DEFAULT_TIMEZONE } from '../utils/dateFormatter';
 import { format } from 'date-fns';
@@ -22,6 +23,8 @@ import { AttendanceAdminView } from '../modules/admin/attendance/AttendanceAdmin
 import { ShiftAdminView } from '../modules/admin/shifts/ShiftAdminView'; 
 import { EOMAdminView } from '../modules/admin/eom/EOMAdminView';
 import { BluebookAdminView } from '../modules/admin/bluebook/BluebookAdminView';
+import { TableMonitorAdminView } from '../modules/admin/tablemonitor/TableMonitorAdminView';
+import { tableMonitorService } from '../services/tableMonitorService';
 
 interface CrewLayoutProps {
   currentUser: CurrentUser;
@@ -40,6 +43,7 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
   const [canViewShifts, setCanViewShifts] = useState(true);
   const [canViewEOM, setCanViewEOM] = useState(true);
   const [canViewBluebook, setCanViewBluebook] = useState(true);
+  const [canViewRecipe, setCanViewRecipe] = useState(false);
   
   // Birthday State
   const [birthdays, setBirthdays] = useState<CrewMember[]>([]);
@@ -47,6 +51,7 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
   
   // Pilot State
   const [todayPilot, setTodayPilot] = useState<ShiftAssignment | null>(null);
+  const [dirtyTableAlerts, setDirtyTableAlerts] = useState<(TableAlertDoc & { id: string })[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
 
@@ -69,6 +74,7 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
                setCanViewTasks(conf[MODULE_IDS.CREW_TASKS] ? conf[MODULE_IDS.CREW_TASKS].includes(role) : true);
                setCanViewEOM(conf[MODULE_IDS.CREW_EOM] ? conf[MODULE_IDS.CREW_EOM].includes(role) : true);
                setCanViewBluebook(conf[MODULE_IDS.CREW_BLUEBOOK] ? conf[MODULE_IDS.CREW_BLUEBOOK].includes(role) : true);
+               setCanViewRecipe(conf[MODULE_IDS.CREW_RECIPE] ? conf[MODULE_IDS.CREW_RECIPE].includes(role) : false);
             }
 
             const crewSnap = await db.collection('crew').where('active', '==', true).get();
@@ -103,6 +109,15 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
      checkAccess();
   }, [currentUser]);
 
+  useEffect(() => {
+     if (!currentUser.outletId) return;
+     return tableMonitorService.subscribeToActiveAlerts(currentUser.outletId, setDirtyTableAlerts);
+  }, [currentUser.outletId]);
+
+  const acknowledgeDirtyTable = async (alertId: string) => {
+     await tableMonitorService.acknowledgeAlert(alertId, currentUser.dbId || currentUser.uid);
+  };
+
   const renderContent = () => {
      if (activeTab === 'admin') {
         if(adminModule) {
@@ -116,6 +131,7 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
                  {adminModule === MODULE_IDS.STORES && <StoreAdminView />}
                  {adminModule === MODULE_IDS.SHIFTS && <ShiftAdminView />}
                  {adminModule === MODULE_IDS.BLUEBOOK && <BluebookAdminView />}
+                 {adminModule === MODULE_IDS.TABLE_MONITOR && <TableMonitorAdminView />}
                  {adminModule === MODULE_IDS.EOM && <EOMAdminView />}
                  {adminModule === MODULE_IDS.ATTENDANCE && <AttendanceAdminView launchKiosk={() => {}} />}
               </div>
@@ -143,6 +159,7 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
            {activeTab === 'orders' && (canViewOrders ? <OrderCrewView currentUser={currentUser} /> : <AccessDenied/>)}
            {activeTab === 'shifts' && (canViewShifts ? <ShiftCrewView currentUser={currentUser} /> : <AccessDenied/>)}
            {activeTab === 'eom' && (canViewEOM ? <EOMCrewView currentUser={currentUser} /> : <AccessDenied/>)}
+           {activeTab === 'recipe' && (canViewRecipe ? <RecipeCrewView currentUser={currentUser} /> : <AccessDenied/>)}
         </div>
      );
   };
@@ -180,6 +197,26 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
           </div>
           <button onClick={onLogout} className="text-xs border px-3 py-1 rounded-lg">Exit</button>
        </div>
+
+       {dirtyTableAlerts.length > 0 && (
+           <div className="mb-4 mt-2 bg-red-600 text-white p-4 rounded-2xl shadow-lg animate-in slide-in-from-top">
+              <div className="flex items-start gap-3">
+                 <AlertCircle className="w-6 h-6 mt-0.5 flex-shrink-0"/>
+                 <div className="flex-1">
+                    <h3 className="font-black text-lg leading-tight">{dirtyTableAlerts.length} table{dirtyTableAlerts.length === 1 ? '' : 's'} need clearing</h3>
+                    <p className="text-red-100 text-sm">{dirtyTableAlerts.map(alert => alert.tableName).join(', ')}</p>
+                    <div className="flex flex-wrap gap-2 mt-3">
+                       {dirtyTableAlerts.slice(0, 3).map(alert => (
+                          <button key={alert.id} onClick={() => acknowledgeDirtyTable(alert.id)} className="px-3 py-2 rounded-xl bg-white text-red-700 font-black text-xs flex items-center gap-1">
+                             <CheckCircle className="w-4 h-4"/>
+                             {alert.tableName} Done
+                          </button>
+                       ))}
+                    </div>
+                 </div>
+              </div>
+           </div>
+       )}
 
        {/* BIRTHDAY BANNER */}
        {showBirthday && birthdays.length > 0 && (
@@ -239,6 +276,9 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
           {canViewEOM && (
              <NavBtn icon={<Trophy/>} label="Awards" active={activeTab === 'eom'} onClick={() => setActiveTab('eom')} color="amber"/>
           )}
+          {canViewRecipe && (
+             <NavBtn icon={<ChefHat/>} label="Recipes" active={activeTab === 'recipe'} onClick={() => setActiveTab('recipe')} color="teal"/>
+          )}
           {allowedAdmin.length > 0 && (
              <NavBtn icon={<Shield/>} label="Admin" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} color="rose"/>
           )}
@@ -263,7 +303,8 @@ const NavBtn = ({ icon, label, active, onClick, color }: any) => {
        rose: 'bg-rose-500 shadow-rose-200',
        blue: 'bg-blue-600 shadow-blue-200', 
        slate: 'bg-slate-600 shadow-slate-200',
-       amber: 'bg-amber-500 shadow-amber-200'
+       amber: 'bg-amber-500 shadow-amber-200',
+       teal: 'bg-teal-500 shadow-teal-200'
     };
    return (
       <button onClick={onClick} className={`flex-1 flex flex-col items-center py-2 min-w-[50px] rounded-xl transition-all ${active ? `${colors[color]} text-white shadow-lg` : 'text-slate-400'}`}>

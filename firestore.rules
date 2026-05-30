@@ -95,6 +95,17 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isManager();
     }
+
+    match /tableMonitoring/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+
+    match /tableAlerts/{alertId} {
+      allow read: if isAuthenticated();
+      allow create, delete: if isManager();
+      allow update: if isAuthenticated();
+    }
     
     match /eom_cycles/{docId} { allow read: if isAuthenticated(); allow write: if isManager(); }
     match /eom_votes/{docId} { 
@@ -107,10 +118,20 @@ service cloud.firestore {
     match /managerActionItems/{docId} { allow read: if isManager(); allow write: if isManager(); }
     match /managerRecurringAgenda/{docId} { allow read: if isManager(); allow write: if isManager(); }
 
-    // NEW: Bluebook rules
     match /bluebook_items/{itemId} {
       allow read: if isAuthenticated();
       allow write: if isManager();
+    }
+
+    match /recipes/{recipeId} {
+      allow read: if isManager() || (isAuthenticated() && resource.data.isShared == true);
+      allow write: if isManager();
+    }
+
+    match /loginLogs/{logId} {
+      allow read: if isManager();
+      allow create: if isManager() || isOwner('userId');
+      allow update, delete: if isManager();
     }
   }
 }

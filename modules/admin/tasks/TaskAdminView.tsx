@@ -7,6 +7,7 @@ import { Button, Card, Input, Badge, AudioRecorder, Checkbox, Select, TextArea, 
 import { ClipboardList, Clock, CheckCircle, Image as ImageIcon, Plus, Trash2, Calendar, MapPin, AlertCircle, X, Filter, LayoutList, Activity, ArrowRight, Edit, Save, Copy, Bell, Volume2, Zap, Monitor, Play, Users, VolumeX, Timer, FileText, Loader2, Mic, AlignLeft, BarChart3, TrendingUp, CheckSquare, ChevronLeft, Camera, Search, BellRing } from 'lucide-react';
 import { format, getDate, isSameDay, endOfDay, isAfter, eachDayOfInterval, addDays } from 'date-fns';
 import { formatInTimeZone, getShiftedDate, getCurrentTimeInTimeZone, DEFAULT_TIMEZONE } from '../../../utils/dateFormatter';
+import { SOUND_LIBRARY } from '../../../utils/soundLibrary';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, Cell } from 'recharts';
 
 // --- HELPERS ---
@@ -74,16 +75,6 @@ const startOfDay = (date: Date) => {
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-// --- SOUND LIBRARY ---
-const SOUND_LIBRARY = [
-   { id: 'BEEP', name: 'Classic Beep', url: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' },
-   { id: 'SCIFI', name: 'Red Alert (Sci-Fi)', url: 'https://actions.google.com/sounds/v1/alarms/spaceship_alarm.ogg' },
-   { id: 'BUGLE', name: 'Wake Up Bugle', url: 'https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg' },
-   { id: 'CARTOON', name: 'Silly Boing', url: 'https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg' },
-   { id: 'MAGIC', name: 'Magic Chime', url: 'https://actions.google.com/sounds/v1/cartoon/magic_chime.ogg' },
-   { id: 'ROOSTER', name: 'Rooster Crow', url: 'https://actions.google.com/sounds/v1/animals/rooster_crow.ogg' },
-   { id: 'CAT', name: 'Cat Meow', url: 'https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3' }
-];
 
 export const TaskAdminView: React.FC = () => {
    const [activeTab, setActiveTab] = useState<'MONITOR' | 'DEFINITIONS' | 'TEMPLATES' | 'SETTINGS'>('MONITOR');

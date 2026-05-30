@@ -19,8 +19,7 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
 
 export const parseOrderImage = async (base64Image: string) => {
   try {
-    /* Use gemini-3-flash-preview for general vision-text structured tasks per guidelines */
-    const modelId = 'gemini-3-flash-preview'; 
+    const modelId = 'gemini-2.0-flash';
     
     // We ask Gemini to extract structured data
     const prompt = `

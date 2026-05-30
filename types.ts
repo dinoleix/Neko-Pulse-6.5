@@ -47,15 +47,19 @@ export const MODULE_IDS = {
   REPORTS: 'REPORTS',
   EOM: 'EOM',
   MANAGER_MEET: 'MANAGER_MEET',
-  BLUEBOOK: 'BLUEBOOK', // NEW
+  BLUEBOOK: 'BLUEBOOK',
+  RECIPE: 'RECIPE',
+  LOGIN_ACTIVITY: 'LOGIN_ACTIVITY',
   SETTINGS: 'SETTINGS',
-  
+  TABLE_MONITOR: 'TABLE_MONITOR',
+
   // Crew App Features
   CREW_ORDERS: 'CREW_ORDERS',
   CREW_TASKS: 'CREW_TASKS',
   CREW_SHIFTS: 'CREW_SHIFTS',
   CREW_EOM: 'CREW_EOM',
-  CREW_BLUEBOOK: 'CREW_BLUEBOOK' // NEW
+  CREW_BLUEBOOK: 'CREW_BLUEBOOK',
+  CREW_RECIPE: 'CREW_RECIPE'
 } as const;
 
 export type ModuleId = keyof typeof MODULE_IDS;
@@ -319,6 +323,101 @@ export interface EOMResult {
   mgmtScoreRaw: number;
   mgmtScoreNormalized: number;
   finalScore: number;
+}
+
+// --- MODULE: TABLE MONITORING ---
+export type TableState = 'EMPTY' | 'OCCUPIED' | 'POTENTIALLY_DIRTY' | 'DIRTY' | 'ALERT_SENT';
+export type CameraType = 'XIAOMI' | 'EZYKAM';
+export type TableSourceType = 'RTSP' | 'SCREEN';
+
+export interface ScreenRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface TableMonitoringDoc {
+  tableId: string;
+  tableName: string;
+  outletId: string;
+  sourceType?: TableSourceType;
+  rtspUrl?: string;
+  screenRegion?: ScreenRegion | null;
+  cameraType: CameraType;
+  state: TableState;
+  occupiedSince: any | null;
+  dirtySince: any | null;
+  lastGeminiReason: string;
+  lastGeminiAt: any | null;
+  lastUpdatedAt: any;
+  activeAlertId: string | null;
+  isActive: boolean;
+}
+
+export interface TableAlertDoc {
+  alertId: string;
+  tableId: string;
+  tableName: string;
+  outletId: string;
+  status: 'ACTIVE' | 'ACKNOWLEDGED' | 'AUTO_CLEARED';
+  createdAt: any;
+  acknowledgedAt: any | null;
+  acknowledgedBy: string | null;
+  clearedAt: any | null;
+  autoCleared: boolean;
+  geminiReason: string;
+  dirtySinceMinutes: number;
+}
+
+export interface TableMonitorConfig {
+  alertThresholdMinutes: number;
+  rescanIntervalSeconds: number;
+  motionStillnessSeconds: number;
+  alertSoundId: string;
+  alertEnabled: boolean;
+}
+
+// --- MODULE: LOGIN ACTIVITY ---
+export interface LoginLog {
+  id?: string;
+  userId: string;        // Firebase Auth UID
+  dbId?: string;         // Firestore document ID of the crew/manager profile
+  userName: string;
+  role: 'ADMIN' | 'CREW';
+  accessRole?: string;   // e.g. "Manager", "Counter"
+  outletId?: string;
+  loginMethod: 'STAFF_CODE' | 'MANAGER_EMAIL';
+  device?: string;       // Human-readable device summary
+  userAgent?: string;    // Raw UA string for debugging
+  timestamp: any;
+}
+
+// --- MODULE: RECIPE ---
+export interface RecipeIngredient {
+  name: string;
+  amount: string;
+  unit: string;
+}
+
+export interface Recipe {
+  id?: string;
+  name: string;
+  category: string;
+  description?: string;
+  ingredients: RecipeIngredient[];
+  steps: string[];
+  imageUrl?: string;
+  isShared: boolean;
+  prepTime?: number;
+  cookTime?: number;
+  servingSize?: number;
+  createdAt: any;
+  createdBy: string;
+}
+
+export interface RecipeConfig {
+  categories: string[];
 }
 
 // --- MODULE: MANAGER MEET ---

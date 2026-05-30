@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { auth, db } from '../firebaseConfig';
 import { Button, Input, Card } from './SharedComponents';
 import { CurrentUser, UserRole, CrewMember } from '../types';
+import { loginLogService } from '../services/loginLogService';
 import { Coffee, Lock, User, Zap } from 'lucide-react';
 
 interface LoginViewProps {
@@ -79,9 +80,21 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
       if (!userProfile.active) {
          throw new Error("Account is inactive.");
       }
-      
+
+      const resolvedRole = foundInCollection === 'managers' ? UserRole.ADMIN : UserRole.CREW;
+
+      loginLogService.record({
+        userId: uid,
+        dbId: dbId,
+        userName: userProfile.crewName,
+        role: resolvedRole === UserRole.ADMIN ? 'ADMIN' : 'CREW',
+        accessRole: userProfile.role,
+        outletId: userProfile.outletId,
+        loginMethod: 'STAFF_CODE',
+      });
+
       onLogin({
-        role: foundInCollection === 'managers' ? UserRole.ADMIN : UserRole.CREW,
+        role: resolvedRole,
         uid: uid,
         name: userProfile.crewName,
         outletId: userProfile.outletId,
@@ -128,6 +141,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         }
 
         const managerData = managerDoc.data() as CrewMember;
+
+        loginLogService.record({
+          userId: uid,
+          dbId: managerDoc.id,
+          userName: managerData.crewName || userCredential.user.email || 'Admin',
+          role: 'ADMIN',
+          accessRole: managerData.role,
+          outletId: managerData.outletId,
+          loginMethod: 'MANAGER_EMAIL',
+        });
 
         onLogin({
           role: UserRole.ADMIN,
