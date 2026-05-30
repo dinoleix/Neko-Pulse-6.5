@@ -103,8 +103,9 @@ export interface CrewMember {
   authUid?: string; // LINK TO FIREBASE AUTH
   crewName: string;
   crewCode: string;
-  email?: string; 
-  phoneNumber?: string; 
+  email?: string;
+  phoneNumber?: string;
+  photoUrl?: string;
   outletId: string;
   isMobile?: boolean; 
   active: boolean;

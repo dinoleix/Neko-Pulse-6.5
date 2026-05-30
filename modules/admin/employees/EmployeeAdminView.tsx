@@ -4,10 +4,11 @@ import { firebase } from '../../../firebaseConfig';
 import { employeeService } from '../../../services/employeeService';
 import { storeService } from '../../../services/storeService';
 import { attendanceService } from '../../../services/attendanceService';
+import { compressImage } from '../../../services/imageService';
 import { CrewMember, RoleDef, Store, CurrentUser, AttendanceConfig } from '../../../types';
 import { Button, Card, Input, Select, Badge, Checkbox } from '../../../components/SharedComponents';
 // @fix: Added ShieldAlert to imports
-import { Trash2, Edit, X, Loader2, Calendar, Globe, Lock, RefreshCcw, Users, ShieldCheck, Search, UserPlus, Info, ChevronRight, MapPin, Shield, Unlock, ShieldAlert } from 'lucide-react';
+import { Trash2, Edit, X, Loader2, Calendar, Globe, Lock, RefreshCcw, Users, ShieldCheck, Search, UserPlus, Info, ChevronRight, MapPin, Shield, Unlock, ShieldAlert, UserX, UserCheck, Camera, Upload } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface EmployeeAdminViewProps {
@@ -23,22 +24,25 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    const [attConfig, setAttConfig] = useState<AttendanceConfig | null>(null);
    const [isLoading, setIsLoading] = useState(true);
    const [searchQuery, setSearchQuery] = useState('');
+   const [showInactive, setShowInactive] = useState(false);
    
    // Form State
-   const [newCrew, setNewCrew] = useState<Partial<CrewMember>>({ 
-      crewName: '', 
-      crewCode: '', 
-      email: '', 
-      phoneNumber: '', 
-      role: '', 
+   const [newCrew, setNewCrew] = useState<Partial<CrewMember>>({
+      crewName: '',
+      crewCode: '',
+      email: '',
+      phoneNumber: '',
+      photoUrl: '',
+      role: '',
       gender: undefined,
       outletId: '',
-      isMobile: false, 
+      isMobile: false,
       dateOfBirth: '',
       dateOfJoining: '',
       dateOfLeaving: '',
-      leaveBalanceOverride: undefined 
+      leaveBalanceOverride: undefined
    });
+   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
    
    // Password state for creating Managers
    const [newManagerPassword, setNewManagerPassword] = useState('');
@@ -75,12 +79,18 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    };
 
    // --- HELPERS ---
+   // A member is inactive if explicitly marked (active === false) or has a relieving date.
+   const isMemberInactive = (m: CrewMember) => m.active === false || !!m.dateOfLeaving;
+
    const rawList = activeTab === 'CREW' ? crew : managers;
-   const currentList = rawList.filter(u => 
-      u.crewName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      u.crewCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.role?.toLowerCase().includes(searchQuery.toLowerCase())
-   );
+   const inactiveCount = rawList.filter(isMemberInactive).length;
+   const currentList = rawList
+      .filter(u => showInactive ? isMemberInactive(u) : !isMemberInactive(u))
+      .filter(u =>
+         u.crewName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+         u.crewCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+         u.role?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
 
    const PROTECTED_ROLES = ['Super Admin', 'System Admin', 'Owner'];
 
@@ -131,9 +141,10 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
 
       setNewCrew({
          crewName: member.crewName,
-         crewCode: member.crewCode || '', 
+         crewCode: member.crewCode || '',
          email: member.email || '',
          phoneNumber: member.phoneNumber || '',
+         photoUrl: member.photoUrl || '',
          role: member.role,
          gender: member.gender,
          outletId: member.outletId,
@@ -151,15 +162,16 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    };
 
    const cancelEdit = () => {
-      setNewCrew({ 
-         crewName: '', 
-         crewCode: '', 
+      setNewCrew({
+         crewName: '',
+         crewCode: '',
          email: '',
          phoneNumber: '',
-         role: '', 
+         photoUrl: '',
+         role: '',
          gender: undefined,
          outletId: '',
-         isMobile: false, 
+         isMobile: false,
          dateOfBirth: '',
          dateOfJoining: '',
          dateOfLeaving: '',
@@ -168,6 +180,24 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       setNewManagerPassword('');
       setEditingId(null);
       setIsCreating(false);
+   };
+
+   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setIsUploadingPhoto(true);
+      try {
+         // Optimize: resize to max 1024px and re-encode as JPEG before upload.
+         const compressed = await compressImage(file, 0.6);
+         const url = await employeeService.uploadPhoto(compressed);
+         setNewCrew(prev => ({ ...prev, photoUrl: url }));
+      } catch (err) {
+         console.error("Photo upload failed:", err);
+         alert("Photo upload failed. Please try a different image.");
+      } finally {
+         setIsUploadingPhoto(false);
+         e.target.value = '';
+      }
    };
 
    const handleSave = async (forceResetAuth = false) => {
@@ -260,9 +290,10 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
 
          const payload = {
             crewName: newCrew.crewName,
-            crewCode: newCrew.crewCode || '', 
+            crewCode: newCrew.crewCode || '',
             email: newCrew.email || null,
             phoneNumber: newCrew.phoneNumber || null,
+            photoUrl: newCrew.photoUrl || null,
             role: newCrew.role,
             gender: newCrew.gender || null,
             outletId: newCrew.outletId,
@@ -337,14 +368,14 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
          {/* TOP TAB CONTROL - SEGMENTED PILL */}
          <div className="bg-slate-100 p-1.5 rounded-2xl flex w-full md:w-fit mx-auto shadow-inner">
              <button 
-                onClick={() => { setActiveTab('CREW'); cancelEdit(); }} 
+                onClick={() => { setActiveTab('CREW'); cancelEdit(); setShowInactive(false); }}
                 className={`flex-1 md:w-48 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'CREW' ? 'bg-white text-emerald-600 shadow-md' : 'text-slate-500 hover:text-slate-600'}`}
              >
                 <Users className={`w-4 h-4 ${activeTab === 'CREW' ? 'text-emerald-500' : 'text-slate-400'}`}/> 
                 Staff Directory
              </button>
              <button 
-                onClick={() => { setActiveTab('MANAGERS'); cancelEdit(); }} 
+                onClick={() => { setActiveTab('MANAGERS'); cancelEdit(); setShowInactive(false); }}
                 className={`flex-1 md:w-48 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'MANAGERS' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-500 hover:text-slate-600'}`}
              >
                 <ShieldCheck className={`w-4 h-4 ${activeTab === 'MANAGERS' ? 'text-indigo-500' : 'text-slate-400'}`}/> 
@@ -367,6 +398,18 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                         onChange={(e) => setSearchQuery(e.target.value)}
                      />
                   </div>
+                  <button
+                     onClick={() => setShowInactive(v => !v)}
+                     title={showInactive ? 'Show active members' : 'Show inactive members'}
+                     className={`!w-auto px-5 rounded-3xl text-sm font-bold flex items-center justify-center gap-2 border transition-all ${
+                        showInactive
+                           ? 'bg-slate-700 text-white border-slate-700 shadow-md'
+                           : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                     }`}
+                  >
+                     {showInactive ? <UserCheck className="w-5 h-5"/> : <UserX className="w-5 h-5"/>}
+                     {showInactive ? 'Show Active' : `Inactive${inactiveCount > 0 ? ` (${inactiveCount})` : ''}`}
+                  </button>
                   <Button className="!w-auto !rounded-3xl" onClick={() => setIsCreating(true)}>
                      <UserPlus className="w-5 h-5 mr-2"/> Add New
                   </Button>
@@ -374,7 +417,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
 
                <div className="space-y-3">
                   {currentList.map(c => {
-                     const isInactive = !!c.dateOfLeaving;
+                     const isInactive = isMemberInactive(c);
                      const accentColor = activeTab === 'CREW' ? 'emerald' : 'indigo';
                      const isSelf = c.id === currentUser.dbId || c.authUid === currentUser.uid;
                      const isProtected = isAccountProtected(c);
@@ -382,8 +425,8 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                      
                      return (
                         <div key={c.id} className={`bg-white p-4 rounded-3xl border shadow-sm flex items-center gap-4 group transition-all hover:shadow-md ${editingId === c.id ? `border-${accentColor}-500 ring-4 ring-${accentColor}-50` : isProtected ? 'border-amber-100 bg-amber-50/10' : 'border-slate-100'}`}>
-                           <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-xl flex-shrink-0 relative ${isInactive ? 'bg-slate-100 text-slate-400 grayscale' : activeTab === 'CREW' ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'}`}>
-                              {c.crewName[0]}
+                           <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-xl flex-shrink-0 relative overflow-hidden ${isInactive ? 'bg-slate-100 text-slate-400 grayscale' : activeTab === 'CREW' ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                              {c.photoUrl ? <img src={c.photoUrl} className="w-full h-full object-cover" alt={c.crewName}/> : c.crewName[0]}
                               {c.authUid && !isInactive && (
                                  <div className="absolute -top-1 -right-1 bg-white rounded-full p-1 shadow-sm border border-slate-50">
                                     <Lock className={`w-3 h-3 ${activeTab === 'CREW' ? 'text-emerald-500' : 'text-indigo-500'}`}/>
@@ -430,8 +473,16 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                   })}
                   {currentList.length === 0 && (
                      <div className="text-center py-16 bg-slate-50/50 rounded-[40px] border-2 border-dashed border-slate-200">
-                        <Users className="w-12 h-12 text-slate-200 mx-auto mb-3"/>
-                        <p className="text-slate-400 font-bold">No records found matching your search.</p>
+                        {showInactive
+                           ? <UserX className="w-12 h-12 text-slate-200 mx-auto mb-3"/>
+                           : <Users className="w-12 h-12 text-slate-200 mx-auto mb-3"/>}
+                        <p className="text-slate-400 font-bold">
+                           {searchQuery
+                              ? 'No records found matching your search.'
+                              : showInactive
+                                 ? `No inactive ${activeTab === 'CREW' ? 'staff' : 'managers'}.`
+                                 : `No active ${activeTab === 'CREW' ? 'staff' : 'managers'} yet.`}
+                        </p>
                      </div>
                   )}
                </div>
@@ -448,6 +499,38 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                      <div>
                         <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Info className="w-3 h-3"/> Personal Details</h4>
                         <div className="space-y-4">
+                           {/* PHOTO */}
+                           <div className="flex items-center gap-4">
+                              <div className={`w-20 h-20 rounded-2xl flex items-center justify-center overflow-hidden flex-shrink-0 relative ${activeTab === 'CREW' ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                                 {isUploadingPhoto ? (
+                                    <Loader2 className="w-6 h-6 animate-spin text-slate-400"/>
+                                 ) : newCrew.photoUrl ? (
+                                    <img src={newCrew.photoUrl} className="w-full h-full object-cover" alt="Employee"/>
+                                 ) : newCrew.crewName ? (
+                                    <span className="text-2xl font-bold">{newCrew.crewName[0]}</span>
+                                 ) : (
+                                    <Camera className="w-7 h-7 opacity-40"/>
+                                 )}
+                              </div>
+                              <div className="flex-1 space-y-2">
+                                 <div className="flex gap-2">
+                                    <label className="flex-1 cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 rounded-xl py-2.5 px-3 text-xs font-bold text-slate-600 flex items-center justify-center gap-1.5 transition-colors">
+                                       <Camera className="w-4 h-4"/> Take Photo
+                                       <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoSelect} disabled={isUploadingPhoto} />
+                                    </label>
+                                    <label className="flex-1 cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 rounded-xl py-2.5 px-3 text-xs font-bold text-slate-600 flex items-center justify-center gap-1.5 transition-colors">
+                                       <Upload className="w-4 h-4"/> Upload
+                                       <input type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} disabled={isUploadingPhoto} />
+                                    </label>
+                                 </div>
+                                 {newCrew.photoUrl && !isUploadingPhoto && (
+                                    <button type="button" onClick={() => setNewCrew(prev => ({ ...prev, photoUrl: '' }))} className="text-[10px] font-bold text-red-500 hover:text-red-600 flex items-center gap-1">
+                                       <X className="w-3 h-3"/> Remove photo
+                                    </button>
+                                 )}
+                                 <p className="text-[9px] text-slate-400 italic leading-tight">Auto-optimized to keep file size small.</p>
+                              </div>
+                           </div>
                            <Input placeholder="Full Name *" value={newCrew.crewName} onChange={e => setNewCrew({...newCrew, crewName: e.target.value})} />
                            <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-1">

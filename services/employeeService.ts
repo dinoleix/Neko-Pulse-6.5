@@ -1,8 +1,15 @@
 
-import { db, firebase, firebaseConfig } from '../firebaseConfig';
+import { db, storage, firebase, firebaseConfig } from '../firebaseConfig';
 import { CrewMember, RoleDef } from '../types';
 
 export const employeeService = {
+    // --- PHOTO ---
+    uploadPhoto: async (data: Blob): Promise<string> => {
+        const ref = storage.ref(`employees/${Date.now()}_photo.jpg`);
+        await ref.put(data);
+        return await ref.getDownloadURL();
+    },
+
     // --- CREW CRUD (Staff) ---
     getAllCrew: async (): Promise<CrewMember[]> => {
         const snap = await db.collection('crew').orderBy('crewName').get();
