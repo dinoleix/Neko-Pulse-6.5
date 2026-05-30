@@ -264,7 +264,7 @@ export const TaskCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUs
                                         <Camera className="w-8 h-8 text-slate-400 mb-2"/>
                                         <span className="text-xs font-bold text-slate-500">Tap to Take Photo</span>
                                         <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => {
-                                            if(e.target.files?.[0]) setProofPhoto(await compressImage(e.target.files[0], 0.1));
+                                            if(e.target.files?.[0]) setProofPhoto(await compressImage(e.target.files[0], 0.7));
                                         }} />
                                     </label>
                                 )}
