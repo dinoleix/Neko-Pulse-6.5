@@ -84,6 +84,7 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
    // Leave Balance Tab State
    const [balanceSearch, setBalanceSearch] = useState('');
    const [balanceStoreFilter, setBalanceStoreFilter] = useState('ALL');
+   const [showInactiveBalance, setShowInactiveBalance] = useState(false);
    const [expandedEmployeeId, setExpandedEmployeeId] = useState<string | null>(null);
 
    // PIN Restriction State
@@ -332,6 +333,14 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
    };
 
    const crewWithOverrides = crew.filter(c => c.leaveBalanceOverride !== undefined && c.leaveBalanceOverride !== null);
+
+   // A member is inactive if explicitly marked or has a relieving date.
+   const isInactiveMember = (c: CrewMember) => c.active === false || !!c.dateOfLeaving;
+   const inactiveBalanceCount = crew.filter(isInactiveMember).length;
+   const balanceList = crew
+      .filter(c => showInactiveBalance ? isInactiveMember(c) : !isInactiveMember(c))
+      .filter(c => c.crewName.toLowerCase().includes(balanceSearch.toLowerCase()))
+      .filter(c => balanceStoreFilter === 'ALL' || c.outletId === balanceStoreFilter);
 
    return (
       <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
@@ -593,10 +602,10 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
 
          {activeTab === 'LEAVE_BALANCE' && (
             <div className="space-y-6 animate-in fade-in">
-               <div className="grid md:grid-cols-2 gap-4">
+               <div className="grid md:grid-cols-3 gap-4">
                   <div className="relative">
                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                     <input 
+                     <input
                         type="text"
                         placeholder="Search employee name..."
                         className="w-full pl-12 pr-4 py-3 rounded-2xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all text-sm font-medium"
@@ -608,6 +617,18 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
                      <option value="ALL">All Stores</option>
                      {uniqueStores.map(s => <option key={s} value={s}>{s}</option>)}
                   </Select>
+                  <button
+                     onClick={() => setShowInactiveBalance(v => !v)}
+                     title={showInactiveBalance ? 'Show active employees' : 'Show inactive (former) employees'}
+                     className={`rounded-2xl text-sm font-bold flex items-center justify-center gap-2 border transition-all py-3 px-4 ${
+                        showInactiveBalance
+                           ? 'bg-slate-700 text-white border-slate-700 shadow-md'
+                           : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                     }`}
+                  >
+                     {showInactiveBalance ? <Users className="w-4 h-4"/> : <EyeOff className="w-4 h-4"/>}
+                     {showInactiveBalance ? 'Show Active' : `Inactive${inactiveBalanceCount > 0 ? ` (${inactiveBalanceCount})` : ''}`}
+                  </button>
                </div>
 
                <div className="bg-white rounded-[32px] shadow-xl shadow-slate-200/60 border border-slate-100 overflow-hidden">
@@ -622,10 +643,7 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
                            </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                           {crew
-                              .filter(c => c.crewName.toLowerCase().includes(balanceSearch.toLowerCase()))
-                              .filter(c => balanceStoreFilter === 'ALL' || c.outletId === balanceStoreFilter)
-                              .map(c => {
+                           {balanceList.map(c => {
                                  const balance = attendanceService.calculateLeaveBalance(c, leaves);
                                  const history = leaves.filter(l => l.crewId === c.id || l.crewId === c.authUid);
                                  const isExpanded = expandedEmployeeId === c.id;
@@ -638,12 +656,18 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
                                        >
                                           <td className="p-5">
                                              <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-lg group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
-                                                   {c.crewName[0]}
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg overflow-hidden transition-colors ${isInactiveMember(c) ? 'bg-slate-100 text-slate-400 grayscale' : 'bg-slate-100 text-slate-500 group-hover:bg-emerald-100 group-hover:text-emerald-600'}`}>
+                                                   {c.photoUrl ? <img src={c.photoUrl} className="w-full h-full object-cover" alt={c.crewName}/> : c.crewName[0]}
                                                 </div>
                                                 <div>
-                                                   <div className="font-bold text-slate-800">{c.crewName}</div>
-                                                   <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">ID: {c.crewCode}</div>
+                                                   <div className="font-bold text-slate-800 flex items-center gap-2">
+                                                      {c.crewName}
+                                                      {isInactiveMember(c) && <Badge variant="danger" className="!py-0 !text-[8px]">Inactive</Badge>}
+                                                   </div>
+                                                   <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
+                                                      ID: {c.crewCode}
+                                                      {c.dateOfLeaving && <span className="ml-2 normal-case text-slate-400">· Left {format(parseISO(c.dateOfLeaving), 'MMM d, yyyy')}</span>}
+                                                   </div>
                                                 </div>
                                              </div>
                                           </td>
@@ -723,11 +747,17 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
                                     </React.Fragment>
                                  );
                               })}
-                           {crew.length === 0 && (
+                           {balanceList.length === 0 && (
                               <tr>
                                  <td colSpan={4} className="p-12 text-center text-slate-400">
                                     <User size={48} className="mx-auto mb-3 opacity-20"/>
-                                    <p className="font-bold">No employees found matching the filters.</p>
+                                    <p className="font-bold">
+                                       {balanceSearch || balanceStoreFilter !== 'ALL'
+                                          ? 'No employees found matching the filters.'
+                                          : showInactiveBalance
+                                             ? 'No inactive employees.'
+                                             : 'No active employees.'}
+                                    </p>
                                  </td>
                               </tr>
                            )}

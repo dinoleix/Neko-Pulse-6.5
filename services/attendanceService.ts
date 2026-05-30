@@ -79,8 +79,16 @@ export const attendanceService = {
         const baseDate = parseISO(baseDateStr);
         const today = new Date();
 
+        // Inactive employees stop accruing on their relieving date — their balance
+        // freezes at whatever it was the day they left and never grows again.
+        let accrualEnd = today;
+        if (crew.dateOfLeaving) {
+            const leftDate = parseISO(crew.dateOfLeaving);
+            if (leftDate < today) accrualEnd = leftDate;
+        }
+
         // Calculate Days Passed since Reset Point
-        const daysElapsed = differenceInDays(today, baseDate);
+        const daysElapsed = differenceInDays(accrualEnd, baseDate);
         if (daysElapsed <= 0) return baseBalance;
 
         // Calculate Accrual: Pro-rata daily growth
