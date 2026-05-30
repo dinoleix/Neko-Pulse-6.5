@@ -24,3 +24,4 @@ table_monitor_config.local.json
 *.njsproj
 *.sln
 *.sw?
+.vercel

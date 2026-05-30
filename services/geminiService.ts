@@ -1,8 +1,20 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-/* Always initialize with direct process.env.API_KEY per guidelines */
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Lazily create the client. Instantiating at module load with a missing/empty
+// API key throws ("An API Key must be set...") which, in the production bundle,
+// runs at startup and blanks the whole app. Defer it until OCR is actually used.
+let ai: GoogleGenAI | null = null;
+const getClient = (): GoogleGenAI => {
+  if (!ai) {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error("Gemini API key is not configured. Set GEMINI_API_KEY to use AI order parsing.");
+    }
+    ai = new GoogleGenAI({ apiKey });
+  }
+  return ai;
+};
 
 // Helper to convert file to base64
 export const fileToGenerativePart = async (file: File): Promise<string> => {
@@ -41,7 +53,7 @@ export const parseOrderImage = async (base64Image: string) => {
         - category (string, strictly "food" or "drink". Guess based on item name. E.g., Latte, Tea, Coke = drink. Rice, Bowl, Sandwich, Cake = food)
     `;
 
-    const response = await ai.models.generateContent({
+    const response = await getClient().models.generateContent({
       model: modelId,
       contents: {
         parts: [
