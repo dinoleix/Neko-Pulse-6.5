@@ -8,6 +8,15 @@ import { KioskView } from './components/KioskView';
 import { DynamicBranding } from './components/DynamicBranding';
 import { CurrentUser, UserRole, CrewMember } from './types';
 
+// Auto-logout after inactivity. Most roles get 5 minutes; the "Counter" role
+// runs unattended on a shared device, so it gets 14 hours.
+const DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const COUNTER_IDLE_TIMEOUT_MS = 14 * 60 * 60 * 1000;
+const LAST_ACTIVITY_KEY = 'neko_last_activity';
+
+const getIdleTimeoutMs = (accessRole?: string) =>
+  accessRole === 'Counter' ? COUNTER_IDLE_TIMEOUT_MS : DEFAULT_IDLE_TIMEOUT_MS;
+
 function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   
@@ -25,6 +34,12 @@ function App() {
   const [init, setInit] = useState(true);
 
   useEffect(() => {
+    // Only the very first auth callback represents a session restored from
+    // storage on page load — that's when we enforce the idle deadline so a
+    // refresh can't be used to dodge the timeout. Logins that happen later in
+    // the same session are genuine user activity and are exempt.
+    let didInitialIdleCheck = false;
+
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (user) {
         // Determine role based on login method (Synthetic Email = Crew Code Login)
@@ -78,6 +93,19 @@ function App() {
                 outletId = userProfile.outletId;
                 name = userProfile.crewName;
                 dbId = docId;
+
+                // On a restored session, log out if the idle deadline (role-based) has passed.
+                if (!didInitialIdleCheck) {
+                    didInitialIdleCheck = true;
+                    const last = Number(localStorage.getItem(LAST_ACTIVITY_KEY));
+                    if (last && Date.now() - last > getIdleTimeoutMs(accessRole)) {
+                        localStorage.removeItem(LAST_ACTIVITY_KEY);
+                        await auth.signOut();
+                        setCurrentUser(null);
+                        setInit(false);
+                        return;
+                    }
+                }
             } else {
                 // If profile not found in correct collection, logout to prevent "Ghost" sessions
                 console.warn("User authenticated but no profile found in restricted collections.");
@@ -99,16 +127,48 @@ function App() {
             dbId: dbId
         });
       } else {
+        didInitialIdleCheck = true;
         setCurrentUser(null);
       }
       setInit(false);
     });
     return () => unsubscribe();
-  }, []); 
+  }, []);
+
+  // Idle-logout timer: while logged in, sign out after the role's idle window
+  // with no interaction. Activity also stamps localStorage so a page reload
+  // can't reset the clock (see the restore check above).
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const timeoutMs = getIdleTimeoutMs(currentUser.accessRole);
+    let timerId: number;
+    let lastWrite = 0;
+
+    const handleActivity = () => {
+      const now = Date.now();
+      if (now - lastWrite > 10000) {
+        localStorage.setItem(LAST_ACTIVITY_KEY, String(now));
+        lastWrite = now;
+      }
+      window.clearTimeout(timerId);
+      timerId = window.setTimeout(() => { auth.signOut(); }, timeoutMs);
+    };
+
+    const events = ['mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    events.forEach(e => window.addEventListener(e, handleActivity, { passive: true }));
+    handleActivity(); // start the timer and stamp initial activity
+
+    return () => {
+      window.clearTimeout(timerId);
+      events.forEach(e => window.removeEventListener(e, handleActivity));
+    };
+  }, [currentUser]);
 
   const handleLogin = (user: CurrentUser) => setCurrentUser(user);
   
   const handleLogout = () => {
+    localStorage.removeItem(LAST_ACTIVITY_KEY);
     auth.signOut();
     setCurrentUser(null);
   };
