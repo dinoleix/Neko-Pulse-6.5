@@ -165,8 +165,28 @@ export const TaskCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUs
         setProofAudio(null);
     };
 
+    // Determine which selected proof types are still missing for the active task.
+    const getMissingProofs = (task: Task): TaskProofType[] => {
+        const required = task.proofTypes?.filter(p => p !== TaskProofType.NONE) ?? [];
+        return required.filter(type => {
+            if (type === TaskProofType.PHOTO) return !proofPhoto;
+            if (type === TaskProofType.AUDIO) return !proofAudio;
+            if (type === TaskProofType.TEXT) return !proofText.trim();
+            return false;
+        });
+    };
+
     const handleSubmit = async () => {
         if (!activeTask) return;
+
+        // Enforce that every selected proof type is provided before closing.
+        const missing = getMissingProofs(activeTask);
+        if (missing.length > 0) {
+            const labels = missing.map(m => m.charAt(0) + m.slice(1).toLowerCase()).join(', ');
+            alert(`Please provide the required proof before completing: ${labels}.`);
+            return;
+        }
+
         setSubmittingId(activeTask.id!);
 
         try {
@@ -285,7 +305,22 @@ export const TaskCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUs
                             </div>
                         )}
 
-                        <Button onClick={handleSubmit} isLoading={!!submittingId}>Complete Task</Button>
+                        {(() => {
+                            const missing = getMissingProofs(activeTask);
+                            const labels = missing.map(m => m.charAt(0) + m.slice(1).toLowerCase()).join(', ');
+                            return (
+                                <div>
+                                    <Button onClick={handleSubmit} isLoading={!!submittingId} disabled={missing.length > 0}>
+                                        Complete Task
+                                    </Button>
+                                    {missing.length > 0 && (
+                                        <p className="text-xs text-amber-600 text-center font-bold mt-2">
+                                            Required before completing: {labels}
+                                        </p>
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </div>
                 </Card>
             </div>
