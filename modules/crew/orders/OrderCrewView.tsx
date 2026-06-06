@@ -36,8 +36,10 @@ export const OrderCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentU
      setIsLoading(true);
      try {
         const file = e.target.files[0];
-        // Only for OCR analysis
-        const base64 = await fileToGenerativePart(file);
+        // Compress before OCR: keeps the upload under the serverless body limit
+        // and reduces Gemini token cost. 0.7 quality stays legible for text.
+        const compressed = await compressImage(file, 0.7);
+        const base64 = await fileToGenerativePart(compressed);
         const aiData = await parseOrderImage(base64);
         
         // Add local validation state to items
