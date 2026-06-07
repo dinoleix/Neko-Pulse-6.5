@@ -58,6 +58,14 @@
     <div id="root"></div>
     <script>
       if ('serviceWorker' in navigator) {
+        // When a new service worker takes control (after a deploy), reload once
+        // so the open app swaps onto the latest code instead of running stale.
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (refreshing) return;
+          refreshing = true;
+          window.location.reload();
+        });
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
             .then(registration => {
