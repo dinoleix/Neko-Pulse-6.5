@@ -1,6 +1,7 @@
 
 import { db } from '../firebaseConfig';
 import { Store, CrewMember, AppConfig, ShiftAssignment, AttendanceLog, TaskLog, Task, CafeHoliday } from '../types';
+import { getCachedSettingsDoc } from './configCache';
 
 export const reportsService = {
     getStores: async (): Promise<Store[]> => {
@@ -14,8 +15,7 @@ export const reportsService = {
     },
 
     getAppConfig: async (): Promise<AppConfig | null> => {
-        const snap = await db.collection('settings').doc('appConfig').get();
-        return snap.exists ? (snap.data() as AppConfig) : null;
+        return (await getCachedSettingsDoc('appConfig')) as AppConfig | null;
     },
 
     getShifts: async (startDate: string, endDate: string): Promise<ShiftAssignment[]> => {

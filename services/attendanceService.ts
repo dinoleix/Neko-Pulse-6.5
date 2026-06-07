@@ -1,6 +1,7 @@
 
 import { db, firebase } from '../firebaseConfig';
 import { AttendanceLog, LeaveRequest, AttendanceConfig, CrewMember, ShiftAssignment, AppConfig } from '../types';
+import { getCachedSettingsDoc } from './configCache';
 // @fix: Removed parseISO from date-fns as it's not exported in the available version
 import { differenceInDays } from 'date-fns';
 
@@ -39,8 +40,7 @@ export const attendanceService = {
     },
 
     getAppConfig: async (): Promise<AppConfig | null> => {
-        const snap = await db.collection('settings').doc('appConfig').get();
-        return snap.exists ? (snap.data() as AppConfig) : null;
+        return (await getCachedSettingsDoc('appConfig')) as AppConfig | null;
     },
 
     // --- LEAVE MANAGEMENT ---

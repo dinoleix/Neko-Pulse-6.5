@@ -1,6 +1,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { db, storage, firebase, auth } from '../firebaseConfig';
+import { getCachedSettingsDoc } from '../services/configCache';
 import { AttendanceConfig, CrewMember, AttendanceLog, CurrentUser } from '../types';
 import { Clock, RefreshCw, LogIn, LogOut, XCircle, ChevronLeft, Lock, ShieldCheck, Grid3x3, MapPin } from 'lucide-react';
 import { format, differenceInMinutes, startOfDay } from 'date-fns';
@@ -39,8 +40,8 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
   // Clock & Config Load
   useEffect(() => {
     // Load App Config (Timezone)
-    db.collection('settings').doc('appConfig').get().then(doc => {
-        if(doc.exists) setTimezone(doc.data()?.timezone || DEFAULT_TIMEZONE);
+    getCachedSettingsDoc('appConfig').then(cfg => {
+        if(cfg) setTimezone(cfg.timezone || DEFAULT_TIMEZONE);
     });
 
     // Load Attendance Config (Enabled Methods)

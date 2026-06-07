@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../../firebaseConfig'; // For timezone retrieval if needed
+import { getCachedSettingsDoc } from '../../../services/configCache';
 import { taskService } from '../../../services/taskService';
 import { CurrentUser, Task, TaskLog, TaskConfig, TaskFrequency, TaskProofType } from '../../../types';
 import { Button, Card, Badge, AudioRecorder, TextArea } from '../../../components/SharedComponents';
@@ -40,8 +41,8 @@ export const TaskCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUs
 
     useEffect(() => {
         // Load timezone and alert config
-        db.collection('settings').doc('appConfig').get().then(doc => {
-             if(doc.exists) setTimezone(doc.data()?.timezone || DEFAULT_TIMEZONE);
+        getCachedSettingsDoc('appConfig').then(cfg => {
+             if(cfg) setTimezone(cfg.timezone || DEFAULT_TIMEZONE);
         });
         
         const loadConfig = async () => {

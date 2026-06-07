@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../../../firebaseConfig';
+import { getCachedSettingsDoc } from '../../../services/configCache';
 import { loginLogService } from '../../../services/loginLogService';
 import { LoginLog } from '../../../types';
 import { Card, Badge, Input, Select, Button } from '../../../components/SharedComponents';
@@ -18,8 +19,8 @@ export const LoginActivityAdminView: React.FC = () => {
     const [roleFilter, setRoleFilter] = useState<'ALL' | 'ADMIN' | 'CREW'>('ALL');
 
     useEffect(() => {
-        db.collection('settings').doc('appConfig').get().then(doc => {
-            if (doc.exists) setTimezone(doc.data()?.timezone || DEFAULT_TIMEZONE);
+        getCachedSettingsDoc('appConfig').then(cfg => {
+            if (cfg) setTimezone(cfg.timezone || DEFAULT_TIMEZONE);
         }).catch(() => {});
         load();
     }, []);

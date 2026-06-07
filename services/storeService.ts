@@ -1,6 +1,7 @@
 
 import { db, storage } from '../firebaseConfig';
 import { Store, AppConfig } from '../types';
+import { getCachedSettingsDoc, invalidateSettingsDoc } from './configCache';
 
 export const storeService = {
   // --- STORES ---
@@ -29,11 +30,12 @@ export const storeService = {
 
   // --- APP CONFIG ---
   getAppConfig: async (): Promise<AppConfig | null> => {
-    const snap = await db.collection('settings').doc('appConfig').get();
-    return snap.exists ? (snap.data() as AppConfig) : null;
+    return (await getCachedSettingsDoc('appConfig')) as AppConfig | null;
   },
 
   updateAppConfig: async (config: AppConfig) => {
-    return await db.collection('settings').doc('appConfig').set(config, { merge: true });
+    const res = await db.collection('settings').doc('appConfig').set(config, { merge: true });
+    invalidateSettingsDoc('appConfig');
+    return res;
   }
 };

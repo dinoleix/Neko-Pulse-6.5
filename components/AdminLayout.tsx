@@ -19,6 +19,7 @@ import { SettingsAdminView } from '../modules/admin/settings/SettingsAdminView';
 import { BluebookAdminView } from '../modules/admin/bluebook/BluebookAdminView';
 import { RecipeAdminView } from '../modules/admin/recipes/RecipeAdminView';
 import { LoginActivityAdminView } from '../modules/admin/loginactivity/LoginActivityAdminView';
+import { getCachedSettingsDoc } from '../services/configCache';
 
 interface AdminLayoutProps {
   currentUser: CurrentUser;
@@ -34,9 +35,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
      // Load Access Matrix
      const loadConfig = async () => {
          try {
-             const doc = await db.collection('settings').doc('accessConfig').get();
-             if (doc.exists) {
-                 setAccessConfig(doc.data() as AccessConfig);
+             const conf = (await getCachedSettingsDoc('accessConfig')) as AccessConfig | null;
+             if (conf) {
+                 setAccessConfig(conf);
              }
          } catch(e) {
              console.error("Failed to load access config", e);

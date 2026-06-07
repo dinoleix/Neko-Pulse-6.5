@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../../../firebaseConfig'; // Still needed for timestamp if constructing manually, though service handles most
+import { getCachedSettingsDoc } from '../../../services/configCache';
 import { taskService } from '../../../services/taskService';
 import { Task, TaskTemplate, TaskLog, TaskFrequency, TaskProofType, Store, TaskConfig, CrewMember } from '../../../types';
 import { Button, Card, Input, Badge, AudioRecorder, Checkbox, Select, TextArea, FullScreenImageViewer } from '../../../components/SharedComponents';
@@ -130,8 +131,8 @@ export const TaskAdminView: React.FC = () => {
 
    const loadData = async () => {
       try {
-          db.collection('settings').doc('appConfig').get().then(doc => {
-              if(doc.exists) setTimezone(doc.data()?.timezone || DEFAULT_TIMEZONE);
+          getCachedSettingsDoc('appConfig').then(cfg => {
+              if(cfg) setTimezone(cfg.timezone || DEFAULT_TIMEZONE);
           });
 
           const [tData, templData, configData, contextData] = await Promise.all([
