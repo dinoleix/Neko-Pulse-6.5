@@ -82,15 +82,27 @@ export const taskService = {
     getTodaysLogs: async (outletId: string): Promise<TaskLog[]> => {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        
-        // Optimized: Fetch all logs for last 24h, filter by outlet in memory
-        const snap = await db.collection('taskLogs')
-            .where('completedAt', '>=', yesterday)
-            .get();
-            
-        return snap.docs
-            .map(d => ({ ...d.data(), id: d.id } as TaskLog))
-            .filter(l => l.outletId === outletId);
+
+        try {
+            // Filter by outlet server-side so each crew device reads only its own
+            // store's logs, not every outlet's. Requires the composite index
+            // taskLogs (outletId ASC, completedAt ASC) in firestore.indexes.json.
+            const snap = await db.collection('taskLogs')
+                .where('outletId', '==', outletId)
+                .where('completedAt', '>=', yesterday)
+                .get();
+            return snap.docs.map(d => ({ ...d.data(), id: d.id } as TaskLog));
+        } catch (e) {
+            // If the index isn't built yet (e.g. just after a deploy), fall back to
+            // the time-only query + in-memory filter so task loading never breaks.
+            console.warn('taskLogs outlet index unavailable, using fallback:', e);
+            const snap = await db.collection('taskLogs')
+                .where('completedAt', '>=', yesterday)
+                .get();
+            return snap.docs
+                .map(d => ({ ...d.data(), id: d.id } as TaskLog))
+                .filter(l => l.outletId === outletId);
+        }
     },
 
     submitLog: async (log: Omit<TaskLog, 'id'>) => {
