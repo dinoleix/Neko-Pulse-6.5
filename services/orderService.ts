@@ -31,16 +31,27 @@ export const orderService = {
 
     // --- CREW: HISTORY ---
     getMyHistory: async (crewId: string, limit: number = 10): Promise<OrderValidation[]> => {
-        // Optimized: Removed .orderBy('validatedAt', 'desc') combined with .where()
-        // This avoids requiring a composite index on [validatedByCrewId, validatedAt].
-        const snap = await db.collection('validations')
-            .where('validatedByCrewId', '==', crewId)
-            .limit(20) // Fetch slightly more to ensure top 10 after sort
-            .get();
-        
-        const data = snap.docs.map(d => ({...d.data(), id: d.id} as OrderValidation));
-        
-        // Client-side Sort
-        return data.sort((a,b) => (b.validatedAt?.seconds || 0) - (a.validatedAt?.seconds || 0)).slice(0, limit);
+        // Server-side order + limit so we truly get the newest N. Requires the
+        // composite index validations (validatedByCrewId ASC, validatedAt DESC).
+        // The old where()+limit() without orderBy returned the first N by doc
+        // ID — effectively random records once history grew past the limit.
+        try {
+            const snap = await db.collection('validations')
+                .where('validatedByCrewId', '==', crewId)
+                .orderBy('validatedAt', 'desc')
+                .limit(limit)
+                .get();
+            return snap.docs.map(d => ({...d.data(), id: d.id} as OrderValidation));
+        } catch (e) {
+            // Index may still be building right after a deploy — fall back to
+            // the unordered query rather than showing an empty history.
+            console.warn('validations index unavailable, using fallback:', e);
+            const snap = await db.collection('validations')
+                .where('validatedByCrewId', '==', crewId)
+                .limit(limit * 2)
+                .get();
+            const data = snap.docs.map(d => ({...d.data(), id: d.id} as OrderValidation));
+            return data.sort((a,b) => (b.validatedAt?.seconds || 0) - (a.validatedAt?.seconds || 0)).slice(0, limit);
+        }
     }
 };

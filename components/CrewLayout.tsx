@@ -74,16 +74,21 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
                setCanViewRecipe(conf[MODULE_IDS.CREW_RECIPE] ? conf[MODULE_IDS.CREW_RECIPE].includes(role) : false);
             }
 
-            // Cheap birthday lookup: query only people whose birthday is today
-            // via the denormalized birthMMDD field (single-field index, ~0-2 reads)
-            // instead of reading the whole active-crew collection.
-            const todayMMDD = format(new Date(), 'MM-dd');
-            const crewSnap = await db.collection('crew').where('birthMMDD', '==', todayMMDD).get();
+            // Cheap birthday lookup (~0-2 reads) against /crewDirectory — the
+            // staff-readable mirror. Crew accounts can't list /crew itself, so
+            // querying it here used to permission-fail and also killed the
+            // pilot lookup below; isolate the failure domain just in case.
+            try {
+                const todayMMDD = format(new Date(), 'MM-dd');
+                const dirSnap = await db.collection('crewDirectory').where('birthMMDD', '==', todayMMDD).get();
 
-            const bdayMatches = crewSnap.docs
-                .map(doc => ({...doc.data(), id: doc.id} as CrewMember))
-                .filter(c => c.active !== false);
-            setBirthdays(bdayMatches);
+                const bdayMatches = dirSnap.docs
+                    .map(doc => ({...doc.data(), id: doc.id} as CrewMember))
+                    .filter(c => c.active !== false);
+                setBirthdays(bdayMatches);
+            } catch (bdayErr) {
+                console.warn('Birthday lookup failed:', bdayErr);
+            }
 
             if (currentUser.outletId) {
                 const appCfg = await getCachedSettingsDoc('appConfig');

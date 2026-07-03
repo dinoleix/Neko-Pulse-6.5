@@ -1,6 +1,6 @@
 
 import { db, firebase } from '../firebaseConfig';
-import { EOMCycle, CrewMember, EOMVote, EOMScore, EOMResult } from '../types';
+import { EOMCycle, CrewMember, CrewDirectoryEntry, EOMVote, EOMScore, EOMResult } from '../types';
 
 export const eomService = {
     // --- CYCLES ---
@@ -52,6 +52,13 @@ export const eomService = {
         return snap.docs.map(d => ({ ...d.data(), id: d.id } as CrewMember));
     },
 
+    // Crew-safe nominee list: /crew is manager-or-self readable (it holds login
+    // codes), so the voting screen reads the /crewDirectory mirror instead.
+    getNomineeDirectory: async (): Promise<CrewDirectoryEntry[]> => {
+        const snap = await db.collection('crewDirectory').where('active', '==', true).get();
+        return snap.docs.map(d => ({ ...d.data(), id: d.id } as CrewDirectoryEntry));
+    },
+
     // --- VOTES ---
     castVote: async (cycleId: string, voterId: string, nomineeId: string) => {
         return await db.collection('eom_votes').add({
@@ -62,13 +69,23 @@ export const eomService = {
         });
     },
 
-    getMyVote: async (cycleId: string, voterId: string): Promise<string | null> => {
-        const snap = await db.collection('eom_votes')
+    // altId: legacy votes may be stored under the crew doc ID instead of the
+    // auth UID; check both so old voters don't see the ballot again.
+    getMyVote: async (cycleId: string, voterId: string, altId?: string): Promise<string | null> => {
+        const fetch = (id: string) => db.collection('eom_votes')
             .where('cycleId', '==', cycleId)
-            .where('voterId', '==', voterId)
+            .where('voterId', '==', id)
             .limit(1)
             .get();
-        return snap.empty ? null : snap.docs[0].data().nomineeId;
+
+        const snap = await fetch(voterId);
+        if (!snap.empty) return snap.docs[0].data().nomineeId;
+
+        if (altId && altId !== voterId) {
+            const altSnap = await fetch(altId);
+            if (!altSnap.empty) return altSnap.docs[0].data().nomineeId;
+        }
+        return null;
     },
 
     getVotesForCycle: async (cycleId: string): Promise<EOMVote[]> => {

@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { eomService } from '../../../services/eomService';
-import { CrewMember, CurrentUser, EOMCycle } from '../../../types';
+import { CrewDirectoryEntry, CurrentUser, EOMCycle } from '../../../types';
 import { Trophy, Vote, Award, Crown, CheckCircle, Calendar, ThumbsUp, Loader2 } from 'lucide-react';
 
 export const EOMCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUser }) => {
     const [activeCycle, setActiveCycle] = useState<EOMCycle | null>(null);
-    const [nominees, setNominees] = useState<CrewMember[]>([]);
+    const [nominees, setNominees] = useState<CrewDirectoryEntry[]>([]);
     const [myVote, setMyVote] = useState<string | null>(null);
     const [pastWinners, setPastWinners] = useState<EOMCycle[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -25,13 +25,15 @@ export const EOMCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUse
                 
                 if (cycle) {
                     setActiveCycle(cycle);
-                    const votedNominee = await eomService.getMyVote(cycle.id, dbId);
+                    // New votes are keyed by auth UID; pass dbId so legacy votes still count
+                    const votedNominee = await eomService.getMyVote(cycle.id, currentUser.uid, dbId);
                     if (votedNominee) setMyVote(votedNominee);
                 }
 
-                // 2. Get Nominees (Coworkers, exclude self)
-                const allCrew = await eomService.getActiveCrew();
-                setNominees(allCrew.filter(c => c.id !== dbId));
+                // 2. Get Nominees (Coworkers, exclude self) — from the staff-readable
+                // directory mirror; crew accounts can't list the /crew collection.
+                const directory = await eomService.getNomineeDirectory();
+                setNominees(directory.filter(c => c.id !== dbId && c.id !== currentUser.uid));
 
                 // 3. Past Winners
                 const winners = await eomService.getPastWinners();
@@ -59,7 +61,8 @@ export const EOMCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUse
         // Step 2: Submit
         setIsVoting(true);
         try {
-            await eomService.castVote(activeCycle.id, dbId, nomineeId);
+            // voterId must be the auth UID — security rules check it on create
+            await eomService.castVote(activeCycle.id, currentUser.uid, nomineeId);
             setMyVote(nomineeId);
         } catch (e: any) {
             alert(`Failed to vote: ${e.message}`);

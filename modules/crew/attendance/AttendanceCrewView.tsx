@@ -272,7 +272,9 @@ export const AttendanceCrewView: React.FC<{ currentUser: CurrentUser }> = ({ cur
        setIsLoading(true);
        try {
            await attendanceService.submitLeave({
-               crewId: currentUser.dbId || currentUser.uid,
+               // Must be the auth UID: security rules verify crewId ==
+               // request.auth.uid on create. (Legacy dbId here was rejected.)
+               crewId: currentUser.uid,
                crewName: currentUser.name || 'Unknown',
                outletId: currentUser.outletId || '',
                type: newLeave.type as any,

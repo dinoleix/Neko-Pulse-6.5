@@ -116,8 +116,21 @@ export interface CrewMember {
   dateOfJoining?: string; 
   dateOfLeaving?: string; 
   documents?: CrewDocument[];
-  leaveBalanceOverride?: number; 
+  leaveBalanceOverride?: number;
   leaveBalanceOverrideDate?: string; // YYYY-MM-DD - The reset point for accrual
+}
+
+// Public-safe subset of CrewMember, mirrored into /crewDirectory (doc ID =
+// crew doc ID) so crew-facing features (birthday banner, EOM nominees) can
+// list coworkers without read access to /crew, which holds login codes and
+// HR fields. Synced by employeeService on save/delete and self-healed when
+// an admin opens the Employees tab.
+export interface CrewDirectoryEntry {
+  id?: string;
+  crewName: string;
+  role?: string | null;
+  birthMMDD?: string | null;
+  active?: boolean;
 }
 
 // --- MODULE: SHIFTS ---
