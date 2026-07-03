@@ -38,12 +38,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
       const uid = userCred.user.uid;
       let userProfile: CrewMember | null = null;
       let dbId = '';
-      let foundInCollection = 'crew';
 
-      // 1. SEARCH IN 'CREW' COLLECTION
-      // Try by Doc ID (Primary)
+      // A crew code resolves against the CREW collection only. The old
+      // fallback into 'managers' was a back door: a staff-code login could
+      // land in the full admin hub, and the session then died on refresh
+      // (the restore path never checked managers for synthetic accounts).
+      // Admins sign in with their email on the Manager Login tab.
       let docSnap = await db.collection('crew').doc(uid).get();
-      
+
       // Fallback: Check via authUid field if Doc ID doesn't match
       if (!docSnap.exists) {
           const querySnap = await db.collection('crew').where('authUid', '==', uid).limit(1).get();
@@ -55,47 +57,30 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
       if (docSnap.exists) {
           userProfile = docSnap.data() as CrewMember;
           dbId = docSnap.id;
-      } else {
-          // 2. SEARCH IN 'MANAGERS' COLLECTION (Fallback for managers using PINs)
-          // Try by Doc ID
-          docSnap = await db.collection('managers').doc(uid).get();
-          if (!docSnap.exists) {
-              const querySnap = await db.collection('managers').where('authUid', '==', uid).limit(1).get();
-              if (!querySnap.empty) {
-                  docSnap = querySnap.docs[0];
-              }
-          }
-
-          if (docSnap.exists) {
-              userProfile = docSnap.data() as CrewMember;
-              dbId = docSnap.id;
-              foundInCollection = 'managers';
-          }
       }
 
       if (!userProfile) {
-         throw new Error("Account exists but profile data is missing. Please ask an Admin to 'Regenerate Login' for this user in the Employee tab.");
+         await auth.signOut();
+         throw new Error("No staff profile found for this code. Managers should use the Manager Login tab; otherwise ask an Admin to 'Regenerate Login' for this user in the Employee tab.");
       }
-      
+
       if (userProfile.active === false) {
          await auth.signOut();
          throw new Error("Account is inactive. Please contact your administrator.");
       }
 
-      const resolvedRole = foundInCollection === 'managers' ? UserRole.ADMIN : UserRole.CREW;
-
       loginLogService.record({
         userId: uid,
         dbId: dbId,
         userName: userProfile.crewName,
-        role: resolvedRole === UserRole.ADMIN ? 'ADMIN' : 'CREW',
+        role: 'CREW',
         accessRole: userProfile.role,
         outletId: userProfile.outletId,
         loginMethod: 'STAFF_CODE',
       });
 
       onLogin({
-        role: resolvedRole,
+        role: UserRole.CREW,
         uid: uid,
         name: userProfile.crewName,
         outletId: userProfile.outletId,

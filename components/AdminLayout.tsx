@@ -49,15 +49,17 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
   }, []);
 
   const hasAccess = (moduleId: string): boolean => {
-      if (!currentUser.accessRole) return true;
-      const SUPER_ROLES = ['Super Admin', 'Admin', 'System Admin'];
-      if (currentUser.accessRole.includes('Owner') || SUPER_ROLES.includes(currentUser.accessRole)) {
-          return true;
-      }
-      if (!accessConfig) return false; 
+      // A missing role denies everything (it used to grant everything), and
+      // super roles are exact-match — a role merely *containing* "Owner"
+      // used to unlock every module including this access matrix.
+      const role = currentUser.accessRole?.trim().toLowerCase();
+      if (!role) return false;
+      const SUPER_ROLES = ['owner', 'super admin', 'admin', 'system admin'];
+      if (SUPER_ROLES.includes(role)) return true;
+      if (!accessConfig) return false;
       const allowedRoles = accessConfig[moduleId];
       if (allowedRoles === undefined) return false;
-      return allowedRoles.includes(currentUser.accessRole);
+      return allowedRoles.includes(currentUser.accessRole!);
   };
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-emerald-600 font-bold">Loading Admin Hub...</div>;
@@ -98,7 +100,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
     );
   }
 
-  if (activeModule !== 'ACCESS' && !hasAccess(activeModule)) {
+  // No exemption for the ACCESS module — the matrix editor is super-role-only
+  // (it never appears as a matrix row, so hasAccess only passes via SUPER_ROLES).
+  if (!hasAccess(activeModule)) {
       return (
           <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
               <Lock className="w-16 h-16 text-slate-300 mb-4"/>

@@ -62,9 +62,14 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
             const conf = (await getCachedSettingsDoc('accessConfig')) as AccessConfig | null;
             if(conf && role) {
 
+               // Admin tools inside the crew app require their own explicit
+               // CREWADMIN_ grants in the access matrix. Previously this read
+               // the *manager* module rows, so ticking a module for a manager
+               // role silently gave every staff member with that role name the
+               // admin pages too.
                const allowed = Object.entries(conf)
-                    .filter(([key, roles]) => roles.includes(role) && !key.startsWith('CREW_')) 
-                    .map(([k]) => k);
+                    .filter(([key, roles]) => key.startsWith('CREWADMIN_') && Array.isArray(roles) && roles.includes(role))
+                    .map(([k]) => k.replace('CREWADMIN_', ''));
                setAllowedAdmin(allowed);
 
                setCanViewOrders(conf[MODULE_IDS.CREW_ORDERS] ? conf[MODULE_IDS.CREW_ORDERS].includes(role) : true);

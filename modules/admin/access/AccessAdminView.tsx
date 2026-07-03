@@ -74,7 +74,22 @@ export const AccessAdminView: React.FC = () => {
       MODULE_IDS.CREW_TASKS,
       MODULE_IDS.CREW_BLUEBOOK, // Added Bluebook Viewer for Crew
       MODULE_IDS.CREW_SHIFTS,
-      MODULE_IDS.CREW_EOM 
+      MODULE_IDS.CREW_EOM
+   ];
+
+   // Admin tools exposed inside the CREW app (stored as CREWADMIN_<module>).
+   // Kept separate from the manager rows above so granting a manager role a
+   // dashboard module doesn't leak admin pages to staff who share the role
+   // name. Only the modules CrewLayout can actually render are listed.
+   const crewAdminModules = [
+      MODULE_IDS.ACCURACY,
+      MODULE_IDS.TASKS,
+      MODULE_IDS.EMPLOYEE,
+      MODULE_IDS.STORES,
+      MODULE_IDS.SHIFTS,
+      MODULE_IDS.BLUEBOOK,
+      MODULE_IDS.EOM,
+      MODULE_IDS.ATTENDANCE
    ];
 
    if (isLoading) return <div className="p-8 text-center text-emerald-600 font-bold flex items-center justify-center gap-2"><Loader2 className="animate-spin"/> Loading Access Matrix...</div>;
@@ -150,15 +165,42 @@ export const AccessAdminView: React.FC = () => {
                                  {roles.map(r => (
                                     <td key={r} className="p-4 text-center">
                                        <div className="flex justify-center">
-                                          <Checkbox 
-                                             checked={config[mod]?.includes(r) || false} 
-                                             onChange={() => toggle(mod, r)} 
+                                          <Checkbox
+                                             checked={config[mod]?.includes(r) || false}
+                                             onChange={() => toggle(mod, r)}
                                           />
                                        </div>
                                     </td>
                                  ))}
                               </tr>
                            ))}
+
+                           {/* CREW ADMIN TOOLS SECTION */}
+                           <tr>
+                              <td colSpan={roles.length + 1} className="bg-rose-50 p-2 pl-4 text-xs font-bold text-rose-500 uppercase tracking-widest border-t border-rose-100">
+                                 Crew App: Admin Tools (staff see these admin pages inside their app)
+                              </td>
+                           </tr>
+                           {crewAdminModules.map(mod => {
+                              const key = `CREWADMIN_${mod}`;
+                              return (
+                                 <tr key={key} className="hover:bg-slate-50 transition-colors">
+                                    <td className="p-4 font-bold text-slate-800 flex items-center gap-2">
+                                       {mod}
+                                    </td>
+                                    {roles.map(r => (
+                                       <td key={r} className="p-4 text-center">
+                                          <div className="flex justify-center">
+                                             <Checkbox
+                                                checked={config[key]?.includes(r) || false}
+                                                onChange={() => toggle(key, r)}
+                                             />
+                                          </div>
+                                       </td>
+                                    ))}
+                                 </tr>
+                              );
+                           })}
                         </tbody>
                      </table>
                   </div>
