@@ -137,9 +137,11 @@ export const OrderCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentU
 
          await orderService.saveValidation(payload);
          setStep('SUCCESS');
-      } catch(e) { 
-          alert("Submit failed"); 
-      } finally { 
+      } catch(e: any) {
+          console.error("Order validation submit failed:", e);
+          const detail = e?.code || e?.message || String(e);
+          alert(`Submit failed.\n\nError: ${detail}`);
+      } finally {
           setIsLoading(false); 
       }
   };

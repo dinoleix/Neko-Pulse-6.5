@@ -227,8 +227,10 @@ export const TaskCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUs
 
             setActiveTask(null);
             loadMyTasks();
-        } catch (e) {
-            alert("Failed to submit task.");
+        } catch (e: any) {
+            console.error("Task submit failed:", e);
+            const detail = e?.code || e?.message || String(e);
+            alert(`Failed to submit task.\n\nError: ${detail}`);
         } finally {
             setSubmittingId(null);
         }

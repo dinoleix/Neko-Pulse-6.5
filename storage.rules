@@ -3,7 +3,11 @@ rules_version = '2';
 // Mirrors the Firestore access model: "staff" means a crew/ or managers/
 // profile doc keyed by the caller's auth UID (open email signup means a bare
 // Firebase login proves nothing). Cross-service firestore.exists() lookups
-// are billed as Firestore reads and cached per request.
+// are billed as Firestore reads and cached per request. NOTE: these lookups
+// need roles/firebaserules.firestoreServiceAgent granted to the Storage
+// service agent — the CLI only offers the grant on an interactive deploy
+// whose rules content changed (see rulesDeploy.js: up-to-date rulesets skip
+// the IAM check entirely).
 //
 // Note: images shown in the app load via getDownloadURL() token URLs, which
 // bypass these rules — so read rules here only gate direct SDK/API access.
