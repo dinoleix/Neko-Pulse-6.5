@@ -14,18 +14,29 @@ const parseISO = (str: string) => {
 
 export const attendanceService = {
     // --- ADMIN: DATA FETCHING ---
-    getAllLogs: async (limit: number = 1000): Promise<AttendanceLog[]> => {
-        const snap = await db.collection('attendanceLogs').orderBy('timestamp', 'desc').limit(limit).get();
+    // `since` bounds the read to the window the caller actually renders —
+    // without it every admin view open pays for the full `limit`.
+    getAllLogs: async (limit: number = 1000, since?: Date): Promise<AttendanceLog[]> => {
+        let query: firebase.firestore.Query = db.collection('attendanceLogs');
+        if (since) query = query.where('timestamp', '>=', since);
+        const snap = await query.orderBy('timestamp', 'desc').limit(limit).get();
         return snap.docs.map(d => ({...d.data(), id: d.id} as AttendanceLog));
     },
 
-    getAllLeaves: async (): Promise<LeaveRequest[]> => {
-        const snap = await db.collection('leaveRequests').orderBy('appliedAt', 'desc').get();
+    // Limit is a guardrail, not a filter: leave volume is small, but the
+    // collection grows forever and balances only need leaves after each
+    // member's reset date, which recent-first ordering preserves in practice.
+    getAllLeaves: async (limit: number = 1000): Promise<LeaveRequest[]> => {
+        const snap = await db.collection('leaveRequests').orderBy('appliedAt', 'desc').limit(limit).get();
         return snap.docs.map(d => ({...d.data(), id: d.id} as LeaveRequest));
     },
 
-    getAllShifts: async (): Promise<ShiftAssignment[]> => {
-        const snap = await db.collection('shiftAssignments').get();
+    // One doc per crew member per day — unbounded, this was the single
+    // biggest read on the admin attendance screen.
+    getAllShifts: async (sinceDate?: string): Promise<ShiftAssignment[]> => {
+        let query: firebase.firestore.Query = db.collection('shiftAssignments');
+        if (sinceDate) query = query.where('date', '>=', sinceDate);
+        const snap = await query.get();
         return snap.docs.map(d => ({...d.data(), id: d.id} as ShiftAssignment));
     },
 
@@ -141,29 +152,29 @@ export const attendanceService = {
     },
 
     getCrewLeaves: async (crewId: string, limit: number = 20, altId?: string): Promise<LeaveRequest[]> => {
-        let snap = await db.collection('leaveRequests')
-            .where('crewId', '==', crewId)
+        // Server-side ordering + limit (composite index: leaveRequests
+        // crewId ASC, appliedAt DESC) instead of reading the member's whole
+        // leave history and slicing client-side.
+        const fetch = (id: string) => db.collection('leaveRequests')
+            .where('crewId', '==', id)
+            .orderBy('appliedAt', 'desc')
+            .limit(limit)
             .get();
-            
-        let leaves = snap.docs.map(d => ({...d.data(), id: d.id} as LeaveRequest));
 
-        if (altId && altId !== crewId) {
-            const snap2 = await db.collection('leaveRequests')
-                .where('crewId', '==', altId)
-                .get();
-            const leaves2 = snap2.docs.map(d => ({...d.data(), id: d.id} as LeaveRequest));
-            const existingIds = new Set(leaves.map(l => l.id));
-            leaves2.forEach(l => {
-                if (!existingIds.has(l.id)) leaves.push(l);
-            });
-        }
-        
-        leaves.sort((a, b) => {
-            const tA = a.appliedAt?.seconds || 0;
-            const tB = b.appliedAt?.seconds || 0;
-            return tB - tA;
-        });
-        
+        const snaps = await Promise.all(
+            altId && altId !== crewId ? [fetch(crewId), fetch(altId)] : [fetch(crewId)]
+        );
+
+        const seen = new Set<string>();
+        const leaves: LeaveRequest[] = [];
+        snaps.forEach(snap => snap.docs.forEach(d => {
+            if (!seen.has(d.id)) {
+                seen.add(d.id);
+                leaves.push({ ...d.data(), id: d.id } as LeaveRequest);
+            }
+        }));
+
+        leaves.sort((a, b) => (b.appliedAt?.seconds || 0) - (a.appliedAt?.seconds || 0));
         return leaves.slice(0, limit);
     },
 

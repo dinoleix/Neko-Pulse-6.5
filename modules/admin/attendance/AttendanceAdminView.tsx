@@ -107,12 +107,23 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
    const loadData = async () => {
       setLoadingError(null);
       try {
+          // The report filters never look earlier than start-of-month,
+          // start-of-week, or yesterday (whichever reaches back furthest, e.g.
+          // on the 1st "yesterday" is last month) — so only read that window
+          // instead of the whole ever-growing logs/shifts collections.
+          const now = new Date();
+          const reportBound = new Date(Math.min(
+              startOfMonth(now).getTime(),
+              startOfWeek(now).getTime(),
+              startOfDay(subDays(now, 1)).getTime()
+          ));
+
           const [appConfig, logsData, leavesData, crewData, shiftData, attConfig] = await Promise.all([
               attendanceService.getAppConfig(),
-              attendanceService.getAllLogs(1000),
+              attendanceService.getAllLogs(1000, reportBound),
               attendanceService.getAllLeaves(),
               attendanceService.getCrew(),
-              attendanceService.getAllShifts(),
+              attendanceService.getAllShifts(format(reportBound, 'yyyy-MM-dd')),
               attendanceService.getConfig()
           ]);
 

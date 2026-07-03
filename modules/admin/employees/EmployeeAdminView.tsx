@@ -220,6 +220,18 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
           return;
       }
 
+      // Codes must be unique across crew AND managers: the kiosk resolves the
+      // first match, and reusing a code would silently link the new profile to
+      // the existing account's auth user (the "recover" fallback below succeeds).
+      if (newCrew.crewCode) {
+          const codeTaken = [...crew, ...managers].some(m =>
+              m.id !== editingId && m.crewCode && m.crewCode === newCrew.crewCode);
+          if (codeTaken) {
+              alert("This Crew Code is already assigned to another staff member. Codes must be unique.");
+              return;
+          }
+      }
+
       if (activeTab === 'MANAGERS' && !editingId && (!newCrew.email || !newManagerPassword)) {
           alert("Email and Password are required for new managers.");
           return;

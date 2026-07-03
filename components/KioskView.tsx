@@ -37,26 +37,31 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
   const [qrUrl, setQrUrl] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Clock & Config Load
+  // Clock
   useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Config load — only once unlocked. While locked there's no auth session,
+  // so these reads just spam permission-denied errors and retry forever.
+  useEffect(() => {
+    if (isLocked) return;
+
     // Load App Config (Timezone)
     getCachedSettingsDoc('appConfig').then(cfg => {
         if(cfg) setTimezone(cfg.timezone || DEFAULT_TIMEZONE);
-    });
+    }).catch(err => console.warn('Kiosk appConfig load failed:', err));
 
     // Load Attendance Config (Enabled Methods)
     const unsubscribeConfig = db.collection('settings').doc('attendanceConfig').onSnapshot(doc => {
         if (doc.exists) {
             setKioskConfig(doc.data() as AttendanceConfig);
         }
-    });
+    }, err => console.warn('Kiosk attendanceConfig listener failed:', err));
 
-    const timer = setInterval(() => setTime(new Date()), 1000);
-    return () => {
-        clearInterval(timer);
-        unsubscribeConfig();
-    };
-  }, []);
+    return () => unsubscribeConfig();
+  }, [isLocked]);
 
   // Get time in target timezone
   const displayTime = getShiftedDate(time, timezone);
