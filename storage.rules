@@ -1,0 +1,90 @@
+rules_version = '2';
+
+// Mirrors the Firestore access model: "staff" means a crew/ or managers/
+// profile doc keyed by the caller's auth UID (open email signup means a bare
+// Firebase login proves nothing). Cross-service firestore.exists() lookups
+// are billed as Firestore reads and cached per request.
+//
+// Note: images shown in the app load via getDownloadURL() token URLs, which
+// bypass these rules — so read rules here only gate direct SDK/API access.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isManager() {
+      return isAuthenticated() &&
+        firestore.exists(/databases/(default)/documents/managers/$(request.auth.uid));
+    }
+
+    function isStaff() {
+      return isAuthenticated() && (
+        firestore.exists(/databases/(default)/documents/crew/$(request.auth.uid)) ||
+        firestore.exists(/databases/(default)/documents/managers/$(request.auth.uid))
+      );
+    }
+
+    // On delete request.resource is null, so content checks must not run.
+    function isImageUnder(maxMb) {
+      return request.resource.size < maxMb * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Crew-submitted evidence: order-validation photos and task proofs
+    // (photos or audio clips). Create-only for crew; managers can clean up.
+    match /proofs/{fileName} {
+      allow read: if isStaff();
+      allow create: if isStaff() &&
+        request.resource.size < 10 * 1024 * 1024 &&
+        (request.resource.contentType.matches('image/.*') ||
+         request.resource.contentType.matches('audio/.*'));
+      allow delete: if isManager();
+    }
+
+    match /employees/{fileName} {
+      allow read: if isStaff();
+      allow create, update: if isManager() && isImageUnder(10);
+      allow delete: if isManager();
+    }
+
+    match /bluebook/{fileName} {
+      allow read: if isStaff();
+      allow create, update: if isManager() && isImageUnder(10);
+      allow delete: if isManager();
+    }
+
+    match /recipes/{fileName} {
+      allow read: if isStaff();
+      allow create, update: if isManager() && isImageUnder(10);
+      allow delete: if isManager();
+    }
+
+    match /stores/certs/{fileName} {
+      allow read: if isStaff();
+      allow create, update: if isManager() && request.resource.size < 20 * 1024 * 1024;
+      allow delete: if isManager();
+    }
+
+    // HR documents (contracts, IDs) are the most sensitive files here —
+    // manager-only in both directions. Uploads can be PDFs, so no type check.
+    match /hr_docs/{crewId}/{fileName} {
+      allow read: if isManager();
+      allow create, update: if isManager() && request.resource.size < 20 * 1024 * 1024;
+      allow delete: if isManager();
+    }
+
+    // Company logo: world-readable on purpose — DynamicBranding uses it on the
+    // login screen and locked kiosk, before any session exists.
+    match /settings/{fileName} {
+      allow read: if true;
+      allow create, update: if isManager() && isImageUnder(5);
+      allow delete: if isManager();
+    }
+  }
+}

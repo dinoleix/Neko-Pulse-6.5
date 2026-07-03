@@ -2,6 +2,8 @@
 // parsing is delegated to the /api/parse-order serverless function, which holds
 // the key server-side. This keeps the key out of the browser bundle entirely.
 
+import { auth } from '../firebaseConfig';
+
 // Helper to convert a file/blob to a base64 string (no data: prefix).
 export const fileToGenerativePart = async (file: Blob): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -16,9 +18,16 @@ export const fileToGenerativePart = async (file: Blob): Promise<string> => {
 };
 
 export const parseOrderImage = async (base64Image: string) => {
+  // The endpoint requires a Firebase ID token and verifies staff membership
+  // server-side, so signed-out (or non-staff) callers can't spend Gemini quota.
+  const idToken = await auth.currentUser?.getIdToken();
+  if (!idToken) {
+    throw new Error('You must be signed in to scan orders.');
+  }
+
   const res = await fetch('/api/parse-order', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
     body: JSON.stringify({ image: base64Image }),
   });
 

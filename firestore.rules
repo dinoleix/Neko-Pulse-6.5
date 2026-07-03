@@ -13,6 +13,18 @@ service cloud.firestore {
       return isAuthenticated() && exists(/databases/$(database)/documents/managers/$(request.auth.uid));
     }
 
+    // Email/password signup is open on this project (the admin UI creates
+    // accounts client-side), so "authenticated" alone proves nothing — anyone
+    // on the internet can mint a Firebase user. Staff membership means having
+    // a profile doc keyed by your auth UID. Crew is checked first since crew
+    // devices generate most traffic; exists() results are cached per request.
+    function isStaff() {
+      return isAuthenticated() && (
+        exists(/databases/$(database)/documents/crew/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/managers/$(request.auth.uid))
+      );
+    }
+
     function isOwner(userIdField) {
       return isAuthenticated() && request.resource.data[userIdField] == request.auth.uid;
     }
@@ -25,7 +37,7 @@ service cloud.firestore {
 
     match /managers/{managerId} {
       allow read: if isManager() || (isAuthenticated() && request.auth.uid == managerId);
-      allow write: if isManager(); 
+      allow write: if isManager();
     }
 
     match /crew/{crewId} {
@@ -33,93 +45,122 @@ service cloud.firestore {
       allow write: if isManager();
     }
 
+    // Public-safe mirror of /crew (name, role, birthMMDD, active — nothing
+    // else). Lets crew-facing features list coworkers (birthday banner, EOM
+    // nominees) without opening /crew, which holds login codes and HR fields.
+    match /crewDirectory/{crewId} {
+      allow read: if isStaff();
+      allow write: if isManager();
+    }
+
     match /roles/{roleId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isManager();
     }
 
     match /stores/{storeId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isManager();
     }
 
     match /validations/{orderId} {
-      allow read: if isAuthenticated();
-      allow create: if isManager() || isOwner('validatedByCrewId');
+      allow read: if isStaff();
+      allow create: if isManager() || (isStaff() && isOwner('validatedByCrewId'));
       allow update, delete: if isManager();
     }
 
     match /tasks/{taskId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isManager();
     }
     match /taskTemplates/{templateId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isManager();
     }
 
     match /taskLogs/{logId} {
-      allow read: if isAuthenticated();
-      allow create: if isManager() || isOwner('crewId');
-      allow update: if isManager() || (isAuthenticated() && resource.data.crewId == request.auth.uid);
+      allow read: if isStaff();
+      allow create: if isManager() || (isStaff() && isOwner('crewId'));
+      allow update: if isManager() || (isStaff() && resource.data.crewId == request.auth.uid);
       allow delete: if isManager();
     }
 
     match /attendanceLogs/{logId} {
-      allow read: if isAuthenticated();
-      allow create: if isManager() || isOwner('crewId');
-      allow update, delete: if isManager();
+      allow read: if isStaff();
+      allow create: if isManager() || (isStaff() && isOwner('crewId'));
+      // Crew "last-out" flow: a crew member may bump their own CHECK_OUT log
+      // to the current server time — never backdate, never any other field.
+      // Without this, every crew re-scan fell back to creating a duplicate log.
+      allow update: if isManager() || (
+        isStaff() &&
+        resource.data.crewId == request.auth.uid &&
+        resource.data.type == 'CHECK_OUT' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['timestamp', 'method']) &&
+        request.resource.data.timestamp == request.time
+      );
+      allow delete: if isManager();
     }
 
     match /leaveRequests/{requestId} {
-      allow read: if isAuthenticated();
-      allow create: if isManager() || isOwner('crewId');
-      allow update, delete: if isManager() || (isAuthenticated() && resource.data.crewId == request.auth.uid);
+      allow read: if isStaff();
+      // Crew may only submit PENDING requests they can't pre-approve; status
+      // changes and deletions are manager decisions (no crew UI edits leaves).
+      allow create: if isManager() ||
+        (isStaff() && isOwner('crewId') && request.resource.data.status == 'PENDING');
+      allow update, delete: if isManager();
     }
 
     match /shifts/{shiftId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isManager();
     }
     match /shiftAssignments/{assignId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isManager();
     }
-    
+
     match /cafeHolidays/{holidayId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
+      allow write: if isManager();
+    }
+
+    // The company logo is deliberately world-readable: DynamicBranding fetches
+    // it on the login screen and the locked kiosk, before any sign-in exists.
+    // It holds nothing but a public image URL.
+    match /settings/companyLogo {
+      allow read: if true;
       allow write: if isManager();
     }
 
     match /settings/{docId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isManager();
     }
 
-    match /eom_cycles/{docId} { allow read: if isAuthenticated(); allow write: if isManager(); }
-    match /eom_votes/{docId} { 
-      allow read: if isAuthenticated(); 
-      allow create: if isManager() || isOwner('voterId');
+    match /eom_cycles/{docId} { allow read: if isStaff(); allow write: if isManager(); }
+    match /eom_votes/{docId} {
+      allow read: if isStaff();
+      allow create: if isManager() || (isStaff() && isOwner('voterId'));
     }
-    match /eom_scores/{docId} { allow read: if isAuthenticated(); allow write: if isManager(); }
-    
+    match /eom_scores/{docId} { allow read: if isStaff(); allow write: if isManager(); }
+
     match /managerMeetings/{docId} { allow read: if isManager(); allow write: if isManager(); }
     match /managerActionItems/{docId} { allow read: if isManager(); allow write: if isManager(); }
     match /managerRecurringAgenda/{docId} { allow read: if isManager(); allow write: if isManager(); }
 
     match /bluebook_items/{itemId} {
-      allow read: if isAuthenticated();
+      allow read: if isStaff();
       allow write: if isManager();
     }
 
     match /recipes/{recipeId} {
-      allow read: if isManager() || (isAuthenticated() && resource.data.isShared == true);
+      allow read: if isManager() || (isStaff() && resource.data.isShared == true);
       allow write: if isManager();
     }
 
     match /loginLogs/{logId} {
       allow read: if isManager();
-      allow create: if isManager() || isOwner('userId');
+      allow create: if isManager() || (isStaff() && isOwner('userId'));
       allow update, delete: if isManager();
     }
   }
