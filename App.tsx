@@ -115,10 +115,17 @@ function App() {
                 return;
             }
         } catch (error) {
-            console.warn("Profile fetch warning:", error);
+            // Never fall through to a half-session: a failed profile fetch
+            // would grant a user with no accessRole/outlet and skip the
+            // inactive-account and idle-deadline checks above.
+            console.warn("Profile fetch failed — signing out instead of granting a partial session:", error);
+            await auth.signOut();
+            setCurrentUser(null);
+            setInit(false);
+            return;
         }
 
-        setCurrentUser({ 
+        setCurrentUser({
             role: determinedRole, 
             uid: user.uid, 
             name: name,

@@ -61,7 +61,9 @@ export const eomService = {
 
     // --- VOTES ---
     castVote: async (cycleId: string, voterId: string, nomineeId: string) => {
-        return await db.collection('eom_votes').add({
+        // Deterministic ID + create-only rules = one vote per person per
+        // cycle, enforced server-side. A second cast is permission-denied.
+        return await db.collection('eom_votes').doc(`${cycleId}_${voterId}`).set({
             cycleId,
             voterId,
             nomineeId,

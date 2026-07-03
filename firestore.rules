@@ -87,7 +87,11 @@ service cloud.firestore {
 
     match /attendanceLogs/{logId} {
       allow read: if isStaff();
-      allow create: if isManager() || (isStaff() && isOwner('crewId'));
+      // Crew creates must carry the server's own time (the app sends
+      // serverTimestamp()), so a tampered client can't backdate check-ins.
+      allow create: if isManager() || (
+        isStaff() && isOwner('crewId') && request.resource.data.timestamp == request.time
+      );
       // Crew "last-out" flow: a crew member may bump their own CHECK_OUT log
       // to the current server time — never backdate, never any other field.
       // Without this, every crew re-scan fell back to creating a duplicate log.
@@ -138,9 +142,16 @@ service cloud.firestore {
     }
 
     match /eom_cycles/{docId} { allow read: if isStaff(); allow write: if isManager(); }
-    match /eom_votes/{docId} {
+    // One vote per person per cycle, enforced by the doc ID: it must be
+    // "<cycleId>_<auth uid>", and with no update rule a second cast (a set()
+    // on the same ID) is rejected. Legacy random-ID votes remain readable.
+    match /eom_votes/{voteId} {
       allow read: if isStaff();
-      allow create: if isManager() || (isStaff() && isOwner('voterId'));
+      allow create: if isManager() || (
+        isStaff() &&
+        isOwner('voterId') &&
+        voteId == request.resource.data.cycleId + '_' + request.auth.uid
+      );
     }
     match /eom_scores/{docId} { allow read: if isStaff(); allow write: if isManager(); }
 
