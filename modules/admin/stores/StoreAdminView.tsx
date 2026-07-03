@@ -204,7 +204,7 @@ export const StoreAdminView: React.FC = () => {
                      <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
                         <MapPin className="w-3 h-3"/> Full Address
                      </label>
-                     <TextArea placeholder="Street, City, Zip Code..." value={formStore.address} onChange={e => setFormStore({...formStore, address: e.target.value})} className="h-24"/>
+                     <TextArea placeholder="Street, City, Zip Code..." value={formStore.address} onChange={e => setFormStore({...formStore, address: e.target.value})} className="h-24 !min-h-0"/>
                   </div>
                </div>
 

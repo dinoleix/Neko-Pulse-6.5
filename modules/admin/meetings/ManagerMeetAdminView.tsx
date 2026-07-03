@@ -261,8 +261,8 @@ export const ManagerMeetAdminView: React.FC<{ currentUser: CurrentUser }> = ({ c
                 
                 {isCreating && (
                     <div className="p-4 bg-indigo-50 border-b border-indigo-100 space-y-3 animate-in slide-in-from-top-2">
-                        <Input placeholder="Title (e.g. Weekly Sync)" value={newMeetingTitle} onChange={e => setNewMeetingTitle(e.target.value)} className="bg-white"/>
-                        <Input type="date" value={newMeetingDate} onChange={e => setNewMeetingDate(e.target.value)} className="bg-white"/>
+                        <Input placeholder="Title (e.g. Weekly Sync)" value={newMeetingTitle} onChange={e => setNewMeetingTitle(e.target.value)} className="!bg-white"/>
+                        <Input type="date" value={newMeetingDate} onChange={e => setNewMeetingDate(e.target.value)} className="!bg-white"/>
                         <div className="flex gap-2">
                             <Button onClick={createMeeting} className="!py-1.5 !text-xs">Create</Button>
                             <Button variant="secondary" onClick={() => setIsCreating(false)} className="!py-1.5 !text-xs">Cancel</Button>
@@ -378,7 +378,7 @@ export const ManagerMeetAdminView: React.FC<{ currentUser: CurrentUser }> = ({ c
                                     </div>
                                     <div className="space-y-2">
                                         <div className="flex gap-2">
-                                            <Input placeholder="Add agenda item..." value={newAgendaText} onChange={e => setNewAgendaText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addAgendaItem()} className="bg-white"/>
+                                            <Input placeholder="Add agenda item..." value={newAgendaText} onChange={e => setNewAgendaText(e.target.value)} onKeyDown={e => e.key === 'Enter' && addAgendaItem()} className="!bg-white"/>
                                             <Button variant="secondary" className="!w-auto" onClick={addAgendaItem}><Plus className="w-4 h-4"/></Button>
                                         </div>
                                         <div className="flex items-center gap-2 pl-1">

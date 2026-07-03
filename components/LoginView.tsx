@@ -225,13 +225,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Password</label>
                 <div className="relative">
-                  <Lock className="absolute left-4 top-4 w-5 h-5 text-slate-400" />
-                  <Input 
-                    type="password" 
-                    value={password} 
-                    onChange={e => setPassword(e.target.value)} 
-                    className="pl-12"
-                    placeholder="••••••••" 
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                  <Input
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className="!pl-12"
+                    placeholder="••••••••"
                   />
                 </div>
               </div>
@@ -249,13 +249,19 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
                   Crew Code (PIN)
                 </label>
                 <div className="relative">
-                  <User className="absolute left-4 top-4 w-6 h-6 text-slate-400" />
-                  <Input 
-                    placeholder="Enter code" 
-                    className="pl-14 text-center tracking-[0.5em] text-xl font-bold text-slate-700" 
-                    type="tel" 
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                  {/* Symmetric !px-12 keeps the digits truly centered (a left-only
+                      pad shifted them right); tracking is reset on the placeholder
+                      so "Enter code" doesn't render stretched. */}
+                  <Input
+                    placeholder="Enter code"
+                    className="!px-12 text-center tracking-[0.35em] placeholder:tracking-normal text-xl !font-bold !text-slate-700"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    maxLength={6}
                     value={crewCode}
-                    onChange={(e) => setCrewCode(e.target.value)}
+                    onChange={(e) => setCrewCode(e.target.value.replace(/\D/g, ''))}
                   />
                 </div>
                 <p className="text-[10px] text-slate-400 text-center">Use the Crew Code provided by your Manager</p>

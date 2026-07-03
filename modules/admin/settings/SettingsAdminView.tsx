@@ -246,7 +246,7 @@ export const SettingsAdminView: React.FC = () => {
                         placeholder="Type DELETE to confirm" 
                         value={confirmText} 
                         onChange={e => setConfirmText(e.target.value)}
-                        className="border-red-200 focus:border-red-500 text-red-700 font-bold"
+                        className="!border-red-200 focus:!border-red-500 !text-red-700 !font-bold"
                     />
                     <div className="flex gap-3">
                         <Button variant="secondary" onClick={() => setStep('CONFIG')}>Cancel</Button>

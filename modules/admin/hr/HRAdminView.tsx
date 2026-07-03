@@ -540,7 +540,7 @@ export const HRAdminView: React.FC = () => {
                                         value={letterheadConfig.address} 
                                         onChange={e => setLetterheadConfig({...letterheadConfig, address: e.target.value})} 
                                         placeholder="e.g. 123 Street, City&#10;State - Zip"
-                                        className="h-24"
+                                        className="h-24 !min-h-0"
                                     />
                                     <p className="text-xs text-slate-400 mt-1">Appears below the logo. Use new lines for formatting.</p>
                                 </div>
@@ -550,7 +550,7 @@ export const HRAdminView: React.FC = () => {
                                         value={letterheadConfig.contactInfo} 
                                         onChange={e => setLetterheadConfig({...letterheadConfig, contactInfo: e.target.value})} 
                                         placeholder="e.g. hr@domain.com | +91 99999 99999"
-                                        className="h-24"
+                                        className="h-24 !min-h-0"
                                     />
                                     <p className="text-xs text-slate-400 mt-1">Appears at the bottom of every page.</p>
                                 </div>
@@ -598,7 +598,7 @@ export const HRAdminView: React.FC = () => {
                                             <TextArea 
                                                 value={tempEditForm.content} 
                                                 onChange={e => setTempEditForm({...tempEditForm, content: e.target.value})} 
-                                                className="min-h-[300px] font-mono text-sm"
+                                                className="!min-h-[300px] font-mono text-sm"
                                             />
                                         </div>
                                     </div>

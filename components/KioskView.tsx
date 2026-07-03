@@ -239,7 +239,7 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
                              type="email" 
                              value={adminEmail} 
                              onChange={e => setAdminEmail(e.target.value)} 
-                             className="bg-slate-900 border-slate-700 text-white focus:bg-slate-900" 
+                             className="!bg-slate-900 !border-slate-700 !text-white focus:!bg-slate-900" 
                           />
                       </div>
                       <div>
@@ -248,7 +248,7 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
                              type="password" 
                              value={adminPassword} 
                              onChange={e => setAdminPassword(e.target.value)} 
-                             className="bg-slate-900 border-slate-700 text-white focus:bg-slate-900" 
+                             className="!bg-slate-900 !border-slate-700 !text-white focus:!bg-slate-900" 
                           />
                       </div>
                       <Button type="submit" isLoading={isUnlocking} className="mt-4 shadow-emerald-500/20">

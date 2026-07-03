@@ -30,32 +30,35 @@ export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
   );
 };
 
-export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (props) => (
-  <input 
-    className="w-full px-5 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:bg-white focus:outline-none focus:ring-0 focus:border-emerald-400 transition-all text-slate-800 placeholder:text-slate-400 font-medium disabled:opacity-50"
+// Callers pass className *fragments* (e.g. "!py-2 !pl-9") meant to layer on
+// top of the base styles, so merge them. Spreading props after className used
+// to replace the entire base style, leaving customized inputs unstyled.
+export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ className = '', ...props }) => (
+  <input
+    className={`w-full px-5 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:bg-white focus:outline-none focus:ring-0 focus:border-emerald-400 transition-all text-slate-800 placeholder:text-slate-400 font-medium disabled:opacity-50 ${className}`}
     {...props}
   />
 );
 
-export const TextArea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement>> = (props) => (
-  <textarea 
-    className="w-full px-5 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:bg-white focus:outline-none focus:ring-0 focus:border-emerald-400 transition-all text-slate-800 placeholder:text-slate-400 font-medium disabled:opacity-50 min-h-[120px] resize-y"
+export const TextArea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement>> = ({ className = '', ...props }) => (
+  <textarea
+    className={`w-full px-5 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:bg-white focus:outline-none focus:ring-0 focus:border-emerald-400 transition-all text-slate-800 placeholder:text-slate-400 font-medium disabled:opacity-50 min-h-[120px] resize-y ${className}`}
     {...props}
   />
 );
 
-export const Checkbox: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (props) => (
-  <input 
-    type="checkbox" 
-    className="w-5 h-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-    {...props} 
+export const Checkbox: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ className = '', ...props }) => (
+  <input
+    type="checkbox"
+    className={`w-5 h-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer ${className}`}
+    {...props}
   />
 );
 
-export const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (props) => (
+export const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({ className = '', ...props }) => (
   <div className="relative">
-    <select 
-      className="w-full px-5 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:bg-white focus:outline-none focus:ring-0 focus:border-emerald-400 transition-all text-slate-800 font-medium appearance-none"
+    <select
+      className={`w-full px-5 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:bg-white focus:outline-none focus:ring-0 focus:border-emerald-400 transition-all text-slate-800 font-medium appearance-none ${className}`}
       {...props}
     />
     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">

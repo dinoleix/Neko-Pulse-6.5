@@ -815,7 +815,7 @@ export const TaskAdminView: React.FC = () => {
                               placeholder="Search tasks..." 
                               value={taskSearchQuery} 
                               onChange={e => setTaskSearchQuery(e.target.value)} 
-                              className="pl-10 !py-2"
+                              className="!pl-10 !py-2"
                           />
                       </div>
                   </div>
