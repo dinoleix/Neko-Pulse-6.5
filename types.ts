@@ -228,6 +228,7 @@ export interface TaskTemplate {
   timeSlots: string[];
   proofType: TaskProofType;
   proofTypes?: TaskProofType[];
+  proofPhotoCount?: number; // How many photos are required when PHOTO proof is selected (default 1)
 }
 
 export interface Task {
@@ -235,15 +236,16 @@ export interface Task {
   title: string;
   description?: string;
   instructions?: string;
-  outletId: string; 
+  outletId: string;
   assignedCrewIds?: string[];
   frequency: TaskFrequency;
-  repeatDays?: string[]; 
-  repeatDate?: number;   
-  timeSlots: string[];   
+  repeatDays?: string[];
+  repeatDate?: number;
+  timeSlots: string[];
   dueTime?: string;
   proofType: TaskProofType;
   proofTypes?: TaskProofType[];
+  proofPhotoCount?: number; // How many photos are required when PHOTO proof is selected (default 1)
   isActive: boolean;
   createdAt?: any;
 }
@@ -256,10 +258,10 @@ export interface TaskLog {
   crewName: string;
   outletId: string;
   completedAt: any;
-  scheduledTime?: string; 
+  scheduledTime?: string;
   proofValue?: string;
   proofType: TaskProofType;
-  proofData?: { type: TaskProofType; value: string }[];
+  proofData?: { type: TaskProofType; value: string | string[] }[];
   status: 'completed' | 'late';
 }
 

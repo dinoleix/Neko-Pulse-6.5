@@ -36,7 +36,8 @@ export const TaskCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUs
     // Submission State
     const [activeTask, setActiveTask] = useState<Task | null>(null);
     const [proofText, setProofText] = useState('');
-    const [proofPhoto, setProofPhoto] = useState<Blob | null>(null);
+    const [proofPhotos, setProofPhotos] = useState<Blob[]>([]);
+    const [proofPhotoPreviews, setProofPhotoPreviews] = useState<string[]>([]);
     const [proofAudio, setProofAudio] = useState<Blob | null>(null);
 
     useEffect(() => {
@@ -162,15 +163,30 @@ export const TaskCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUs
     const handleOpenTask = (t: Task) => {
         setActiveTask(t);
         setProofText('');
-        setProofPhoto(null);
+        setProofPhotos([]);
+        setProofPhotoPreviews([]);
         setProofAudio(null);
+    };
+
+    const requiredPhotoCount = (task: Task) => Math.min(4, Math.max(1, task.proofPhotoCount || 1));
+
+    const addProofPhoto = async (file: File, task: Task) => {
+        if (proofPhotos.length >= requiredPhotoCount(task)) return;
+        const compressed = await compressImage(file, 0.7);
+        setProofPhotos(prev => [...prev, compressed]);
+        setProofPhotoPreviews(prev => [...prev, URL.createObjectURL(compressed)]);
+    };
+
+    const removeProofPhoto = (index: number) => {
+        setProofPhotos(prev => prev.filter((_, i) => i !== index));
+        setProofPhotoPreviews(prev => prev.filter((_, i) => i !== index));
     };
 
     // Determine which selected proof types are still missing for the active task.
     const getMissingProofs = (task: Task): TaskProofType[] => {
         const required = task.proofTypes?.filter(p => p !== TaskProofType.NONE) ?? [];
         return required.filter(type => {
-            if (type === TaskProofType.PHOTO) return !proofPhoto;
+            if (type === TaskProofType.PHOTO) return proofPhotos.length < requiredPhotoCount(task);
             if (type === TaskProofType.AUDIO) return !proofAudio;
             if (type === TaskProofType.TEXT) return !proofText.trim();
             return false;
@@ -191,11 +207,11 @@ export const TaskCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUs
         setSubmittingId(activeTask.id!);
 
         try {
-            const proofData = [];
-            
-            if (activeTask.proofTypes?.includes(TaskProofType.PHOTO) && proofPhoto) {
-                const url = await taskService.uploadProof(proofPhoto, 'IMAGE');
-                proofData.push({ type: TaskProofType.PHOTO, value: url });
+            const proofData: { type: TaskProofType; value: string | string[] }[] = [];
+
+            if (activeTask.proofTypes?.includes(TaskProofType.PHOTO) && proofPhotos.length > 0) {
+                const urls = await Promise.all(proofPhotos.map(p => taskService.uploadProof(p, 'IMAGE')));
+                proofData.push({ type: TaskProofType.PHOTO, value: urls });
             }
 
             if (activeTask.proofTypes?.includes(TaskProofType.TEXT) && proofText) {
@@ -206,10 +222,11 @@ export const TaskCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUs
                  const url = await taskService.uploadProof(proofAudio, 'AUDIO');
                  proofData.push({ type: TaskProofType.AUDIO, value: url });
             }
-            
-            // Legacy/Fallback proofValue
-            const legacyValue = proofData.length > 0 ? proofData[0].value : 'Checked';
-            const legacyType = proofData.length > 0 ? proofData[0].type : TaskProofType.NONE;
+
+            // Legacy/Fallback proofValue (single string, first photo if applicable)
+            const firstEntry = proofData[0];
+            const legacyValue = firstEntry ? (Array.isArray(firstEntry.value) ? firstEntry.value[0] : firstEntry.value) : 'Checked';
+            const legacyType = firstEntry ? firstEntry.type : TaskProofType.NONE;
 
             await taskService.submitLog({
                 taskId: activeTask.id!,
@@ -276,21 +293,27 @@ export const TaskCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUs
                     <div className="space-y-6">
                         {activeTask.proofTypes?.includes(TaskProofType.PHOTO) && (
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Photo Proof</label>
-                                {proofPhoto ? (
-                                    <div className="relative">
-                                        <img src={URL.createObjectURL(proofPhoto)} className="w-full h-48 object-cover rounded-lg" />
-                                        <button onClick={() => setProofPhoto(null)} className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full"><X className="w-4 h-4"/></button>
-                                    </div>
-                                ) : (
-                                    <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:bg-slate-50">
-                                        <Camera className="w-8 h-8 text-slate-400 mb-2"/>
-                                        <span className="text-xs font-bold text-slate-500">Tap to Take Photo</span>
-                                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => {
-                                            if(e.target.files?.[0]) setProofPhoto(await compressImage(e.target.files[0], 0.7));
-                                        }} />
-                                    </label>
-                                )}
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
+                                    Photo Proof ({proofPhotoPreviews.length}/{requiredPhotoCount(activeTask)})
+                                </label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {proofPhotoPreviews.map((url, i) => (
+                                        <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200">
+                                            <img src={url} className="w-full h-full object-cover" />
+                                            <button onClick={() => removeProofPhoto(i)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full"><X className="w-3 h-3"/></button>
+                                        </div>
+                                    ))}
+                                    {proofPhotoPreviews.length < requiredPhotoCount(activeTask) && (
+                                        <label className="flex flex-col items-center justify-center aspect-square border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:bg-slate-50">
+                                            <Camera className="w-6 h-6 text-slate-400 mb-1"/>
+                                            <span className="text-[10px] font-bold text-slate-500 text-center px-1">Tap to Take Photo</span>
+                                            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={async (e) => {
+                                                if(e.target.files?.[0]) await addProofPhoto(e.target.files[0], activeTask);
+                                                e.target.value = '';
+                                            }} />
+                                        </label>
+                                    )}
+                                </div>
                             </div>
                         )}
 

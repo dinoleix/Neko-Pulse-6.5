@@ -112,7 +112,8 @@ export const TaskAdminView: React.FC = () => {
       timeSlots: ['09:00'],
       repeatDays: [],
       repeatDate: 1,
-      proofTypes: [TaskProofType.NONE], 
+      proofTypes: [TaskProofType.NONE],
+      proofPhotoCount: 1,
       assignedCrewIds: []
    });
 
@@ -343,10 +344,11 @@ export const TaskAdminView: React.FC = () => {
              frequency: newTask.frequency || TaskFrequency.DAILY,
              timeSlots: newTask.timeSlots || ['09:00'],
              proofTypes: newTask.proofTypes,
+             proofPhotoCount: Math.min(4, Math.max(1, Number(newTask.proofPhotoCount) || 1)),
              description: newTask.description || '',
              instructions: newTask.instructions || '',
              repeatDays: newTask.repeatDays || [],
-             repeatDate: Number(newTask.repeatDate) || 1, 
+             repeatDate: Number(newTask.repeatDate) || 1,
              assignedCrewIds: newTask.assignedCrewIds || [],
              isActive: true,
              proofType: newTask.proofTypes[0] // Legacy support
@@ -369,6 +371,7 @@ export const TaskAdminView: React.FC = () => {
                repeatDate: Number(newTask.repeatDate) || 1,
                timeSlots: newTask.timeSlots || ['09:00'],
                proofTypes: newTask.proofTypes || [TaskProofType.NONE],
+               proofPhotoCount: Math.min(4, Math.max(1, Number(newTask.proofPhotoCount) || 1)),
                proofType: newTask.proofTypes ? newTask.proofTypes[0] : TaskProofType.NONE // Legacy support
            };
            await taskService.saveTemplate(payload, editingTemplateId || undefined);
@@ -391,7 +394,8 @@ export const TaskAdminView: React.FC = () => {
             repeatDate: Number(newTask.repeatDate) || 1,
             timeSlots: newTask.timeSlots || ['09:00'],
             proofTypes: newTask.proofTypes || [TaskProofType.NONE],
-            proofType: newTask.proofTypes ? newTask.proofTypes[0] : TaskProofType.NONE 
+            proofPhotoCount: Math.min(4, Math.max(1, Number(newTask.proofPhotoCount) || 1)),
+            proofType: newTask.proofTypes ? newTask.proofTypes[0] : TaskProofType.NONE
          };
          await taskService.saveTemplate(template);
          alert("Saved!"); loadData(); 
@@ -410,7 +414,8 @@ export const TaskAdminView: React.FC = () => {
             repeatDays: t.repeatDays || [],
             repeatDate: t.repeatDate || 1,
             timeSlots: t.timeSlots || ['09:00'],
-            proofTypes: t.proofTypes || [TaskProofType.NONE]
+            proofTypes: t.proofTypes || [TaskProofType.NONE],
+            proofPhotoCount: t.proofPhotoCount || 1
          });
       }
    };
@@ -424,7 +429,8 @@ export const TaskAdminView: React.FC = () => {
            repeatDays: t.repeatDays || [],
            repeatDate: t.repeatDate || 1,
            timeSlots: t.timeSlots || ['09:00'],
-           proofTypes: t.proofTypes || [TaskProofType.NONE]
+           proofTypes: t.proofTypes || [TaskProofType.NONE],
+           proofPhotoCount: t.proofPhotoCount || 1
        });
        setEditingTemplateId(t.id!);
    };
@@ -448,7 +454,8 @@ export const TaskAdminView: React.FC = () => {
            assignedCrewIds: t.assignedCrewIds || [],
            repeatDays: t.repeatDays || [],
            timeSlots: t.timeSlots || ['09:00'],
-           proofTypes: t.proofTypes || [TaskProofType.NONE]
+           proofTypes: t.proofTypes || [TaskProofType.NONE],
+           proofPhotoCount: t.proofPhotoCount || 1
        });
        setEditingId(t.id!);
        setIsCreating(true);
@@ -467,6 +474,7 @@ export const TaskAdminView: React.FC = () => {
           repeatDays: [],
           repeatDate: 1,
           proofTypes: [TaskProofType.NONE],
+          proofPhotoCount: 1,
           assignedCrewIds: []
        });
    };
@@ -532,6 +540,25 @@ export const TaskAdminView: React.FC = () => {
                             <span className="text-sm font-bold text-slate-600 flex items-center gap-1"><Mic className="w-3 h-3"/> Audio</span>
                         </div>
                    </div>
+                   {newTask.proofTypes?.includes(TaskProofType.PHOTO) && (
+                       <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 p-3 rounded-xl mt-2 animate-in slide-in-from-top-2">
+                           <span className="text-xs font-bold text-indigo-700 uppercase">Photos Required</span>
+                           <div className="flex gap-1">
+                               {[1, 2, 3, 4].map(n => (
+                                   <button
+                                       key={n}
+                                       type="button"
+                                       onClick={() => setNewTask({...newTask, proofPhotoCount: n})}
+                                       className={`w-8 h-8 rounded-lg text-sm font-bold transition-all ${
+                                           (newTask.proofPhotoCount || 1) === n ? 'bg-indigo-500 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'
+                                       }`}
+                                   >
+                                       {n}
+                                   </button>
+                               ))}
+                           </div>
+                       </div>
+                   )}
                </div>
            </div>
        </>
@@ -765,9 +792,13 @@ export const TaskAdminView: React.FC = () => {
                                      inst.log.proofData.map((p: any, i: number) => (
                                          <div key={i} className="flex-shrink-0">
                                             {p.type === TaskProofType.PHOTO && (
-                                                <FullScreenImageViewer src={p.value}>
-                                                    <img src={p.value} className="w-16 h-16 rounded-lg object-cover border border-slate-200 cursor-pointer" title="Click to view full size"/>
-                                                </FullScreenImageViewer>
+                                                <div className="flex gap-2 flex-wrap">
+                                                    {(Array.isArray(p.value) ? p.value : [p.value]).map((url: string, j: number) => (
+                                                        <FullScreenImageViewer key={j} src={url}>
+                                                            <img src={url} className="w-16 h-16 rounded-lg object-cover border border-slate-200 cursor-pointer" title="Click to view full size"/>
+                                                        </FullScreenImageViewer>
+                                                    ))}
+                                                </div>
                                             )}
                                             {p.type === TaskProofType.TEXT && <div className="max-w-[400px] min-w-[200px] text-xs p-2 bg-slate-50 rounded border italic whitespace-pre-wrap break-words" title={p.value}>"{p.value}"</div>}
                                          </div>
