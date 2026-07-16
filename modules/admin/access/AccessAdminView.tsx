@@ -61,7 +61,8 @@ export const AccessAdminView: React.FC = () => {
       MODULE_IDS.SHIFTS, 
       MODULE_IDS.HR,
       MODULE_IDS.BLUEBOOK, // Added Bluebook Admin
-      MODULE_IDS.REPORTS, 
+      MODULE_IDS.RECIPE, // Kitchen Recipes (AdminLayout gates the card on this ID)
+      MODULE_IDS.REPORTS,
       MODULE_IDS.EOM, 
       MODULE_IDS.MANAGER_MEET, 
       MODULE_IDS.ATTENDANCE,
@@ -73,6 +74,7 @@ export const AccessAdminView: React.FC = () => {
       MODULE_IDS.CREW_ORDERS,
       MODULE_IDS.CREW_TASKS,
       MODULE_IDS.CREW_BLUEBOOK, // Added Bluebook Viewer for Crew
+      MODULE_IDS.CREW_RECIPE, // Recipe viewer tab in the crew app
       MODULE_IDS.CREW_SHIFTS,
       MODULE_IDS.CREW_EOM
    ];
