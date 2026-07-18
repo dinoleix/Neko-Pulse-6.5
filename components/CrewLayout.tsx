@@ -12,7 +12,7 @@ import { BluebookCrewView } from '../modules/crew/bluebook/BluebookCrewView';
 import { RecipeCrewView } from '../modules/crew/recipes/RecipeCrewView';
 import { shiftService } from '../services/shiftService';
 import { useConversationRecorder } from '../modules/crew/conversations/useConversationRecorder';
-import { RecordingIndicator } from '../modules/crew/conversations/RecordingIndicator';
+import { RecordingIndicator, RecChip } from '../modules/crew/conversations/RecordingIndicator';
 import { getCachedSettingsDoc } from '../services/configCache';
 import { getCurrentTimeInTimeZone, DEFAULT_TIMEZONE } from '../utils/dateFormatter';
 import { format } from 'date-fns';
@@ -194,7 +194,7 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
 
        <div className="flex justify-between items-center py-4 border-b border-slate-200 mb-2">
           <div>
-             <h3 className="text-xl font-bold text-slate-800">{currentUser.name}</h3>
+             <h3 className="text-xl font-bold text-slate-800">{currentUser.name}<RecChip status={conversationRecorder.status} pendingUploads={conversationRecorder.pendingUploads} /></h3>
              <p className="text-xs text-slate-500">{currentUser.outletId}</p>
           </div>
           <button onClick={onLogout} className="text-xs border px-3 py-1 rounded-lg">Exit</button>
