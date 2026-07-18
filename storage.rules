@@ -51,6 +51,29 @@ service firebase.storage {
       allow delete: if isManager();
     }
 
+    // Counter-tablet conversation recordings. Create-only for staff (the
+    // Counter session uploads chunks); playback and cleanup are manager-only —
+    // these are customer conversations, not crew-shareable media. Objects
+    // under conversations/ are auto-deleted by a GCS lifecycle rule (30 days,
+    // set in the Cloud console — firebase deploy does not manage it).
+    match /conversations/{day}/{fileName} {
+      allow read: if isManager();
+      allow create: if isStaff() &&
+        request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('audio/.*');
+      allow delete: if isManager();
+    }
+
+    // Curated training clips, copied out of conversations/ by an admin so
+    // they escape the lifecycle expiry. No lifecycle rule on this prefix.
+    match /training/{fileName} {
+      allow read: if isManager();
+      allow create, update: if isManager() &&
+        request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('audio/.*');
+      allow delete: if isManager();
+    }
+
     match /employees/{fileName} {
       allow read: if isStaff();
       allow create, update: if isManager() && isImageUnder(10);

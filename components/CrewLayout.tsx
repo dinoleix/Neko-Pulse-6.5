@@ -11,6 +11,8 @@ import { EOMCrewView } from '../modules/crew/eom/EOMCrewView';
 import { BluebookCrewView } from '../modules/crew/bluebook/BluebookCrewView';
 import { RecipeCrewView } from '../modules/crew/recipes/RecipeCrewView';
 import { shiftService } from '../services/shiftService';
+import { useConversationRecorder } from '../modules/crew/conversations/useConversationRecorder';
+import { RecordingIndicator } from '../modules/crew/conversations/RecordingIndicator';
 import { getCachedSettingsDoc } from '../services/configCache';
 import { getCurrentTimeInTimeZone, DEFAULT_TIMEZONE } from '../utils/dateFormatter';
 import { format } from 'date-fns';
@@ -32,7 +34,11 @@ interface CrewLayoutProps {
 
 export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout }) => {
   const isCounterRole = currentUser.accessRole === 'Counter';
-  const [activeTab, setActiveTab] = useState<string>(isCounterRole ? 'tasks' : 'attendance'); 
+  const [activeTab, setActiveTab] = useState<string>(isCounterRole ? 'tasks' : 'attendance');
+
+  // Counter tablets follow the admin's remote switch and record customer
+  // conversations in the background while it's on.
+  const conversationRecorder = useConversationRecorder(currentUser, isCounterRole);
   const [allowedAdmin, setAllowedAdmin] = useState<string[]>([]);
   const [adminModule, setAdminModule] = useState<string | null>(null);
   
@@ -165,7 +171,9 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
 
   return (
     <div className="min-h-screen bg-slate-50 px-4">
-       
+
+       <RecordingIndicator status={conversationRecorder.status} pendingUploads={conversationRecorder.pendingUploads} />
+
        {/* PILOT BANNER */}
        {todayPilot && (
            <div className="mx-[-1rem] bg-gradient-to-r from-amber-200 to-amber-400 p-3 shadow-md mb-2 flex items-center justify-center gap-3 animate-in slide-in-from-top">

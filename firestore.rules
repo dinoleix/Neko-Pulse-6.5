@@ -169,6 +169,24 @@ service cloud.firestore {
       allow write: if isManager();
     }
 
+    // Counter conversation recordings: the tablet (staff) may only create
+    // docs stamped with its own uid; listening/analysis/cleanup is
+    // manager-only. Config lives at /settings/conversationConfig, covered by
+    // the settings rule (staff read = the tablet's live on/off subscription).
+    match /conversations/{recId} {
+      allow read: if isManager();
+      allow create: if isManager() || (isStaff() && isOwner('recordedById'));
+      allow update, delete: if isManager();
+    }
+
+    // Counter tablet heartbeat (doc ID = the device session's auth uid).
+    // Written on recorder state transitions only, so the admin module can
+    // show "recording / stopped / mic blocked" without polling the device.
+    match /conversationStatus/{uid} {
+      allow read: if isManager();
+      allow write: if isManager() || (isStaff() && request.auth.uid == uid);
+    }
+
     match /loginLogs/{logId} {
       allow read: if isManager();
       allow create: if isManager() || (isStaff() && isOwner('userId'));

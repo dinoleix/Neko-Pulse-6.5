@@ -50,6 +50,7 @@ export const MODULE_IDS = {
   BLUEBOOK: 'BLUEBOOK',
   RECIPE: 'RECIPE',
   LOGIN_ACTIVITY: 'LOGIN_ACTIVITY',
+  CONVERSATIONS: 'CONVERSATIONS',
   SETTINGS: 'SETTINGS',
 
   // Crew App Features
@@ -383,6 +384,42 @@ export interface Recipe {
 
 export interface RecipeConfig {
   categories: string[];
+}
+
+// --- MODULE: COUNTER CONVERSATIONS ---
+export interface ConversationConfig {
+  recordingEnabled: boolean;
+  chunkMinutes: number;   // length of each recorded segment (default 5)
+  retentionDays: number;  // must match the GCS lifecycle rule on conversations/ (default 30)
+}
+
+export interface ConversationCoaching {
+  greeting: number;       // each rubric score is 1-10
+  friendliness: number;
+  clarity: number;
+  upsellAttempt: number;
+  closing: number;
+  overallScore: number;
+  tips: string[];
+}
+
+export interface ConversationRecording {
+  id?: string;
+  // Storage path is persisted (unlike task proofs, which only keep the URL)
+  // because the training-copy flow and cleanup need to address the object.
+  storagePath: string;
+  downloadUrl: string;
+  startedAt: any;
+  durationSec: number;
+  recordedById: string;   // auth uid of the counter session (rules: isOwner)
+  recordedByName: string;
+  outletId?: string;
+  status: 'uploaded' | 'analyzed';
+  transcript?: string;
+  coaching?: ConversationCoaching;
+  isTraining: boolean;
+  trainingPath?: string;  // set once copied into the non-expiring training/ prefix
+  trainingUrl?: string;
 }
 
 // --- MODULE: MANAGER MEET ---

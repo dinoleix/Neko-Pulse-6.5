@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '../firebaseConfig';
 import { Button } from './SharedComponents';
-import { LogOut, ArrowLeft, CheckCircle, ClipboardList, Users, Store as StoreIcon, ShieldCheck, CalendarClock, Calendar, Briefcase, Lock, FileBarChart, Trophy, MessageSquare, Settings as SettingsIcon, BookOpen, ChefHat, LogIn } from 'lucide-react';
+import { LogOut, ArrowLeft, CheckCircle, ClipboardList, Users, Store as StoreIcon, ShieldCheck, CalendarClock, Calendar, Briefcase, Lock, FileBarChart, Trophy, MessageSquare, Settings as SettingsIcon, BookOpen, ChefHat, LogIn, Mic } from 'lucide-react';
 import { MODULE_IDS, CurrentUser, AccessConfig } from '../types';
 import { OrderAdminView } from '../modules/admin/orders/OrderAdminView'; 
 import { TaskAdminView } from '../modules/admin/tasks/TaskAdminView'; 
@@ -19,6 +19,7 @@ import { SettingsAdminView } from '../modules/admin/settings/SettingsAdminView';
 import { BluebookAdminView } from '../modules/admin/bluebook/BluebookAdminView';
 import { RecipeAdminView } from '../modules/admin/recipes/RecipeAdminView';
 import { LoginActivityAdminView } from '../modules/admin/loginactivity/LoginActivityAdminView';
+import { ConversationAdminView } from '../modules/admin/conversations/ConversationAdminView';
 import { getCachedSettingsDoc } from '../services/configCache';
 
 interface AdminLayoutProps {
@@ -93,6 +94,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
            {hasAccess(MODULE_IDS.HR) && <ModuleCard title="HR & Letters" icon={<Briefcase/>} color="bg-pink-400" onClick={() => setActiveModule(MODULE_IDS.HR)}/>}
            {hasAccess(MODULE_IDS.STORES) && <ModuleCard title="Stores" icon={<StoreIcon/>} color="bg-purple-500" onClick={() => setActiveModule(MODULE_IDS.STORES)}/>}
            {hasAccess(MODULE_IDS.LOGIN_ACTIVITY) && <ModuleCard title="Login Activity" icon={<LogIn/>} color="bg-sky-500" onClick={() => setActiveModule(MODULE_IDS.LOGIN_ACTIVITY)}/>}
+           {hasAccess(MODULE_IDS.CONVERSATIONS) && <ModuleCard title="Counter Conversations" icon={<Mic/>} color="bg-red-500" onClick={() => setActiveModule(MODULE_IDS.CONVERSATIONS)}/>}
            {hasAccess(MODULE_IDS.SETTINGS) && <ModuleCard title="System Maint." icon={<SettingsIcon/>} color="bg-slate-700" onClick={() => setActiveModule(MODULE_IDS.SETTINGS)}/>}
            {hasAccess('ACCESS') && <ModuleCard title="Access" icon={<ShieldCheck/>} color="bg-rose-500" onClick={() => setActiveModule('ACCESS')}/>}
         </div>
@@ -118,7 +120,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
        <nav className="bg-white border-b border-emerald-100 sticky top-0 z-20 px-6 py-4 flex justify-between items-center shadow-sm">
           <div className="flex items-center gap-4">
              <button onClick={() => setActiveModule(null)} className="p-2 hover:bg-slate-100 rounded-xl"><ArrowLeft/></button>
-             <h1 className="font-bold text-xl">{activeModule === MODULE_IDS.EOM ? 'Employee of the Month' : activeModule === MODULE_IDS.MANAGER_MEET ? 'Manager Meetings' : activeModule === MODULE_IDS.RECIPE ? 'Kitchen Recipes' : activeModule === MODULE_IDS.LOGIN_ACTIVITY ? 'Login Activity' : activeModule}</h1>
+             <h1 className="font-bold text-xl">{activeModule === MODULE_IDS.EOM ? 'Employee of the Month' : activeModule === MODULE_IDS.MANAGER_MEET ? 'Manager Meetings' : activeModule === MODULE_IDS.RECIPE ? 'Kitchen Recipes' : activeModule === MODULE_IDS.LOGIN_ACTIVITY ? 'Login Activity' : activeModule === MODULE_IDS.CONVERSATIONS ? 'Counter Conversations' : activeModule}</h1>
           </div>
           <Button variant="secondary" className="!w-auto !text-xs" onClick={onLogout}>Logout</Button>
        </nav>
@@ -130,6 +132,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
           {activeModule === MODULE_IDS.BLUEBOOK && <BluebookAdminView />}
           {activeModule === MODULE_IDS.RECIPE && <RecipeAdminView />}
           {activeModule === MODULE_IDS.LOGIN_ACTIVITY && <LoginActivityAdminView />}
+          {activeModule === MODULE_IDS.CONVERSATIONS && <ConversationAdminView />}
           {activeModule === MODULE_IDS.HR && <HRAdminView />}
           {activeModule === MODULE_IDS.REPORTS && <ReportsAdminView />}
           {activeModule === MODULE_IDS.EOM && <EOMAdminView />}

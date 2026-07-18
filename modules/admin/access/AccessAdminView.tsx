@@ -67,7 +67,8 @@ export const AccessAdminView: React.FC = () => {
       MODULE_IDS.MANAGER_MEET, 
       MODULE_IDS.ATTENDANCE,
       MODULE_IDS.STORES,
-      MODULE_IDS.SETTINGS 
+      MODULE_IDS.CONVERSATIONS, // Counter conversation recordings (AdminLayout gates the card on this ID)
+      MODULE_IDS.SETTINGS
    ];
 
    const crewFeatures = [
