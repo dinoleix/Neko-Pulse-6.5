@@ -12,6 +12,7 @@ import { BluebookCrewView } from '../modules/crew/bluebook/BluebookCrewView';
 import { RecipeCrewView } from '../modules/crew/recipes/RecipeCrewView';
 import { shiftService } from '../services/shiftService';
 import { useConversationRecorder } from '../modules/crew/conversations/useConversationRecorder';
+import { RecordingIndicator, RecChip } from '../modules/crew/conversations/RecordingIndicator';
 import { getCachedSettingsDoc } from '../services/configCache';
 import { getCurrentTimeInTimeZone, DEFAULT_TIMEZONE } from '../utils/dateFormatter';
 import { format } from 'date-fns';
@@ -36,10 +37,8 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
   const [activeTab, setActiveTab] = useState<string>(isCounterRole ? 'tasks' : 'attendance');
 
   // Counter tablets follow the admin's remote switch and record customer
-  // conversations silently in the background while it's on. No tablet-facing
-  // indicator by owner's decision; recorder state (incl. mic-blocked) is still
-  // reported to the admin Conversations view via the device-status heartbeat.
-  useConversationRecorder(currentUser, isCounterRole);
+  // conversations in the background while it's on.
+  const conversationRecorder = useConversationRecorder(currentUser, isCounterRole);
   const [allowedAdmin, setAllowedAdmin] = useState<string[]>([]);
   const [adminModule, setAdminModule] = useState<string | null>(null);
   
@@ -173,6 +172,8 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
   return (
     <div className="min-h-screen bg-slate-50 px-4">
 
+       <RecordingIndicator status={conversationRecorder.status} pendingUploads={conversationRecorder.pendingUploads} />
+
        {/* PILOT BANNER */}
        {todayPilot && (
            <div className="mx-[-1rem] bg-gradient-to-r from-amber-200 to-amber-400 p-3 shadow-md mb-2 flex items-center justify-center gap-3 animate-in slide-in-from-top">
@@ -193,7 +194,7 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
 
        <div className="flex justify-between items-center py-4 border-b border-slate-200 mb-2">
           <div>
-             <h3 className="text-xl font-bold text-slate-800">{currentUser.name}</h3>
+             <h3 className="text-xl font-bold text-slate-800">{currentUser.name}<RecChip status={conversationRecorder.status} pendingUploads={conversationRecorder.pendingUploads} /></h3>
              <p className="text-xs text-slate-500">{currentUser.outletId}</p>
           </div>
           <button onClick={onLogout} className="text-xs border px-3 py-1 rounded-lg">Exit</button>
