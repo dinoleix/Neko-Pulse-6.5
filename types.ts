@@ -408,7 +408,10 @@ export interface ConversationRecording {
   // Storage path is persisted (unlike task proofs, which only keep the URL)
   // because the training-copy flow and cleanup need to address the object.
   storagePath: string;
-  downloadUrl: string;
+  // Legacy only: chunks used to persist a download URL at upload time, but
+  // minting one is a Storage read the staff counter session isn't allowed.
+  // Newer docs omit it; the admin resolves a URL from storagePath on demand.
+  downloadUrl?: string;
   startedAt: any;
   durationSec: number;
   recordedById: string;   // auth uid of the counter session (rules: isOwner)

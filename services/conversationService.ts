@@ -29,21 +29,25 @@ export const conversationService = {
     },
 
     // --- CAPTURE ---
-    uploadChunk: async (
-        blob: Blob,
-        meta: { durationSec: number; recordedById: string; recordedByName: string; outletId?: string; startedAt: Date }
-    ): Promise<string> => {
-        const day = meta.startedAt.toISOString().slice(0, 10); // YYYY-MM-DD
+    // Two steps so the tablet's retry loop can re-run the Firestore add
+    // without re-putting a blob that already landed in Storage. No
+    // getDownloadURL() here: that's a Storage read, and conversations/ is
+    // manager-read-only — the admin resolves URLs via resolveAudioUrl().
+    uploadAudio: async (blob: Blob, startedAt: Date): Promise<string> => {
+        const day = startedAt.toISOString().slice(0, 10); // YYYY-MM-DD
         // Safari/iPad MediaRecorder emits audio/mp4 rather than webm.
         const ext = blob.type.includes('mp4') ? 'm4a' : 'webm';
         const path = `conversations/${day}/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
-        const ref = storage.ref(path);
-        await ref.put(blob);
-        const url = await ref.getDownloadURL();
+        await storage.ref(path).put(blob);
+        return path;
+    },
 
+    saveChunkDoc: async (
+        storagePath: string,
+        meta: { durationSec: number; recordedById: string; recordedByName: string; outletId?: string; startedAt: Date }
+    ): Promise<string> => {
         const doc: Omit<ConversationRecording, 'id'> = {
-            storagePath: path,
-            downloadUrl: url,
+            storagePath,
             startedAt: firebase.firestore.Timestamp.fromDate(meta.startedAt),
             durationSec: meta.durationSec,
             recordedById: meta.recordedById,
@@ -57,6 +61,15 @@ export const conversationService = {
     },
 
     // --- ADMIN REVIEW ---
+    // Mint a playback URL for a recording (manager session — staff can't read
+    // conversations/). Prefers the permanent training copy, then the legacy
+    // stored URL, then resolves from the storage path.
+    resolveAudioUrl: async (rec: ConversationRecording): Promise<string> => {
+        if (rec.trainingUrl) return rec.trainingUrl;
+        if (rec.downloadUrl) return rec.downloadUrl;
+        return await storage.ref(rec.storagePath).getDownloadURL();
+    },
+
     listByDate: async (start: Date, end: Date): Promise<ConversationRecording[]> => {
         const snap = await db.collection('conversations')
             .where('startedAt', '>=', start)
@@ -78,7 +91,8 @@ export const conversationService = {
     // Copy the audio out of the auto-expiring conversations/ prefix into
     // training/, which has no lifecycle rule, so curated clips live forever.
     markAsTraining: async (rec: ConversationRecording) => {
-        const res = await fetch(rec.downloadUrl);
+        const sourceUrl = rec.downloadUrl || await storage.ref(rec.storagePath).getDownloadURL();
+        const res = await fetch(sourceUrl);
         if (!res.ok) throw new Error('Could not fetch the recording audio.');
         const blob = await res.blob();
         const trainingPath = `training/${Date.now()}_${rec.id}.webm`;
@@ -155,7 +169,7 @@ export const conversationService = {
         const res = await fetch('/api/analyze-conversation', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-            body: JSON.stringify({ downloadUrl: rec.trainingUrl || rec.downloadUrl })
+            body: JSON.stringify({ downloadUrl: await conversationService.resolveAudioUrl(rec) })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || `Analysis failed (${res.status})`);

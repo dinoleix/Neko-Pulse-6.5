@@ -32,23 +32,28 @@ export const useConversationRecorder = (currentUser: CurrentUser, active: boolea
             conversationService.setDeviceStatus(u.uid, { state, name: u.name || 'Counter', outletId: u.outletId });
         };
 
-        const uploadWithRetry = (blob: Blob, startedAt: Date, durationSec: number, attempt = 0) => {
+        const uploadWithRetry = async (blob: Blob, startedAt: Date, durationSec: number, attempt = 0, uploadedPath: string | null = null) => {
             const u = userRef.current;
-            conversationService.uploadChunk(blob, {
-                durationSec,
-                recordedById: u.uid,
-                recordedByName: u.name || 'Counter',
-                outletId: u.outletId,
-                startedAt
-            }).then(() => {
+            let path = uploadedPath;
+            try {
+                if (!path) path = await conversationService.uploadAudio(blob, startedAt);
+                await conversationService.saveChunkDoc(path, {
+                    durationSec,
+                    recordedById: u.uid,
+                    recordedByName: u.name || 'Counter',
+                    outletId: u.outletId,
+                    startedAt
+                });
                 setPendingUploads(p => Math.max(0, p - 1));
-            }).catch(err => {
+            } catch (err: any) {
                 // Keep the blob in memory and back off; a chunk is ~1-2MB so a
-                // long offline stretch stays well within tablet memory.
+                // long offline stretch stays well within tablet memory. `path`
+                // survives into the retry so a blob whose put succeeded is
+                // never re-uploaded — only the Firestore add is re-run.
                 console.warn(`chunk upload failed (attempt ${attempt + 1}):`, err?.code || err?.message);
                 const delay = Math.min(60_000, 5_000 * Math.pow(2, attempt));
-                setTimeout(() => uploadWithRetry(blob, startedAt, durationSec, attempt + 1), delay);
-            });
+                setTimeout(() => uploadWithRetry(blob, startedAt, durationSec, attempt + 1, path), delay);
+            }
         };
 
         const beginChunk = () => {

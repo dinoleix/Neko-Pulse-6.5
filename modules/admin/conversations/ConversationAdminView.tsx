@@ -4,7 +4,7 @@ import { conversationService } from '../../../services/conversationService';
 import { storeService } from '../../../services/storeService';
 import { ConversationConfig, ConversationRecording, ConversationCoaching, Store } from '../../../types';
 import { Button, Card, Badge, Select } from '../../../components/SharedComponents';
-import { Mic, MicOff, GraduationCap, Sparkles, Trash2, Loader2, Radio, AlertTriangle, BookMarked } from 'lucide-react';
+import { Mic, MicOff, GraduationCap, Sparkles, Trash2, Loader2, Radio, AlertTriangle, BookMarked, Play } from 'lucide-react';
 import { format } from 'date-fns';
 
 export const ConversationAdminView: React.FC = () => {
@@ -242,8 +242,25 @@ const RecordingRow: React.FC<{
     onDelete: (r: ConversationRecording) => void;
 }> = ({ rec, busy, onAnalyze, onToggleTraining, onDelete }) => {
     const [showDetail, setShowDetail] = useState(false);
+    // Newer docs carry no downloadUrl (the counter session can't mint one);
+    // the URL is resolved here on demand rather than for every listed row —
+    // each mint costs a Storage read plus the rules' cross-service lookups.
+    const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
+    const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+    const audioSrc = rec.trainingUrl || rec.downloadUrl || resolvedUrl;
     const mins = Math.floor(rec.durationSec / 60);
     const secs = rec.durationSec % 60;
+
+    const loadAudio = async () => {
+        setIsLoadingAudio(true);
+        try {
+            setResolvedUrl(await conversationService.resolveAudioUrl(rec));
+        } catch (e: any) {
+            alert(`Could not load audio — it may have expired. (${e?.message || 'Unknown error'})`);
+        } finally {
+            setIsLoadingAudio(false);
+        }
+    };
 
     return (
         <div className="border border-slate-100 rounded-2xl p-4">
@@ -257,7 +274,18 @@ const RecordingRow: React.FC<{
                 </div>
 
                 {/* Training clips outlive the expiring conversations/ object, so prefer trainingUrl */}
-                <audio controls preload="none" src={rec.trainingUrl || rec.downloadUrl} className="h-10 flex-1 min-w-[200px] rounded-lg"/>
+                {audioSrc ? (
+                    <audio controls preload="none" autoPlay={resolvedUrl !== null} src={audioSrc} className="h-10 flex-1 min-w-[200px] rounded-lg"/>
+                ) : (
+                    <button
+                        onClick={loadAudio}
+                        disabled={isLoadingAudio}
+                        className="h-10 flex-1 min-w-[200px] rounded-lg bg-slate-100 hover:bg-emerald-100 text-slate-600 text-xs font-bold flex items-center justify-center gap-2"
+                    >
+                        {isLoadingAudio ? <Loader2 className="w-4 h-4 animate-spin"/> : <Play className="w-4 h-4"/>}
+                        {isLoadingAudio ? 'Loading…' : 'Play'}
+                    </button>
+                )}
 
                 <div className="flex items-center gap-2">
                     {rec.status === 'analyzed' ? (
