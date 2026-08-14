@@ -2,9 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { recipeService } from '../../../services/recipeService';
 import { compressImage } from '../../../services/imageService';
-import { Recipe, RecipeIngredient, RecipeConfig } from '../../../types';
+import { accessService } from '../../../services/accessService';
+import { employeeService } from '../../../services/employeeService';
+import { Recipe, RecipeIngredient, RecipeConfig, CrewMember } from '../../../types';
 import { Button, Card, Input, TextArea, Select, Badge } from '../../../components/SharedComponents';
-import { ChefHat, Plus, Trash2, Edit, Upload, X, Loader2, Save, Eye, EyeOff, Clock, Users, Copy, Check, LayoutList, LayoutGrid } from 'lucide-react';
+import { ChefHat, Plus, Trash2, Edit, Upload, X, Loader2, Save, Eye, EyeOff, Clock, Users, Copy, Check, LayoutList, LayoutGrid, Printer, CheckSquare, Square, Globe, Search } from 'lucide-react';
 
 const UNITS = ['g', 'kg', 'ml', 'L', 'pcs', 'tbsp', 'tsp', 'cup', 'pinch', 'slice', 'to taste'];
 
@@ -16,6 +18,9 @@ const emptyForm = (defaultCategory = ''): Partial<Recipe> => ({
     steps: [''],
     imageUrl: '',
     isShared: false,
+    shareScope: 'ALL',
+    sharedRoles: [],
+    sharedCrewIds: [],
     prepTime: undefined,
     cookTime: undefined,
     servingSize: undefined,
@@ -26,6 +31,7 @@ export const RecipeAdminView: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'RECIPES' | 'CATEGORIES'>('RECIPES');
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
     const [recipes, setRecipes] = useState<Recipe[]>([]);
+    const [selectedCat, setSelectedCat] = useState<string>('ALL');
     const [config, setConfig] = useState<RecipeConfig>({ categories: [] });
     const [isLoading, setIsLoading] = useState(true);
 
@@ -37,6 +43,12 @@ export const RecipeAdminView: React.FC = () => {
     const [isUploading, setIsUploading] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [newCategory, setNewCategory] = useState('');
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [printCols, setPrintCols] = useState<1 | 2 | 3>(2);
+    const [printCompact, setPrintCompact] = useState(false);
+    const [roles, setRoles] = useState<string[]>([]);
+    const [crew, setCrew] = useState<CrewMember[]>([]);
+    const [peopleSearch, setPeopleSearch] = useState('');
 
     const [form, setForm] = useState<Partial<Recipe>>(emptyForm());
 
@@ -45,12 +57,16 @@ export const RecipeAdminView: React.FC = () => {
     const load = async () => {
         setIsLoading(true);
         try {
-            const [recipesData, configData] = await Promise.all([
+            const [recipesData, configData, rolesData, crewData] = await Promise.all([
                 recipeService.getAll(),
-                recipeService.getConfig()
+                recipeService.getConfig(),
+                accessService.getRoles().catch(() => [] as string[]),
+                employeeService.getAllCrew().catch(() => [] as CrewMember[])
             ]);
             setRecipes(recipesData);
             setConfig(configData);
+            setRoles(rolesData);
+            setCrew(crewData.filter(c => c.active !== false));
             setForm(emptyForm(configData.categories[0] || ''));
         } catch (e) {
             console.error(e);
@@ -92,7 +108,13 @@ export const RecipeAdminView: React.FC = () => {
     };
 
     const handleEdit = (recipe: Recipe) => {
-        setForm({ ...recipe, steps: recipe.steps?.length ? recipe.steps : [''] });
+        setForm({
+            ...recipe,
+            steps: recipe.steps?.length ? recipe.steps : [''],
+            shareScope: recipe.shareScope || 'ALL',
+            sharedRoles: recipe.sharedRoles || [],
+            sharedCrewIds: recipe.sharedCrewIds || [],
+        });
         setEditingId(recipe.id!);
         setIsCreating(false);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -210,6 +232,109 @@ export const RecipeAdminView: React.FC = () => {
         navigator.clipboard.writeText(text);
         setCopiedId(recipe.id!);
         setTimeout(() => setCopiedId(null), 2000);
+    };
+
+    // Category filter for the recipe list. Show categories in config order that
+    // actually have recipes, then any leftover categories on recipes that aren't
+    // in config (e.g. legacy values), so nothing becomes unreachable.
+    const recipeCats = Array.from(new Set(recipes.map(r => r.category).filter(Boolean)));
+    const filterCategories = [
+        ...config.categories.filter(c => recipeCats.includes(c)),
+        ...recipeCats.filter(c => !config.categories.includes(c)),
+    ];
+    const filteredRecipes = selectedCat === 'ALL' ? recipes : recipes.filter(r => r.category === selectedCat);
+
+    // --- SELECTION + PRINT ---
+    const toggleSelect = (id: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+    const selectAllVisible = () => setSelectedIds(new Set(filteredRecipes.map(r => r.id!)));
+    const clearSelection = () => setSelectedIds(new Set());
+
+    // --- SHARING TARGET (form) ---
+    const toggleFormRole = (role: string) => setForm(p => {
+        const cur = p.sharedRoles || [];
+        return { ...p, sharedRoles: cur.includes(role) ? cur.filter(x => x !== role) : [...cur, role] };
+    });
+    const toggleFormPerson = (id: string) => setForm(p => {
+        const cur = p.sharedCrewIds || [];
+        return { ...p, sharedCrewIds: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id] };
+    });
+    const shareLabel = (r: Recipe) => {
+        if (!r.isShared) return 'Share';
+        const scope = r.shareScope || 'ALL';
+        if (scope === 'ROLES') return `Roles (${(r.sharedRoles || []).length})`;
+        if (scope === 'PEOPLE') return `People (${(r.sharedCrewIds || []).length})`;
+        return 'Shared';
+    };
+
+    const handlePrint = () => {
+        // Keep on-screen order; selection persists across category filters, so a
+        // user can gather recipes from several categories into one printout.
+        const chosen = recipes.filter(r => selectedIds.has(r.id!));
+        if (!chosen.length) return;
+
+        const esc = (s: any) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const compact = printCompact;
+
+        // Cards flow through CSS columns and pack tightly (no forced heights), so
+        // short recipes don't waste space. break-inside:avoid keeps a card whole.
+        const cardHtml = (r: Recipe) => {
+            const meta = [
+                r.servingSize ? `Serves ${r.servingSize}` : '',
+                r.prepTime ? `Prep ${r.prepTime}m` : '',
+                r.cookTime ? `Cook ${r.cookTime}m` : '',
+            ].filter(Boolean).join(' &middot; ');
+            const ings = (r.ingredients || []).map(g =>
+                `<li><span class="i-name">${esc(g.name)}</span><span class="i-amt">${esc(g.amount)} ${esc(g.unit)}</span></li>`).join('');
+            const steps = (r.steps || []).filter(s => s && s.trim());
+            const stepsHtml = steps.length
+                ? `<div class="steps"><h3>Steps</h3><ol>${steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol></div>` : '';
+            return `<div class="card">
+                <div class="head"><h2>${esc(r.name)}</h2><span class="cat">${esc(r.category)}</span></div>
+                ${(!compact && meta) ? `<div class="meta">${meta}</div>` : ''}
+                ${(!compact && r.description) ? `<p class="desc">${esc(r.description)}</p>` : ''}
+                <div class="ings"><h3>Ingredients</h3><ul>${ings || '<li class="empty">No ingredients yet</li>'}</ul></div>
+                ${stepsHtml}
+            </div>`;
+        };
+
+        // Sizes scale with density so 3 columns / compact packs the most per page.
+        const base = compact ? 8.5 : 10.5;
+        const h2 = compact ? 12 : 15;
+        const pad = compact ? '3mm 3.5mm' : '5mm';
+        const gap = compact ? '4mm' : '6mm';
+        const cardMargin = compact ? '3.5mm' : '5mm';
+
+        const html = `<!doctype html><html><head><meta charset="utf-8"><title>Recipes</title><style>
+            @page { size: A4; margin: 8mm; }
+            * { box-sizing: border-box; }
+            html, body { margin: 0; padding: 0; }
+            body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1e293b; font-size: ${base}px; line-height: 1.3; }
+            .wrap { column-count: ${printCols}; column-gap: ${gap}; }
+            .card { break-inside: avoid; -webkit-column-break-inside: avoid; page-break-inside: avoid; display: inline-block; width: 100%;
+                    border: 1.25px solid #e2e8f0; border-radius: 8px; padding: ${pad}; margin: 0 0 ${cardMargin}; }
+            .head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; border-bottom: 1.5px solid #f1f5f9; padding-bottom: 3px; margin-bottom: 4px; }
+            .head h2 { font-size: ${h2}px; margin: 0; line-height: 1.1; }
+            .cat { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #ea580c; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 999px; padding: 1px 6px; white-space: nowrap; }
+            .meta { color: #64748b; font-size: ${base - 1}px; margin-bottom: 3px; }
+            .desc { color: #475569; font-size: ${base - 1}px; margin: 0 0 4px; font-style: italic; }
+            h3 { font-size: ${base - 1.5}px; text-transform: uppercase; letter-spacing: .05em; color: #ea580c; margin: 4px 0 2px; }
+            ul { list-style: none; margin: 0; padding: 0; }
+            ul li { display: flex; justify-content: space-between; gap: 8px; padding: 1px 0; border-bottom: 1px dotted #e2e8f0; }
+            .i-name { font-weight: 600; } .i-amt { color: #475569; white-space: nowrap; font-variant-numeric: tabular-nums; }
+            .empty { color: #94a3b8; font-style: italic; border: 0; }
+            ol { margin: 0; padding-left: 15px; } ol li { padding: 1px 0; }
+        </style></head><body onload="window.print()"><div class="wrap">${chosen.map(cardHtml).join('')}</div></body></html>`;
+
+        const w = window.open('', '_blank');
+        if (!w) { alert('Please allow pop-ups for this site to print recipes.'); return; }
+        w.document.write(html);
+        w.document.close();
     };
 
     if (isLoading) return <div className="p-12 text-center text-orange-500 font-bold animate-pulse">Loading Recipes...</div>;
@@ -399,18 +524,106 @@ export const RecipeAdminView: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* SHARE TOGGLE */}
-                                <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                    <button
-                                        onClick={() => setForm(p => ({ ...p, isShared: !p.isShared }))}
-                                        className={`w-12 h-6 rounded-full transition-colors flex items-center px-0.5 flex-shrink-0 ${form.isShared ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'}`}
-                                    >
-                                        <span className="w-5 h-5 bg-white rounded-full shadow block"/>
-                                    </button>
-                                    <div>
-                                        <div className="font-bold text-slate-700 text-sm">Share with Kitchen Staff</div>
-                                        <div className="text-xs text-slate-400">{form.isShared ? 'Visible to kitchen crew in their app' : 'Admin-only — not visible to crew'}</div>
+                                {/* SHARING */}
+                                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
+                                    <div className="flex items-center gap-4">
+                                        <button
+                                            onClick={() => setForm(p => ({ ...p, isShared: !p.isShared }))}
+                                            className={`w-12 h-6 rounded-full transition-colors flex items-center px-0.5 flex-shrink-0 ${form.isShared ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'}`}
+                                        >
+                                            <span className="w-5 h-5 bg-white rounded-full shadow block"/>
+                                        </button>
+                                        <div>
+                                            <div className="font-bold text-slate-700 text-sm">Share with Kitchen Staff</div>
+                                            <div className="text-xs text-slate-400">{form.isShared ? 'Visible in the crew app to the audience below' : 'Admin-only — not visible to crew'}</div>
+                                        </div>
                                     </div>
+
+                                    {form.isShared && (
+                                        <div className="space-y-3 pt-1 pl-1">
+                                            {/* Scope */}
+                                            <div className="flex flex-wrap bg-white p-1 rounded-xl border border-slate-200 gap-1">
+                                                {([
+                                                    { key: 'ALL', label: 'Everyone', icon: <Globe size={14}/> },
+                                                    { key: 'ROLES', label: 'Specific roles', icon: <Users size={14}/> },
+                                                    { key: 'PEOPLE', label: 'Specific people', icon: <Check size={14}/> },
+                                                ] as const).map(s => {
+                                                    const active = (form.shareScope || 'ALL') === s.key;
+                                                    return (
+                                                        <button
+                                                            key={s.key}
+                                                            onClick={() => setForm(p => ({ ...p, shareScope: s.key }))}
+                                                            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${active ? 'bg-orange-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                                        >
+                                                            {s.icon} {s.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {/* Roles picker */}
+                                            {(form.shareScope || 'ALL') === 'ROLES' && (
+                                                <div>
+                                                    {roles.length === 0 ? (
+                                                        <p className="text-xs text-slate-400">No roles defined yet — add roles in the Employees module first.</p>
+                                                    ) : (
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {roles.map(r => {
+                                                                const on = (form.sharedRoles || []).includes(r);
+                                                                return (
+                                                                    <button
+                                                                        key={r}
+                                                                        onClick={() => toggleFormRole(r)}
+                                                                        className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${on ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-slate-500 border-slate-200 hover:border-orange-300'}`}
+                                                                    >
+                                                                        {r}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                    {(form.sharedRoles || []).length === 0 && roles.length > 0 && (
+                                                        <p className="text-[11px] text-amber-600 mt-2">Pick at least one role, or no one will see this recipe.</p>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* People picker */}
+                                            {(form.shareScope || 'ALL') === 'PEOPLE' && (
+                                                <div>
+                                                    <div className="relative mb-2">
+                                                        <Search className="w-4 h-4 text-slate-300 absolute left-3 top-1/2 -translate-y-1/2"/>
+                                                        <Input value={peopleSearch} onChange={e => setPeopleSearch(e.target.value)} placeholder="Search staff…" className="!pl-9" />
+                                                    </div>
+                                                    {crew.length === 0 ? (
+                                                        <p className="text-xs text-slate-400">No staff found.</p>
+                                                    ) : (
+                                                        <div className="max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-white divide-y divide-slate-50">
+                                                            {crew
+                                                                .filter(c => c.crewName?.toLowerCase().includes(peopleSearch.toLowerCase()))
+                                                                .map(c => {
+                                                                    const on = (form.sharedCrewIds || []).includes(c.id!);
+                                                                    return (
+                                                                        <button
+                                                                            key={c.id}
+                                                                            onClick={() => toggleFormPerson(c.id!)}
+                                                                            className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${on ? 'bg-orange-50' : 'hover:bg-slate-50'}`}
+                                                                        >
+                                                                            {on ? <CheckSquare className="w-4 h-4 text-orange-500 flex-shrink-0"/> : <Square className="w-4 h-4 text-slate-300 flex-shrink-0"/>}
+                                                                            <span className="text-sm font-semibold text-slate-700 flex-1 truncate">{c.crewName}</span>
+                                                                            {c.role && <span className="text-[10px] font-bold text-slate-400 uppercase">{c.role}</span>}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                        </div>
+                                                    )}
+                                                    {(form.sharedCrewIds || []).length === 0 && crew.length > 0 && (
+                                                        <p className="text-[11px] text-amber-600 mt-2">Pick at least one person, or no one will see this recipe.</p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="flex gap-3">
@@ -423,11 +636,94 @@ export const RecipeAdminView: React.FC = () => {
                         </Card>
                     )}
 
+                    {/* PRINT / SELECTION TOOLBAR */}
+                    {recipes.length > 0 && (
+                        <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-100 rounded-2xl p-3 shadow-sm">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                    onClick={selectAllVisible}
+                                    className="text-xs font-bold px-3 py-2 rounded-lg bg-slate-100 text-slate-600 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                                >
+                                    Select all{selectedCat !== 'ALL' ? ` in ${selectedCat}` : ''}
+                                </button>
+                                {selectedIds.size > 0 && (
+                                    <button
+                                        onClick={clearSelection}
+                                        className="text-xs font-bold px-3 py-2 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
+                                <span className="text-sm text-slate-500 font-semibold">{selectedIds.size} selected</span>
+                            </div>
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Columns</span>
+                                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                                        {[1, 2, 3].map(n => (
+                                            <button
+                                                key={n}
+                                                onClick={() => setPrintCols(n as 1 | 2 | 3)}
+                                                className={`px-3 py-1 rounded-md text-sm font-bold transition-all ${printCols === n ? 'bg-white shadow-sm text-orange-600' : 'text-slate-500 hover:text-slate-700'}`}
+                                            >
+                                                {n}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setPrintCompact(v => !v)}
+                                    title="Compact hides serving/prep info and descriptions and shrinks type to fit more per page"
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${printCompact ? 'bg-orange-500 text-white border-orange-500 shadow-sm shadow-orange-200' : 'bg-white text-slate-500 border-slate-200 hover:border-orange-200'}`}
+                                >
+                                    Compact
+                                </button>
+                                <button
+                                    onClick={handlePrint}
+                                    disabled={selectedIds.size === 0}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 shadow-sm shadow-orange-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+                                >
+                                    <Printer className="w-4 h-4"/> Print ({selectedIds.size})
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* CATEGORY FILTER */}
+                    {filterCategories.length > 0 && (
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                            <button
+                                onClick={() => setSelectedCat('ALL')}
+                                className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${selectedCat === 'ALL' ? 'bg-orange-500 text-white shadow-lg shadow-orange-200' : 'bg-white text-slate-500 border border-slate-200 hover:border-orange-200'}`}
+                            >
+                                All ({recipes.length})
+                            </button>
+                            {filterCategories.map(c => (
+                                <button
+                                    key={c}
+                                    onClick={() => setSelectedCat(c)}
+                                    className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${selectedCat === c ? 'bg-orange-500 text-white shadow-lg shadow-orange-200' : 'bg-white text-slate-500 border border-slate-200 hover:border-orange-200'}`}
+                                >
+                                    {c} ({recipes.filter(r => r.category === c).length})
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     {/* LIST VIEW */}
                     {viewMode === 'list' && (
                         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                            {recipes.map((recipe, idx) => (
-                                <div key={recipe.id} className={`flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors ${idx !== 0 ? 'border-t border-slate-100' : ''}`}>
+                            {filteredRecipes.map((recipe, idx) => (
+                                <div key={recipe.id} className={`flex items-center gap-4 px-5 py-4 transition-colors ${idx !== 0 ? 'border-t border-slate-100' : ''} ${selectedIds.has(recipe.id!) ? 'bg-orange-50/60' : 'hover:bg-slate-50'}`}>
+                                    {/* Select */}
+                                    <button
+                                        onClick={() => toggleSelect(recipe.id!)}
+                                        className="flex-shrink-0 text-slate-300 hover:text-orange-500 transition-colors"
+                                        title="Select for printing"
+                                    >
+                                        {selectedIds.has(recipe.id!) ? <CheckSquare className="w-5 h-5 text-orange-500"/> : <Square className="w-5 h-5"/>}
+                                    </button>
+
                                     {/* Thumbnail */}
                                     <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-orange-50 flex items-center justify-center">
                                         {recipe.imageUrl
@@ -463,7 +759,7 @@ export const RecipeAdminView: React.FC = () => {
                                             }`}
                                         >
                                             {togglingId === recipe.id ? <Loader2 size={13} className="animate-spin"/> : recipe.isShared ? <Eye size={13}/> : <EyeOff size={13}/>}
-                                            {recipe.isShared ? 'Shared' : 'Share'}
+                                            {shareLabel(recipe)}
                                         </button>
                                         <button
                                             onClick={() => copyForWhatsApp(recipe)}
@@ -480,10 +776,10 @@ export const RecipeAdminView: React.FC = () => {
                                     </div>
                                 </div>
                             ))}
-                            {recipes.length === 0 && !isCreating && (
+                            {filteredRecipes.length === 0 && !isCreating && (
                                 <div className="text-center py-16 text-slate-300">
                                     <ChefHat className="w-12 h-12 mx-auto mb-3 opacity-40"/>
-                                    <p className="font-bold text-slate-400">No recipes yet.</p>
+                                    <p className="font-bold text-slate-400">{selectedCat === 'ALL' ? 'No recipes yet.' : `No recipes in ${selectedCat}.`}</p>
                                 </div>
                             )}
                         </div>
@@ -492,8 +788,8 @@ export const RecipeAdminView: React.FC = () => {
                     {/* GRID VIEW */}
                     {viewMode === 'grid' && (
                         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {recipes.map(recipe => (
-                                <div key={recipe.id} className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow group flex flex-col">
+                            {filteredRecipes.map(recipe => (
+                                <div key={recipe.id} className={`bg-white rounded-3xl border shadow-sm overflow-hidden hover:shadow-md transition-shadow group flex flex-col ${selectedIds.has(recipe.id!) ? 'border-orange-300 ring-2 ring-orange-200' : 'border-slate-100'}`}>
                                     {recipe.imageUrl ? (
                                         <div className="h-44 overflow-hidden bg-slate-100">
                                             <img src={recipe.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt={recipe.name}/>
@@ -505,7 +801,16 @@ export const RecipeAdminView: React.FC = () => {
                                     )}
                                     <div className="p-5 flex-1 flex flex-col">
                                         <div className="flex justify-between items-start mb-2">
-                                            <Badge variant="neutral" className="!text-[10px] !bg-orange-50 !text-orange-600 border-orange-100">{recipe.category}</Badge>
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <button
+                                                    onClick={() => toggleSelect(recipe.id!)}
+                                                    className="flex-shrink-0 text-slate-300 hover:text-orange-500 transition-colors"
+                                                    title="Select for printing"
+                                                >
+                                                    {selectedIds.has(recipe.id!) ? <CheckSquare className="w-5 h-5 text-orange-500"/> : <Square className="w-5 h-5"/>}
+                                                </button>
+                                                <Badge variant="neutral" className="!text-[10px] !bg-orange-50 !text-orange-600 border-orange-100">{recipe.category}</Badge>
+                                            </div>
                                             <div className="flex gap-1">
                                                 <button onClick={() => handleEdit(recipe)} className="p-1.5 text-slate-300 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-all"><Edit size={16}/></button>
                                                 <button onClick={() => handleDelete(recipe.id!)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
@@ -532,7 +837,7 @@ export const RecipeAdminView: React.FC = () => {
                                                 }`}
                                             >
                                                 {togglingId === recipe.id ? <Loader2 size={14} className="animate-spin"/> : recipe.isShared ? <Eye size={14}/> : <EyeOff size={14}/>}
-                                                {recipe.isShared ? 'Shared' : 'Share'}
+                                                {shareLabel(recipe)}
                                             </button>
                                             <button
                                                 onClick={() => copyForWhatsApp(recipe)}
@@ -547,11 +852,11 @@ export const RecipeAdminView: React.FC = () => {
                                     </div>
                                 </div>
                             ))}
-                            {recipes.length === 0 && !isCreating && (
+                            {filteredRecipes.length === 0 && !isCreating && (
                                 <div className="col-span-3 text-center py-20 text-slate-300">
                                     <ChefHat className="w-16 h-16 mx-auto mb-3 opacity-40"/>
-                                    <p className="font-bold text-slate-400">No recipes yet.</p>
-                                    <p className="text-slate-300 text-sm">Click "Add New Recipe" to get started.</p>
+                                    <p className="font-bold text-slate-400">{selectedCat === 'ALL' ? 'No recipes yet.' : `No recipes in ${selectedCat}.`}</p>
+                                    <p className="text-slate-300 text-sm">{selectedCat === 'ALL' ? 'Click "Add New Recipe" to get started.' : 'Try another category or clear the filter.'}</p>
                                 </div>
                             )}
                         </div>

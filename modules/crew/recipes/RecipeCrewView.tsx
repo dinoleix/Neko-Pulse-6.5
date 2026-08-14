@@ -5,6 +5,21 @@ import { Recipe, RecipeConfig, CurrentUser } from '../../../types';
 import { Badge } from '../../../components/SharedComponents';
 import { ChefHat, Clock, Users, ChevronDown, ChevronUp } from 'lucide-react';
 
+// Client-side relevance filter: a shared recipe reaches everyone (ALL / legacy),
+// a set of roles, or a set of specific people. The Firestore rule still lets any
+// staff read shared recipes, so this narrows for relevance, not access control.
+const isVisibleTo = (r: Recipe, user: CurrentUser): boolean => {
+    if (!r.isShared) return false;
+    const scope = r.shareScope || 'ALL';
+    if (scope === 'ALL') return true;
+    if (scope === 'ROLES') return !!user.accessRole && (r.sharedRoles || []).includes(user.accessRole);
+    if (scope === 'PEOPLE') {
+        const ids = r.sharedCrewIds || [];
+        return (!!user.dbId && ids.includes(user.dbId)) || ids.includes(user.uid);
+    }
+    return false;
+};
+
 export const RecipeCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUser }) => {
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [config, setConfig] = useState<RecipeConfig>({ categories: [] });
@@ -19,7 +34,7 @@ export const RecipeCrewView: React.FC<{ currentUser: CurrentUser }> = ({ current
                     recipeService.getShared(),
                     recipeService.getConfig()
                 ]);
-                setRecipes(recipesData);
+                setRecipes(recipesData.filter(r => isVisibleTo(r, currentUser)));
                 setConfig(configData);
             } catch (e) {
                 console.error(e);
@@ -28,7 +43,7 @@ export const RecipeCrewView: React.FC<{ currentUser: CurrentUser }> = ({ current
             }
         };
         load();
-    }, []);
+    }, [currentUser]);
 
     const filtered = selectedCat === 'ALL' ? recipes : recipes.filter(r => r.category === selectedCat);
     const activeCategories = config.categories.filter(c => recipes.some(r => r.category === c));

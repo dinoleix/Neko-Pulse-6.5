@@ -375,6 +375,13 @@ export interface Recipe {
   steps: string[];
   imageUrl?: string;
   isShared: boolean;
+  // Who a shared recipe reaches in the crew app. Absent (legacy) === 'ALL'.
+  // 'ROLES' -> anyone whose role is in sharedRoles; 'PEOPLE' -> anyone whose
+  // crew doc id is in sharedCrewIds. Filtering is client-side (relevance, not
+  // access-lock): the read rule still allows any staff to read shared recipes.
+  shareScope?: 'ALL' | 'ROLES' | 'PEOPLE';
+  sharedRoles?: string[];   // role names (match CrewMember.role / CurrentUser.accessRole)
+  sharedCrewIds?: string[]; // crew doc ids (match CurrentUser.dbId)
   prepTime?: number;
   cookTime?: number;
   servingSize?: number;
