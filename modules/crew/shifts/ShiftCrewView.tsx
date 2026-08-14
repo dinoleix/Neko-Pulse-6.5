@@ -77,8 +77,9 @@ export const ShiftCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentU
             let data: ShiftAssignment[] = [];
 
             if (isCounterRole) {
-                // COUNTER ROLE: Fetch ALL assignments for the store (Roster View)
-                const allAssignments = await shiftService.getAllAssignments();
+                // COUNTER ROLE: Fetch the whole store's roster (not just mine),
+                // but only for the window actually on screen.
+                const allAssignments = await shiftService.getAllAssignments(startStr, endStr);
                 data = allAssignments.filter(a => a.outletId === currentUser.outletId);
             } else {
                 // REGULAR STAFF: Fetch only MY assignments

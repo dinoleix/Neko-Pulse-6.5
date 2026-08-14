@@ -1,5 +1,5 @@
 
-import { db } from '../firebaseConfig';
+import { db, firebase } from '../firebaseConfig';
 import { Shift, ShiftAssignment, CafeHoliday, CrewMember, Store, LeaveRequest } from '../types';
 
 export const shiftService = {
@@ -21,10 +21,16 @@ export const shiftService = {
     },
 
     // --- ASSIGNMENTS (ROSTER) ---
-    getAllAssignments: async (): Promise<ShiftAssignment[]> => {
-        // Optimized: In a real app, you'd filter by date range here.
-        // For this scale, fetching all and filtering in-memory works fine.
-        const snap = await db.collection('shiftAssignments').get();
+    // Bounded by date because shiftAssignments grows forever (one doc per crew
+    // member per day) while every caller only renders a week or a month. Left
+    // unbounded this was by far the largest read on the whole app. `date` is a
+    // plain YYYY-MM-DD string, so the range uses the automatic single-field
+    // index — no composite index needed.
+    getAllAssignments: async (startDate?: string, endDate?: string): Promise<ShiftAssignment[]> => {
+        let query: firebase.firestore.Query = db.collection('shiftAssignments');
+        if (startDate) query = query.where('date', '>=', startDate);
+        if (endDate) query = query.where('date', '<=', endDate);
+        const snap = await query.get();
         return snap.docs.map(d => ({...d.data(), id: d.id} as ShiftAssignment));
     },
 

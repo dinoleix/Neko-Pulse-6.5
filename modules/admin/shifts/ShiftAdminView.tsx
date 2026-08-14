@@ -56,28 +56,56 @@ export const ShiftAdminView: React.FC = () => {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [sharePeriod, setSharePeriod] = useState<'TODAY' | 'TOMORROW' | 'WEEK'>('TODAY');
 
+  // The roster only ever renders the displayed week, but the sharing and copy
+  // flows also reach at "today" and a few weeks ahead. Fetching this window
+  // instead of the entire collection keeps the read cost flat as
+  // shiftAssignments grows. Re-fetched whenever the admin pages to a week
+  // outside it.
+  const assignmentWindow = () => {
+    const today = getCurrentTimeInTimeZone(timezone);
+    const from = new Date(Math.min(currentWeekStart.getTime(), today.getTime()));
+    const to = new Date(Math.max(currentWeekStart.getTime(), today.getTime()));
+    return {
+      start: format(addDays(from, -7), 'yyyy-MM-dd'),
+      end: format(addDays(to, 28), 'yyyy-MM-dd')
+    };
+  };
+
   useEffect(() => {
     getCachedSettingsDoc('appConfig').then(cfg => {
         const tz = cfg?.timezone;
         setTimezone(tz || DEFAULT_TIMEZONE);
         const nowTz = getCurrentTimeInTimeZone(tz || DEFAULT_TIMEZONE);
-        setCurrentWeekStart(startOfWeek(nowTz, { weekStartsOn: 1 }));
+        const tzWeekStart = startOfWeek(nowTz, { weekStartsOn: 1 });
+        // Only re-set when the timezone actually lands on a different week —
+        // a fresh Date with the same value would still re-trigger the
+        // assignments fetch below.
+        setCurrentWeekStart(prev => prev.getTime() === tzWeekStart.getTime() ? prev : tzWeekStart);
     });
     loadData();
   }, []);
 
+  // Sole owner of the assignments fetch: runs on mount and whenever the admin
+  // pages to a week that may sit outside the loaded window.
+  useEffect(() => {
+    reloadAssignments();
+  }, [currentWeekStart]);
+
+  const reloadAssignments = async () => {
+    const { start, end } = assignmentWindow();
+    setAssignments(await shiftService.getAllAssignments(start, end));
+  };
+
   const loadData = async () => {
     setIsLoading(true);
     try {
-        const [s, a, h, context] = await Promise.all([
+        const [s, h, context] = await Promise.all([
             shiftService.getShifts(),
-            shiftService.getAllAssignments(),
             shiftService.getHolidays(),
             shiftService.getContextData()
         ]);
 
         setShifts(s);
-        setAssignments(a);
         setHolidays(h);
         setCrew(context.crew);
         setStores(context.stores);
@@ -237,6 +265,15 @@ export const ShiftAdminView: React.FC = () => {
             const d = parseISO(a.date);
             return d >= start && d <= end && a.outletId === selectedOutlet && selectedCrewForCopy.has(a.crewId);
         });
+        // Copying can target up to 12 weeks out — past the window held in
+        // `assignments` — so the occupied-slot check queries the actual target
+        // range rather than trusting what happens to be loaded.
+        const targetExisting = await shiftService.getAllAssignments(
+            format(addDays(start, 7), 'yyyy-MM-dd'),
+            format(addDays(end, 7 * copyWeeks), 'yyyy-MM-dd')
+        );
+        const occupied = new Set(targetExisting.map(a => `${a.crewId}_${a.date}`));
+
         const newAssignments: ShiftAssignment[] = [];
         let skipped = 0;
         for (let i = 1; i <= copyWeeks; i++) {
@@ -244,7 +281,7 @@ export const ShiftAdminView: React.FC = () => {
                 const oldDate = parseISO(assign.date);
                 const newDate = addDays(oldDate, 7 * i);
                 const newDateStr = format(newDate, 'yyyy-MM-dd');
-                const alreadyExists = assignments.some(a => a.crewId === assign.crewId && a.date === newDateStr) ||
+                const alreadyExists = occupied.has(`${assign.crewId}_${newDateStr}`) ||
                                       newAssignments.some(a => a.crewId === assign.crewId && a.date === newDateStr);
                 if (!alreadyExists) {
                     const { id, ...cleanAssign } = assign; 
@@ -258,8 +295,7 @@ export const ShiftAdminView: React.FC = () => {
             alert("No changes made (targets occupied).");
         } else {
             await shiftService.bulkAssignShifts(newAssignments);
-            const fresh = await shiftService.getAllAssignments();
-            setAssignments(fresh);
+            await reloadAssignments();
             alert(`Added ${newAssignments.length} shifts. ${skipped > 0 ? `(${skipped} skipped)` : ''}`);
         }
         setIsCopyModalOpen(false);
