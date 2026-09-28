@@ -1,21 +1,19 @@
 
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Loader2, X, Share2, Download, Mic, Square, Play } from 'lucide-react';
+import { getProtectedFileUrl, isLegacyDownloadUrl } from '../services/protectedStorageService';
 
 export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'outline', isLoading?: boolean }> = ({ 
   children, variant = 'primary', className = '', isLoading, disabled, ...props 
 }) => {
-  // Increased border radius to rounded-2xl for softer look
-  const baseStyle = "w-full py-3.5 px-6 rounded-2xl font-semibold transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 text-sm tracking-wide";
+  const baseStyle = "w-full py-3 px-5 rounded-xl font-semibold transition-all duration-200 active:scale-[.98] flex items-center justify-center gap-2 text-sm tracking-wide";
   
   const variants = {
-    // Vibrant Emerald Green primary button
-    primary: "bg-emerald-500 text-white hover:bg-emerald-600 shadow-xl shadow-emerald-200 border border-transparent",
-    // Softer secondary button
-    secondary: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-transparent",
-    danger: "bg-red-50 text-red-600 hover:bg-red-100 border border-red-100",
-    outline: "bg-transparent border-2 border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700",
+    primary: "bg-[#063b2c] text-white hover:bg-[#0b6b4d] shadow-lg shadow-emerald-950/15 border border-transparent",
+    secondary: "bg-[#e6f0e9] text-[#063b2c] hover:bg-[#d6e8dc] border border-[#d6e8dc]",
+    danger: "bg-red-50 text-red-700 hover:bg-red-100 border border-red-100",
+    outline: "bg-transparent border border-[#d9d5cb] text-slate-600 hover:bg-[#f7f4ee] hover:text-[#063b2c]",
   };
 
   return (
@@ -35,14 +33,14 @@ export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
 // to replace the entire base style, leaving customized inputs unstyled.
 export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = ({ className = '', ...props }) => (
   <input
-    className={`w-full px-5 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:bg-white focus:outline-none focus:ring-0 focus:border-emerald-400 transition-all text-slate-800 placeholder:text-slate-400 font-medium disabled:opacity-50 ${className}`}
+    className={`w-full px-4 py-3 rounded-xl bg-[#faf9f6] border border-[#e7e2d9] focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-900/10 focus:border-[#0b6b4d] transition-all text-slate-800 placeholder:text-slate-400 font-medium disabled:opacity-50 ${className}`}
     {...props}
   />
 );
 
 export const TextArea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement>> = ({ className = '', ...props }) => (
   <textarea
-    className={`w-full px-5 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:bg-white focus:outline-none focus:ring-0 focus:border-emerald-400 transition-all text-slate-800 placeholder:text-slate-400 font-medium disabled:opacity-50 min-h-[120px] resize-y ${className}`}
+    className={`w-full px-4 py-3 rounded-xl bg-[#faf9f6] border border-[#e7e2d9] focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-900/10 focus:border-[#0b6b4d] transition-all text-slate-800 placeholder:text-slate-400 font-medium disabled:opacity-50 min-h-[120px] resize-y ${className}`}
     {...props}
   />
 );
@@ -58,7 +56,7 @@ export const Checkbox: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (
 export const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({ className = '', ...props }) => (
   <div className="relative">
     <select
-      className={`w-full px-5 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:bg-white focus:outline-none focus:ring-0 focus:border-emerald-400 transition-all text-slate-800 font-medium appearance-none ${className}`}
+      className={`w-full px-4 py-3 rounded-xl bg-[#faf9f6] border border-[#e7e2d9] focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-900/10 focus:border-[#0b6b4d] transition-all text-slate-800 font-medium appearance-none ${className}`}
       {...props}
     />
     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
@@ -67,12 +65,11 @@ export const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (
   </div>
 );
 
-// Increased radius to rounded-3xl and removed harsh borders for "Float" effect
 export const Card: React.FC<{ children: React.ReactNode, className?: string, title?: string }> = ({ children, className = '', title }) => (
-  <div className={`bg-white rounded-3xl shadow-xl shadow-slate-200/60 overflow-hidden ${className}`}>
+  <div className={`bg-[#fffdf9] rounded-2xl shadow-[0_10px_30px_rgba(22,44,35,0.06)] border border-[#e7e2d9] overflow-hidden ${className}`}>
     {title && (
-      <div className="px-6 py-5 border-b border-slate-50">
-        <h3 className="font-bold text-slate-800 text-lg">{title}</h3>
+      <div className="px-6 py-5 border-b border-[#eeeae2]">
+        <h3 className="font-bold text-slate-800 text-lg neko-display">{title}</h3>
       </div>
     )}
     <div className="p-6">
@@ -135,8 +132,10 @@ export const FullScreenImageViewer: React.FC<{ src: string, alt?: string, childr
           text: 'Here is the packing photo for the order.'
         });
       } else {
-        // 2. Fallback for Desktop: Open WhatsApp Web or Copy Link
-        const text = encodeURIComponent(`Here is the order proof photo: ${src}`);
+        // Never copy a direct media URL into a chat fallback. Private media is
+        // shared as a file where the browser supports it; otherwise it stays
+        // accessible only to authorised Neko Pulse users.
+        const text = encodeURIComponent('The proof is available securely in Neko Pulse.');
         window.open(`https://wa.me/?text=${text}`, '_blank');
       }
     } catch (err) {
@@ -194,6 +193,89 @@ export const FullScreenImageViewer: React.FC<{ src: string, alt?: string, childr
       )}
     </>
   );
+};
+
+// Resolves a private Storage path only in the current authorised browser
+// session. Legacy Firebase download URLs remain supported while old records
+// are phased out.
+export const ProtectedImageViewer: React.FC<{
+  fileRef?: string;
+  alt?: string;
+  children: (src: string) => React.ReactNode;
+}> = ({ fileRef, alt, children }) => {
+  const [src, setSrc] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = '';
+    setSrc('');
+    getProtectedFileUrl(fileRef).then(url => {
+      if (!active) {
+        if (!isLegacyDownloadUrl(url)) URL.revokeObjectURL(url);
+        return;
+      }
+      objectUrl = url;
+      setSrc(url);
+    }).catch(error => console.warn('Protected image could not be loaded:', error));
+    return () => {
+      active = false;
+      if (objectUrl && !isLegacyDownloadUrl(objectUrl)) URL.revokeObjectURL(objectUrl);
+    };
+  }, [fileRef]);
+
+  if (!src) return <div className="w-10 h-10 rounded bg-slate-100 animate-pulse" aria-label="Loading protected image" />;
+  return <FullScreenImageViewer src={src} alt={alt}>{children(src)}</FullScreenImageViewer>;
+};
+
+export const ProtectedFileLink: React.FC<{
+  fileRef?: string;
+  children: React.ReactNode;
+  className?: string;
+}> = ({ fileRef, children, className }) => {
+  const [src, setSrc] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = '';
+    getProtectedFileUrl(fileRef).then(url => {
+      if (!active) {
+        if (!isLegacyDownloadUrl(url)) URL.revokeObjectURL(url);
+        return;
+      }
+      objectUrl = url;
+      setSrc(url);
+    }).catch(error => console.warn('Protected file could not be loaded:', error));
+    return () => {
+      active = false;
+      if (objectUrl && !isLegacyDownloadUrl(objectUrl)) URL.revokeObjectURL(objectUrl);
+    };
+  }, [fileRef]);
+
+  if (!src) return <span className={`${className || ''} opacity-40`} aria-label="Loading protected file">{children}</span>;
+  return <a href={src} target="_blank" rel="noreferrer" className={className}>{children}</a>;
+};
+
+export const ProtectedVideo: React.FC<{ fileRef?: string }> = ({ fileRef }) => {
+  const [src, setSrc] = useState('');
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let active = true;
+    let objectUrl = '';
+    setSrc('');
+    setError('');
+    getProtectedFileUrl(fileRef).then(url => {
+      if (!active) { if (url.startsWith('blob:')) URL.revokeObjectURL(url); return; }
+      objectUrl = url;
+      setSrc(url);
+    }).catch(() => {
+      if (active) setError('Video could not be loaded. Check your connection and try again.');
+    });
+    return () => { active = false; if (objectUrl.startsWith('blob:')) URL.revokeObjectURL(objectUrl); };
+  }, [fileRef, attempt]);
+  if (error) return <div role="alert" className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900"><p>{error}</p><Button variant="secondary" className="!w-auto mt-3" onClick={() => setAttempt(value => value + 1)}>Retry video</Button></div>;
+  if (!src) return <div className="h-40 rounded-xl bg-slate-100 animate-pulse" aria-label="Loading training video" />;
+  return <video key={src} src={src} className="w-full rounded-xl bg-black" controls playsInline preload="metadata" onError={() => setError('Playback stopped. The video link may have expired or the connection was interrupted. Tap Retry video to reconnect.')} />;
 };
 
 export const AudioRecorder: React.FC<{ onRecordingComplete: (blob: Blob) => void }> = ({ onRecordingComplete }) => {

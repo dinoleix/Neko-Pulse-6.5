@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Store, AppConfig } from '../../../types';
 import { storeService } from '../../../services/storeService';
-import { Button, Card, Input, TextArea } from '../../../components/SharedComponents';
-import { Store as StoreIcon, MapPin, FileText, Upload, Trash2, Edit, Eye, Loader2, Save, Globe, X } from 'lucide-react';
+import { Button, Card, Input, TextArea, Checkbox } from '../../../components/SharedComponents';
+import { Store as StoreIcon, MapPin, FileText, Upload, Trash2, Edit, Eye, Loader2, Save, Globe, X, Power } from 'lucide-react';
 
 const TIMEZONES = [
     { value: 'Asia/Kolkata', label: 'India (IST) - GMT+5:30' },
@@ -26,7 +26,8 @@ export const StoreAdminView: React.FC = () => {
       fassaiNumber: '',
       gstNumber: '',
       fassaiCertUrl: '',
-      gstCertUrl: ''
+      gstCertUrl: '',
+      isActive: true
    });
    const [editingId, setEditingId] = useState<string | null>(null);
    
@@ -119,7 +120,8 @@ export const StoreAdminView: React.FC = () => {
          fassaiNumber: '', 
          gstNumber: '', 
          fassaiCertUrl: '', 
-         gstCertUrl: '' 
+         gstCertUrl: '',
+         isActive: true
       });
       setEditingId(null);
    };
@@ -132,7 +134,8 @@ export const StoreAdminView: React.FC = () => {
          fassaiNumber: store.fassaiNumber || '',
          gstNumber: store.gstNumber || '',
          fassaiCertUrl: store.fassaiCertUrl || '',
-         gstCertUrl: store.gstCertUrl || ''
+         gstCertUrl: store.gstCertUrl || '',
+         isActive: store.isActive !== false
       });
       setEditingId(store.id!);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -142,6 +145,17 @@ export const StoreAdminView: React.FC = () => {
       if(confirm("Are you sure? This will not delete associated data (employees, tasks) but will remove the store definition.")) {
          await storeService.deleteStore(id);
          load();
+      }
+   };
+
+   const toggleStoreStatus = async (store: Store) => {
+      const nextActive = store.isActive === false;
+      if (!nextActive && !confirm(`Close ${store.name}? It will disappear from operational modules and staff assigned to it will no longer be able to use Neko Pulse.`)) return;
+      try {
+         await storeService.updateStore(store.id!, { isActive: nextActive });
+         load();
+      } catch (error) {
+         alert('Failed to update store status.');
       }
    };
 
@@ -200,6 +214,11 @@ export const StoreAdminView: React.FC = () => {
                         </div>
                      </div>
                   </div>
+
+                  <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-white cursor-pointer">
+                     <Checkbox checked={formStore.isActive !== false} onChange={e => setFormStore({ ...formStore, isActive: e.target.checked })} />
+                     <span><span className="block text-sm font-bold text-slate-700">Store is active</span><span className="block text-xs text-slate-500">Closed stores are removed from new operational work.</span></span>
+                  </label>
                   <div>
                      <label className="text-xs font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
                         <MapPin className="w-3 h-3"/> Full Address
@@ -274,11 +293,11 @@ export const StoreAdminView: React.FC = () => {
          {/* STORE LIST */}
          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {stores.map((s) => (
-               <div key={s.id} className={`bg-white rounded-2xl p-6 shadow-sm border transition-all relative group ${editingId === s.id ? 'border-indigo-500 ring-2 ring-indigo-50' : 'border-slate-100 hover:shadow-md'}`}>
+               <div key={s.id} className={`bg-white rounded-2xl p-6 shadow-sm border transition-all relative group ${s.isActive === false ? 'opacity-65 border-slate-200' : editingId === s.id ? 'border-indigo-500 ring-2 ring-indigo-50' : 'border-slate-100 hover:shadow-md'}`}>
                   <div className="flex justify-between items-start mb-4">
                      <div>
                         <h3 className="font-bold text-lg text-slate-800">{s.name}</h3>
-                        <span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-md">{s.outletId}</span>
+                        <div className="flex gap-2 mt-1"><span className="text-xs font-bold bg-slate-100 text-slate-500 px-2 py-1 rounded-md">{s.outletId}</span><span className={`text-xs font-bold px-2 py-1 rounded-md ${s.isActive === false ? 'bg-slate-200 text-slate-600' : 'bg-emerald-100 text-emerald-700'}`}>{s.isActive === false ? 'Closed' : 'Active'}</span></div>
                      </div>
                      <div className="flex gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <button 
@@ -286,6 +305,13 @@ export const StoreAdminView: React.FC = () => {
                            className="p-2 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                         >
                            <Edit className="w-4 h-4"/>
+                        </button>
+                        <button
+                           onClick={() => toggleStoreStatus(s)}
+                           className={`p-2 rounded-lg transition-colors ${s.isActive === false ? 'text-emerald-600 hover:bg-emerald-50' : 'text-slate-300 hover:text-amber-600 hover:bg-amber-50'}`}
+                           title={s.isActive === false ? 'Reopen store' : 'Close store'}
+                        >
+                           <Power className="w-4 h-4"/>
                         </button>
                         <button 
                            onClick={() => deleteStore(s.id!)}

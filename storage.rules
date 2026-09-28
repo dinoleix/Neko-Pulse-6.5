@@ -1,117 +1,81 @@
 rules_version = '2';
 
-// Mirrors the Firestore access model: "staff" means a crew/ or managers/
-// profile doc keyed by the caller's auth UID (open email signup means a bare
-// Firebase login proves nothing). Cross-service firestore.exists() lookups
-// are billed as Firestore reads and cached per request. NOTE: these lookups
-// need roles/firebaserules.firestoreServiceAgent granted to the Storage
-// service agent — the CLI only offers the grant on an interactive deploy
-// whose rules content changed (see rulesDeploy.js: up-to-date rulesets skip
-// the IAM check entirely).
-//
-// Note: images shown in the app load via getDownloadURL() token URLs, which
-// bypass these rules — so read rules here only gate direct SDK/API access.
+// The file rules enforce the same manager-module matrix as Firestore. Bare
+// Firebase authentication is deliberately insufficient because email/password
+// sign-up is enabled for this project.
 service firebase.storage {
   match /b/{bucket}/o {
-
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
+    function isAuthenticated() { return request.auth != null; }
     function isManager() {
-      return isAuthenticated() &&
-        firestore.exists(/databases/(default)/documents/managers/$(request.auth.uid));
+      return isAuthenticated() && firestore.exists(/databases/(default)/documents/managers/$(request.auth.uid));
     }
-
-    function isStaff() {
-      return isAuthenticated() && (
-        firestore.exists(/databases/(default)/documents/crew/$(request.auth.uid)) ||
-        firestore.exists(/databases/(default)/documents/managers/$(request.auth.uid))
-      );
+    function isCrew() {
+      return isAuthenticated() && firestore.exists(/databases/(default)/documents/crew/$(request.auth.uid));
     }
-
-    // On delete request.resource is null, so content checks must not run.
+    function isStaff() { return isCrew() || isManager(); }
+    function isSecurityAdmin() {
+      return isManager() && firestore.get(/databases/(default)/documents/managers/$(request.auth.uid)).data.role in
+        ['Owner', 'owner', 'Super Admin', 'super admin', 'Admin', 'admin', 'System Admin', 'system admin'];
+    }
+    function hasManagerAccess(moduleId) {
+      return isManager() && (isSecurityAdmin() || (
+        firestore.exists(/databases/(default)/documents/settings/accessConfig) &&
+        firestore.get(/databases/(default)/documents/settings/accessConfig).data.keys().hasAll([moduleId]) &&
+        firestore.get(/databases/(default)/documents/settings/accessConfig).data[moduleId].hasAny([
+          firestore.get(/databases/(default)/documents/managers/$(request.auth.uid)).data.role
+        ])
+      ));
+    }
+    function hasTrainingAccess() {
+      return isManager() && (hasManagerAccess('TRAINING') ||
+        firestore.get(/databases/(default)/documents/managers/$(request.auth.uid)).data.role in
+          ['Store Manager', 'Store manager', 'store Manager', 'store manager', 'STORE MANAGER']);
+    }
     function isImageUnder(maxMb) {
-      return request.resource.size < maxMb * 1024 * 1024 &&
-        request.resource.contentType.matches('image/.*');
+      return request.resource.size < maxMb * 1024 * 1024 && request.resource.contentType.matches('image/.*');
     }
 
-    match /{allPaths=**} {
-      allow read, write: if false;
-    }
+    match /{allPaths=**} { allow read, write: if false; }
 
-    // Crew-submitted evidence: order-validation photos and task proofs
-    // (photos or audio clips). Create-only for crew; managers can clean up.
+    // Shared path for task and order-validation evidence: either responsible
+    // module can clean it up, while every signed-in staff member can submit it.
     match /proofs/{fileName} {
-      allow read: if isStaff();
-      allow create: if isStaff() &&
-        request.resource.size < 10 * 1024 * 1024 &&
-        (request.resource.contentType.matches('image/.*') ||
-         request.resource.contentType.matches('audio/.*'));
-      allow delete: if isManager();
+      allow read: if isCrew() || hasManagerAccess('ACCURACY') || hasManagerAccess('TASKS');
+      allow create: if isStaff() && request.resource.size < 10 * 1024 * 1024 &&
+        (request.resource.contentType.matches('image/.*') || request.resource.contentType.matches('audio/.*'));
+      allow delete: if hasManagerAccess('ACCURACY') || hasManagerAccess('TASKS');
     }
-
-    // Counter-tablet conversation recordings. Create-only for staff (the
-    // Counter session uploads chunks); playback and cleanup are manager-only —
-    // these are customer conversations, not crew-shareable media. Objects
-    // under conversations/ are auto-deleted by a GCS lifecycle rule (30 days,
-    // set in the Cloud console — firebase deploy does not manage it).
-    match /conversations/{day}/{fileName} {
-      allow read: if isManager();
-      allow create: if isStaff() &&
-        request.resource.size < 10 * 1024 * 1024 &&
-        request.resource.contentType.matches('audio/.*');
-      allow delete: if isManager();
-    }
-
-    // Curated training clips, copied out of conversations/ by an admin so
-    // they escape the lifecycle expiry. No lifecycle rule on this prefix.
-    match /training/{fileName} {
-      allow read: if isManager();
-      allow create, update: if isManager() &&
-        request.resource.size < 10 * 1024 * 1024 &&
-        request.resource.contentType.matches('audio/.*');
-      allow delete: if isManager();
-    }
-
     match /employees/{fileName} {
-      allow read: if isStaff();
-      allow create, update: if isManager() && isImageUnder(10);
-      allow delete: if isManager();
+      allow read: if isCrew() || hasManagerAccess('EMPLOYEE') || hasManagerAccess('HR');
+      allow create, update: if hasManagerAccess('EMPLOYEE') && isImageUnder(10);
+      allow delete: if hasManagerAccess('EMPLOYEE');
     }
-
-    match /bluebook/{fileName} {
-      allow read: if isStaff();
-      allow create, update: if isManager() && isImageUnder(10);
-      allow delete: if isManager();
-    }
-
     match /recipes/{fileName} {
-      allow read: if isStaff();
-      allow create, update: if isManager() && isImageUnder(10);
-      allow delete: if isManager();
+      allow read: if isCrew() || hasManagerAccess('RECIPE');
+      allow create, update: if hasManagerAccess('RECIPE') && isImageUnder(10);
+      allow delete: if hasManagerAccess('RECIPE');
     }
-
     match /stores/certs/{fileName} {
-      allow read: if isStaff();
-      allow create, update: if isManager() && request.resource.size < 20 * 1024 * 1024;
-      allow delete: if isManager();
+      allow read: if isCrew() || hasManagerAccess('STORES');
+      allow create, update: if hasManagerAccess('STORES') && request.resource.size < 20 * 1024 * 1024;
+      allow delete: if hasManagerAccess('STORES');
     }
-
-    // HR documents (contracts, IDs) are the most sensitive files here —
-    // manager-only in both directions. Uploads can be PDFs, so no type check.
     match /hr_docs/{crewId}/{fileName} {
-      allow read: if isManager();
-      allow create, update: if isManager() && request.resource.size < 20 * 1024 * 1024;
-      allow delete: if isManager();
+      allow read: if hasManagerAccess('HR');
+      allow create, update: if hasManagerAccess('HR') && request.resource.size < 20 * 1024 * 1024;
+      allow delete: if hasManagerAccess('HR');
     }
-
-    // Company logo: world-readable on purpose — DynamicBranding uses it on the
-    // login screen and locked kiosk, before any session exists.
+    match /training/{moduleId}/{fileName} {
+      allow read: if hasTrainingAccess() || isCrew() &&
+        firestore.get(/databases/(default)/documents/trainingModules/$(moduleId)).data.status == 'PUBLISHED';
+      allow create, update: if hasTrainingAccess() && request.resource.size < 100 * 1024 * 1024 && request.resource.contentType.matches('video/.*');
+      allow delete: if hasTrainingAccess();
+    }
+    // Public read is intentional: branding appears before login and kiosk unlock.
     match /settings/{fileName} {
       allow read: if true;
-      allow create, update: if isManager() && isImageUnder(5);
-      allow delete: if isManager();
+      allow create, update: if hasManagerAccess('HR') && isImageUnder(5);
+      allow delete: if hasManagerAccess('HR');
     }
   }
 }

@@ -1,28 +1,36 @@
 
 import { db, storage, firebase } from '../firebaseConfig';
 import { Task, TaskTemplate, TaskLog, TaskConfig, Store, CrewMember, TaskProofType } from '../types';
+import { storeService } from './storeService';
 
 export const taskService = {
     // --- TASKS ---
     getTasks: async (): Promise<Task[]> => {
-        const snap = await db.collection('tasks').orderBy('createdAt', 'desc').get();
+        const [snap, activeOutletIds] = await Promise.all([
+            db.collection('tasks').orderBy('createdAt', 'desc').get(),
+            storeService.getActiveOutletIds()
+        ]);
         return snap.docs.map(d => {
             const data = d.data() as any;
             // Migration for legacy proofType -> proofTypes array
             if (!data.proofTypes && data.proofType) data.proofTypes = [data.proofType];
             if (!data.proofTypes) data.proofTypes = ['NONE'];
             return { ...data, id: d.id } as Task;
-        });
+        }).filter(task => activeOutletIds.has(task.outletId));
     },
 
     getActiveTasks: async (): Promise<Task[]> => {
-        const snap = await db.collection('tasks').where('isActive', '==', true).get();
+        const [snap, stores] = await Promise.all([
+            db.collection('tasks').where('isActive', '==', true).get(),
+            storeService.getActiveStores()
+        ]);
+        const activeOutletIds = new Set(stores.map(store => store.outletId));
         return snap.docs.map(d => {
             const data = d.data() as any;
             if (!data.proofTypes && data.proofType) data.proofTypes = [data.proofType];
             if (!data.proofTypes) data.proofTypes = ['NONE'];
             return { ...data, id: d.id } as Task;
-        });
+        }).filter(task => activeOutletIds.has(task.outletId));
     },
 
     saveTask: async (task: Partial<Task>, id?: string) => {
@@ -69,8 +77,8 @@ export const taskService = {
             .where('completedAt', '>=', start)
             .where('completedAt', '<=', end);
         
-        const snap = await query.get();
-        let logs = snap.docs.map(d => ({ ...d.data(), id: d.id } as TaskLog));
+        const [snap, activeOutletIds] = await Promise.all([query.get(), storeService.getActiveOutletIds()]);
+        let logs = snap.docs.map(d => ({ ...d.data(), id: d.id } as TaskLog)).filter(log => activeOutletIds.has(log.outletId));
 
         if (outletId && outletId !== 'ALL') {
             logs = logs.filter(l => l.outletId === outletId);
@@ -117,7 +125,7 @@ export const taskService = {
         const path = `proofs/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
         const ref = storage.ref(path);
         await ref.put(blob);
-        return await ref.getDownloadURL();
+        return path;
     },
 
     // --- CONFIG & HELPERS ---
@@ -131,12 +139,12 @@ export const taskService = {
     },
 
     getContextData: async () => {
-        const [sSnap, cSnap] = await Promise.all([
-            db.collection('stores').where('isActive', '==', true).get(),
+        const [stores, cSnap] = await Promise.all([
+            storeService.getActiveStores(),
             db.collection('crew').where('active', '==', true).get()
         ]);
         return {
-            stores: sSnap.docs.map(d => ({ ...d.data(), id: d.id } as Store)),
+            stores,
             crew: cSnap.docs.map(d => ({ ...d.data(), id: d.id } as CrewMember))
         };
     }

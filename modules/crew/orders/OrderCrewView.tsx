@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { orderService } from '../../../services/orderService';
 import { CurrentUser, OrderValidation, OrderItem } from '../../../types';
-import { Button, Card, Badge, FullScreenImageViewer } from '../../../components/SharedComponents';
+import { Button, Card, Badge, ProtectedImageViewer } from '../../../components/SharedComponents';
 import { Camera, CheckCircle, History, ChevronLeft, Image as ImageIcon, Loader2, X, PackageCheck, Coffee, Utensils, Paperclip, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import { compressImage } from '../../../services/imageService';
@@ -205,9 +205,9 @@ export const OrderCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentU
               <div className="text-xs font-bold text-slate-400 uppercase mb-2">Proof Photos</div>
               <div className="flex gap-2 overflow-x-auto pb-2">
                  {viewingOrder.photos?.map((p, i) => (
-                    <FullScreenImageViewer key={i} src={p}>
-                        <img src={p} className="w-20 h-20 object-cover rounded-lg border border-slate-200 cursor-pointer"/>
-                    </FullScreenImageViewer>
+                    <ProtectedImageViewer key={i} fileRef={p}>
+                        {src => <img src={src} className="w-20 h-20 object-cover rounded-lg border border-slate-200 cursor-pointer" />}
+                    </ProtectedImageViewer>
                  ))}
                  {!viewingOrder.photos?.length && <p className="text-xs text-slate-400 italic">No photos attached.</p>}
               </div>

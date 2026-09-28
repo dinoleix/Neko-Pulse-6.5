@@ -5,12 +5,13 @@ import { getCachedSettingsDoc } from '../../../services/configCache';
 import { loginLogService } from '../../../services/loginLogService';
 import { LoginLog } from '../../../types';
 import { Card, Badge, Input, Select, Button } from '../../../components/SharedComponents';
-import { LogIn, RefreshCw, Search, Users, Activity, Shield, Smartphone, MapPin } from 'lucide-react';
+import { LogIn, RefreshCw, Search, Users, Activity, Shield, Smartphone, MapPin, Trash2 } from 'lucide-react';
 import { formatInTimeZone, isTodayInTimeZone, DEFAULT_TIMEZONE } from '../../../utils/dateFormatter';
 
-export const LoginActivityAdminView: React.FC = () => {
+export const LoginActivityAdminView: React.FC<{ canClearLogs: boolean }> = ({ canClearLogs }) => {
     const [logs, setLogs] = useState<LoginLog[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isClearing, setIsClearing] = useState(false);
     const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
 
     // Filters
@@ -34,6 +35,26 @@ export const LoginActivityAdminView: React.FC = () => {
             console.error('Login activity load error', e);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const clearLogs = async () => {
+        if (!canClearLogs || isClearing) return;
+        if (!window.confirm('Clear all Login Activity records? This permanently deletes the full login audit log and cannot be undone.')) return;
+
+        setIsClearing(true);
+        try {
+            const deleted = await loginLogService.clearAll();
+            setLogs([]);
+            setSearch('');
+            setOutletFilter('ALL');
+            setRoleFilter('ALL');
+            alert(`${deleted} login ${deleted === 1 ? 'record was' : 'records were'} permanently deleted.`);
+        } catch (error) {
+            console.error('Login activity clear error', error);
+            alert('Login Activity could not be cleared. Please try again.');
+        } finally {
+            setIsClearing(false);
         }
     };
 
@@ -72,9 +93,14 @@ export const LoginActivityAdminView: React.FC = () => {
                     </div>
                     Login Activity
                 </h1>
-                <Button variant="secondary" className="!w-auto" onClick={load} isLoading={isLoading}>
-                    <RefreshCw className="w-4 h-4 mr-2"/> Refresh
-                </Button>
+                <div className="flex items-center gap-2">
+                    {canClearLogs && <Button variant="secondary" className="!w-auto !border-red-200 !text-red-600 hover:!bg-red-50" onClick={clearLogs} isLoading={isClearing}>
+                        <Trash2 className="w-4 h-4 mr-2"/> Clear logs
+                    </Button>}
+                    <Button variant="secondary" className="!w-auto" onClick={load} isLoading={isLoading}>
+                        <RefreshCw className="w-4 h-4 mr-2"/> Refresh
+                    </Button>
+                </div>
             </div>
 
             {/* STATS */}

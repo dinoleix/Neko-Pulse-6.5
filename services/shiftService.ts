@@ -1,12 +1,13 @@
 
 import { db, firebase } from '../firebaseConfig';
 import { Shift, ShiftAssignment, CafeHoliday, CrewMember, Store, LeaveRequest } from '../types';
+import { storeService } from './storeService';
 
 export const shiftService = {
     // --- DEFINITIONS ---
     getShifts: async (): Promise<Shift[]> => {
-        const snap = await db.collection('shifts').get();
-        return snap.docs.map(d => ({...d.data(), id: d.id} as Shift));
+        const [snap, activeOutletIds] = await Promise.all([db.collection('shifts').get(), storeService.getActiveOutletIds()]);
+        return snap.docs.map(d => ({...d.data(), id: d.id} as Shift)).filter(shift => activeOutletIds.has(shift.outletId));
     },
 
     saveShift: async (shift: Partial<Shift>, id?: string) => {
@@ -30,13 +31,16 @@ export const shiftService = {
         let query: firebase.firestore.Query = db.collection('shiftAssignments');
         if (startDate) query = query.where('date', '>=', startDate);
         if (endDate) query = query.where('date', '<=', endDate);
-        const snap = await query.get();
-        return snap.docs.map(d => ({...d.data(), id: d.id} as ShiftAssignment));
+        const [snap, activeOutletIds] = await Promise.all([query.get(), storeService.getActiveOutletIds()]);
+        return snap.docs.map(d => ({...d.data(), id: d.id} as ShiftAssignment)).filter(assignment => activeOutletIds.has(assignment.outletId));
     },
 
     getUserAssignments: async (crewId: string): Promise<ShiftAssignment[]> => {
-        const snap = await db.collection('shiftAssignments').where('crewId', '==', crewId).get();
-        return snap.docs.map(d => ({...d.data(), id: d.id} as ShiftAssignment));
+        const [snap, activeOutletIds] = await Promise.all([
+            db.collection('shiftAssignments').where('crewId', '==', crewId).get(),
+            storeService.getActiveOutletIds()
+        ]);
+        return snap.docs.map(d => ({...d.data(), id: d.id} as ShiftAssignment)).filter(assignment => activeOutletIds.has(assignment.outletId));
     },
 
     // NEW: Get the Pilot for a specific store and date
@@ -86,15 +90,15 @@ export const shiftService = {
 
     // --- CONTEXT HELPERS ---
     getContextData: async () => {
-        const [cSnap, sSnap, lSnap] = await Promise.all([
+        const [cSnap, stores, lSnap] = await Promise.all([
             db.collection('crew').where('active', '==', true).get(),
-            db.collection('stores').where('isActive', '==', true).get(),
+            storeService.getActiveStores(),
             db.collection('leaveRequests').where('status', '==', 'APPROVED').get()
         ]);
 
         return {
             crew: cSnap.docs.map(d => ({...d.data(), id: d.id} as CrewMember)),
-            stores: sSnap.docs.map(d => ({...d.data(), id: d.id} as Store)),
+            stores,
             leaves: lSnap.docs.map(d => ({...d.data(), id: d.id} as LeaveRequest))
         };
     }

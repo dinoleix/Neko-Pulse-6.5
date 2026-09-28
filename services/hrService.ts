@@ -17,13 +17,11 @@ export const hrService = {
     uploadDocument: async (file: File, crewId: string, docType: string): Promise<CrewDocument> => {
         const ref = storage.ref(`hr_docs/${crewId}/${Date.now()}_${file.name}`);
         await ref.put(file);
-        const url = await ref.getDownloadURL();
-
         return {
             id: Date.now().toString(),
             name: file.name,
             type: docType as any,
-            url: url,
+            storagePath: ref.fullPath,
             uploadedAt: new Date()
         };
     },

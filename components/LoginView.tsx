@@ -4,7 +4,7 @@ import { auth, db } from '../firebaseConfig';
 import { Button, Input, Card } from './SharedComponents';
 import { CurrentUser, UserRole, CrewMember } from '../types';
 import { loginLogService } from '../services/loginLogService';
-import { Coffee, Lock, User, Zap } from 'lucide-react';
+import { Coffee, Lock, User } from 'lucide-react';
 
 interface LoginViewProps {
   onLogin: (user: CurrentUser) => void;
@@ -163,42 +163,31 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
     }
   };
 
-  const launchKiosk = () => {
-      window.location.href = `${window.location.origin}${window.location.pathname}?mode=kiosk`;
-  };
-
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-200 rounded-full blur-3xl opacity-30 -translate-y-1/2 translate-x-1/3"></div>
-      <div className="absolute bottom-0 left-0 w-80 h-80 bg-teal-200 rounded-full blur-3xl opacity-30 translate-y-1/3 -translate-x-1/4"></div>
+    <div className="min-h-screen neko-shell flex items-center justify-center p-6 relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-80 h-80 bg-[#efb5aa] rounded-full blur-3xl opacity-20 -translate-y-1/2 translate-x-1/3"></div>
+      <div className="absolute bottom-0 left-0 w-96 h-96 bg-[#8bbda5] rounded-full blur-3xl opacity-20 translate-y-1/3 -translate-x-1/4"></div>
 
       <div className="w-full max-w-sm relative z-10">
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-emerald-400 to-teal-600 text-white mb-6 shadow-2xl shadow-emerald-200 transform rotate-3">
+          <button
+            type="button"
+            onClick={() => { setMode('admin'); setError(null); }}
+            className="inline-flex items-center justify-center w-20 h-20 rounded-[2rem] bg-[#063b2c] text-white mb-6 shadow-2xl shadow-emerald-950/20 transition-transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-emerald-900/15"
+            aria-label="Manager sign in"
+            title="Manager sign in"
+          >
             <Coffee className="w-10 h-10 drop-shadow-md" />
-          </div>
-          <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Neko Pulse</h1>
-          <p className="text-slate-500 mt-2 font-medium">Your Cafe Solution</p>
+          </button>
+          <p className="neko-eyebrow mb-2">Café operations</p>
+          <h1 className="text-4xl font-semibold text-[#123229] tracking-tight">Neko Pulse</h1>
+          <p className="text-slate-500 mt-2 font-medium">Good people. Great coffee. Brighter days.</p>
         </div>
 
-        <Card className="shadow-2xl shadow-slate-300/50">
-          <div className="flex border-b border-slate-100 mb-8">
-            <button 
-              type="button"
-              className={`flex-1 py-4 text-sm font-bold transition-all relative ${mode === 'staff' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
-              onClick={() => { setMode('staff'); setError(null); }}
-            >
-              Staff Access
-              {mode === 'staff' && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-1 bg-emerald-500 rounded-t-full"></div>}
-            </button>
-            <button 
-              type="button"
-              className={`flex-1 py-4 text-sm font-bold transition-all relative ${mode === 'admin' ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
-              onClick={() => { setMode('admin'); setError(null); }}
-            >
-              Manager Login
-              {mode === 'admin' && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-1 bg-emerald-500 rounded-t-full"></div>}
-            </button>
+        <Card className="shadow-2xl shadow-emerald-950/10">
+          <div className="mb-8">
+            <p className="neko-eyebrow mb-2">{mode === 'admin' ? 'Manager access' : 'Staff access'}</p>
+            <h2 className="text-2xl font-semibold text-[#123229]">{mode === 'admin' ? 'Welcome back.' : 'Start your shift.'}</h2>
           </div>
 
           {mode === 'admin' ? (
@@ -226,6 +215,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
               <Button type="submit" isLoading={isLoading} className="shadow-emerald-300/50 mt-4">
                 Login to Dashboard
               </Button>
+              <button type="button" onClick={() => { setMode('staff'); setError(null); }} className="w-full text-xs font-bold text-slate-400 hover:text-[#0b6b4d] transition-colors">
+                ← Back to staff access
+              </button>
             </form>
           ) : (
             <form onSubmit={handleStaffLogin} className="space-y-6">
@@ -258,17 +250,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
             </form>
           )}
         </Card>
-
-        <div className="mt-8 text-center">
-          <button 
-            type="button"
-            onClick={launchKiosk}
-            className="group px-6 py-3 bg-white/50 hover:bg-white text-slate-500 hover:text-emerald-600 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all border border-transparent hover:border-emerald-100 hover:shadow-lg flex items-center justify-center gap-2 mx-auto"
-          >
-            <Zap className="w-4 h-4 group-hover:fill-emerald-600 transition-colors" />
-            Launch Kiosk (Time Clock)
-          </button>
-        </div>
       </div>
     </div>
   );

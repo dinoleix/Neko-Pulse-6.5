@@ -7,6 +7,7 @@ import { CrewLayout } from './components/CrewLayout';
 import { KioskView } from './components/KioskView';
 import { DynamicBranding } from './components/DynamicBranding';
 import { CurrentUser, UserRole, CrewMember } from './types';
+import { storeService } from './services/storeService';
 
 // Auto-logout after inactivity. Most roles get 5 minutes; the "Counter" role
 // runs unattended on a shared device, so it gets 14 hours.
@@ -94,6 +95,18 @@ function App() {
                 name = userProfile.crewName;
                 dbId = docId;
 
+                // A closed outlet cannot continue operating through a cached
+                // staff session. Managers keep their company-wide access.
+                if (determinedRole === UserRole.CREW && outletId) {
+                    const activeStores = await storeService.getActiveStores();
+                    if (!activeStores.some(store => store.outletId === outletId)) {
+                        await auth.signOut();
+                        setCurrentUser(null);
+                        setInit(false);
+                        return;
+                    }
+                }
+
                 // On a restored session, log out if the idle deadline (role-based) has passed.
                 if (!didInitialIdleCheck) {
                     didInitialIdleCheck = true;
@@ -180,20 +193,20 @@ function App() {
     setCurrentUser(null);
   };
 
-  if (init) return <div className="h-screen flex items-center justify-center text-emerald-600 font-bold animate-pulse">Loading Neko Pulse...</div>;
-
   // Render Kiosk
   if (isKioskMode) {
       return (
         <>
           <DynamicBranding />
-          <KioskView defaultOutletId={kioskOutletId} onExit={() => window.location.href = window.location.origin} currentUser={currentUser} />
+          <KioskView defaultOutletId={kioskOutletId} />
         </>
       );
   }
 
+  if (init) return <div className="h-screen flex items-center justify-center text-[#0b6b4d] font-bold animate-pulse">Loading Neko Pulse...</div>;
+
   return (
-    <div className="min-h-screen bg-emerald-50 text-slate-900 font-sans">
+    <div className="min-h-screen neko-shell text-slate-900">
       <DynamicBranding />
       {!currentUser ? (
         <LoginView onLogin={handleLogin} />

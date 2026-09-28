@@ -1,0 +1,41 @@
+:root {
+  --neko-ink: #123229;
+  --neko-forest: #063b2c;
+  --neko-leaf: #0b6b4d;
+  --neko-cream: #f7f4ee;
+  --neko-paper: #fffdf9;
+  --neko-coral: #ec5b4c;
+  --neko-line: #e7e2d9;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'DM Sans', sans-serif;
+  background: var(--neko-cream);
+  color: var(--neko-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1, h2, h3, .neko-display { font-family: 'Fraunces', Georgia, serif; }
+
+::selection { background: #cce8d9; color: var(--neko-forest); }
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #bdd6c8; border-radius: 99px; }
+
+.neko-shell {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(236, 91, 76, .08), transparent 24rem),
+    radial-gradient(circle at 0% 80%, rgba(11, 107, 77, .08), transparent 30rem),
+    var(--neko-cream);
+}
+
+.neko-eyebrow {
+  color: var(--neko-leaf);
+  font-size: .69rem;
+  font-weight: 700;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}

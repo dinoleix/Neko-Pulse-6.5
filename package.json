@@ -3,17 +3,27 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "overrides": {
+    "jwks-rsa": {
+      "jose": "^5.10.0"
+    }
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:training": "node --test tests/trainingPolicy.test.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",
     "date-fns": "^4.1.0",
     "face-api.js": "^0.22.2",
     "firebase": "^12.6.0",
+    "firebase-admin": "^14.4.0",
     "jsqr": "1.4.0",
     "lucide-react": "^0.554.0",
     "react": "^19.2.0",

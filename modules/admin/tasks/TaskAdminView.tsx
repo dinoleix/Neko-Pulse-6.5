@@ -4,7 +4,7 @@ import { db } from '../../../firebaseConfig'; // Still needed for timestamp if c
 import { getCachedSettingsDoc } from '../../../services/configCache';
 import { taskService } from '../../../services/taskService';
 import { Task, TaskTemplate, TaskLog, TaskFrequency, TaskProofType, Store, TaskConfig, CrewMember } from '../../../types';
-import { Button, Card, Input, Badge, AudioRecorder, Checkbox, Select, TextArea, FullScreenImageViewer } from '../../../components/SharedComponents';
+import { Button, Card, Input, Badge, AudioRecorder, Checkbox, Select, TextArea, ProtectedImageViewer } from '../../../components/SharedComponents';
 import { ClipboardList, Clock, CheckCircle, Image as ImageIcon, Plus, Trash2, Calendar, MapPin, AlertCircle, X, Filter, LayoutList, Activity, ArrowRight, Edit, Save, Copy, Bell, Volume2, Zap, Monitor, Play, Users, VolumeX, Timer, FileText, Loader2, Mic, AlignLeft, BarChart3, TrendingUp, CheckSquare, ChevronLeft, Camera, Search, BellRing } from 'lucide-react';
 import { format, getDate, isSameDay, endOfDay, isAfter, eachDayOfInterval, addDays } from 'date-fns';
 import { formatInTimeZone, getShiftedDate, getCurrentTimeInTimeZone, DEFAULT_TIMEZONE } from '../../../utils/dateFormatter';
@@ -143,7 +143,8 @@ export const TaskAdminView: React.FC = () => {
               taskService.getContextData()
           ]);
 
-          setTasks(tData);
+          const activeOutletIds = new Set(contextData.stores.map(store => store.outletId));
+          setTasks(tData.filter(task => activeOutletIds.has(task.outletId)));
           setTemplates(templData);
           setConfig(configData);
           setStores(contextData.stores);
@@ -793,10 +794,10 @@ export const TaskAdminView: React.FC = () => {
                                          <div key={i} className="flex-shrink-0">
                                             {p.type === TaskProofType.PHOTO && (
                                                 <div className="flex gap-2 flex-wrap">
-                                                    {(Array.isArray(p.value) ? p.value : [p.value]).map((url: string, j: number) => (
-                                                        <FullScreenImageViewer key={j} src={url}>
-                                                            <img src={url} className="w-16 h-16 rounded-lg object-cover border border-slate-200 cursor-pointer" title="Click to view full size"/>
-                                                        </FullScreenImageViewer>
+                                                    {(Array.isArray(p.value) ? p.value : [p.value]).map((fileRef: string, j: number) => (
+                                                        <ProtectedImageViewer key={j} fileRef={fileRef}>
+                                                            {src => <img src={src} className="w-16 h-16 rounded-lg object-cover border border-slate-200 cursor-pointer" title="Click to view full size" />}
+                                                        </ProtectedImageViewer>
                                                     ))}
                                                 </div>
                                             )}
@@ -806,9 +807,9 @@ export const TaskAdminView: React.FC = () => {
                                  ) : inst.log?.proofValue ? (
                                      <div className="flex-shrink-0">
                                         {inst.log.proofType === 'PHOTO' && (
-                                            <FullScreenImageViewer src={inst.log.proofValue}>
-                                                <img src={inst.log.proofValue} className="w-16 h-16 rounded-lg object-cover border border-slate-200 cursor-pointer" />
-                                            </FullScreenImageViewer>
+                                            <ProtectedImageViewer fileRef={inst.log.proofValue}>
+                                                {src => <img src={src} className="w-16 h-16 rounded-lg object-cover border border-slate-200 cursor-pointer" />}
+                                            </ProtectedImageViewer>
                                         )}
                                         {inst.log.proofType === 'TEXT' && <div className="max-w-[400px] min-w-[200px] text-xs p-2 bg-slate-50 rounded border italic truncate">"{inst.log.proofValue}"</div>}
                                      </div>

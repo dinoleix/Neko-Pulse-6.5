@@ -105,7 +105,8 @@ export const ShiftAdminView: React.FC = () => {
             shiftService.getContextData()
         ]);
 
-        setShifts(s);
+        const activeOutletIds = new Set(context.stores.map(store => store.outletId));
+        setShifts(s.filter(shift => activeOutletIds.has(shift.outletId)));
         setHolidays(h);
         setCrew(context.crew);
         setStores(context.stores);
@@ -128,7 +129,8 @@ export const ShiftAdminView: React.FC = () => {
         setNewShift({ name: '', startTime: '09:00', endTime: '17:00', color: '#10b981', outletId: selectedOutlet || '' });
         setEditingId(null);
         const s = await shiftService.getShifts();
-        setShifts(s);
+        const activeOutletIds = new Set(stores.map(store => store.outletId));
+        setShifts(s.filter(shift => activeOutletIds.has(shift.outletId)));
     } catch (error) {
         alert("Failed to save shift template.");
     } finally {

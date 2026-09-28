@@ -48,7 +48,6 @@ Smart, multi-modal attendance tracking designed for the floor:
 ### 🛍️ Orders & Store Operations
 - Track outlet purchase orders and supplier deliveries
 - Store module manages inventory-adjacent operational metadata
-- Bluebook service provides centralised reference data
 
 ### 📋 Task & Meeting Management
 - Assign tasks to crew members with due dates and status tracking
@@ -104,7 +103,6 @@ Neko-Pulse-6.5/
 │   ├── OrderModule.tsx        # Purchase orders
 │   ├── StoreModule.tsx        # Store operations
 │   ├── EOMModule.tsx          # End-of-month processing
-│   ├── ManagerMeetModule.tsx  # Meeting notes
 │   ├── AccessControl.tsx      # Role-based routing
 │   ├── admin/                 # Admin-only views
 │   └── crew/                  # Crew-facing views
@@ -173,6 +171,8 @@ npm run build
 ## ☁️ Deployment
 
 Neko Pulse deploys to **Vercel** with SPA routing configured via `vercel.json`. Connect the repository in your Vercel dashboard and add `VITE_GEMINI_API_KEY` as an environment variable. Firebase credentials are baked into `firebaseConfig.ts` at build time.
+
+The 24-hour Time Clock uses the server-only `FIREBASE_SERVICE_ACCOUNT` environment variable (or `FIREBASE_SERVICE_ACCOUNT_JSON` for a new setup). Add the complete Firebase service-account JSON to Vercel for every environment before deploying the kiosk endpoint; never prefix this variable with `VITE_` or put it in `.env.local` committed to source control.
 
 **Live deployment URL:** Available in repository Deployments tab.
 

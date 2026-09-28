@@ -1,6 +1,6 @@
 // Bump this version whenever the caching logic changes — the activate handler
 // deletes any cache that isn't the current name, flushing stale shells.
-const CACHE_NAME = 'neko-pulse-v2';
+const CACHE_NAME = 'neko-pulse-v4';
 const APP_SHELL = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {
@@ -25,6 +25,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
 
+  // Vite serves un-hashed source modules during local development. Caching
+  // those modules lets an old export survive a refresh and can leave the app
+  // blank after a code edit. Production assets are content-hashed, so keep
+  // the offline cache there while always using the live dev server locally.
+  if (self.location.hostname === '127.0.0.1' || self.location.hostname === 'localhost') return;
+
   // Only ever touch same-origin GETs. Firebase/Firestore/Storage, the QR image
   // API and the geo-IP lookup are cross-origin and must always hit the network.
   if (req.method !== 'GET') return;
@@ -35,6 +41,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (url.origin !== self.location.origin) return;
+  // Private API responses include expiring playback links and must never be
+  // reused across requests or accounts, regardless of HTTP cache headers.
+  if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return;
 
   // Network-first for page navigations: always try to fetch the freshest
   // index.html so a new deploy is picked up immediately. Only fall back to the
@@ -52,8 +61,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for everything else. Vite asset filenames are content-hashed,
-  // so a cached asset is only ever served for the exact build it belongs to.
+  // Only cache the build's static assets; other responses may be user-specific.
+  if (!url.pathname.startsWith('/assets/')) return;
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;

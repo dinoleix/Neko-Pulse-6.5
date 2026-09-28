@@ -1,12 +1,16 @@
 
 import { db, storage, firebase } from '../firebaseConfig';
 import { OrderValidation } from '../types';
+import { storeService } from './storeService';
 
 export const orderService = {
     // --- ADMIN: FETCHING ---
     getRecentValidations: async (limit: number = 500): Promise<OrderValidation[]> => {
-        const snap = await db.collection('validations').orderBy('validatedAt', 'desc').limit(limit).get();
-        return snap.docs.map(d => ({...d.data(), id: d.id} as OrderValidation));
+        const [snap, activeOutletIds] = await Promise.all([
+            db.collection('validations').orderBy('validatedAt', 'desc').limit(limit).get(),
+            storeService.getActiveOutletIds()
+        ]);
+        return snap.docs.map(d => ({...d.data(), id: d.id} as OrderValidation)).filter(validation => activeOutletIds.has(validation.outletId));
     },
 
     // --- ADMIN: ACTIONS ---
@@ -26,7 +30,7 @@ export const orderService = {
         const filename = `proofs/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.jpg`;
         const ref = storage.ref(filename);
         await ref.put(blob);
-        return await ref.getDownloadURL();
+        return filename;
     },
 
     // --- CREW: HISTORY ---

@@ -34,6 +34,26 @@ export interface Store {
   isActive: boolean;
 }
 
+// --- MODULE: DAILY MANAGER OVERVIEW ---
+export interface ManagerAction {
+  id?: string;
+  title: string;
+  details?: string;
+  outletId: string | 'ALL';
+  priority: 'HIGH' | 'NORMAL';
+  status: 'OPEN' | 'COMPLETED';
+  createdAt: any;
+  createdBy: string;
+  createdByName: string;
+  actionNote?: string;
+  actionUpdatedAt?: any;
+  actionUpdatedBy?: string;
+  actionUpdatedByName?: string;
+  completedAt?: any;
+  completedBy?: string;
+  completedByName?: string;
+}
+
 // --- MODULE: ACCESS CONTROL ---
 export const MODULE_IDS = {
   // Admin Dashboard Modules
@@ -46,11 +66,9 @@ export const MODULE_IDS = {
   HR: 'HR',
   REPORTS: 'REPORTS',
   EOM: 'EOM',
-  MANAGER_MEET: 'MANAGER_MEET',
-  BLUEBOOK: 'BLUEBOOK',
   RECIPE: 'RECIPE',
   LOGIN_ACTIVITY: 'LOGIN_ACTIVITY',
-  CONVERSATIONS: 'CONVERSATIONS',
+  TRAINING: 'TRAINING',
   SETTINGS: 'SETTINGS',
 
   // Crew App Features
@@ -58,8 +76,8 @@ export const MODULE_IDS = {
   CREW_TASKS: 'CREW_TASKS',
   CREW_SHIFTS: 'CREW_SHIFTS',
   CREW_EOM: 'CREW_EOM',
-  CREW_BLUEBOOK: 'CREW_BLUEBOOK',
-  CREW_RECIPE: 'CREW_RECIPE'
+  CREW_RECIPE: 'CREW_RECIPE',
+  CREW_TRAINING: 'CREW_TRAINING'
 } as const;
 
 export type ModuleId = keyof typeof MODULE_IDS;
@@ -68,25 +86,134 @@ export interface AccessConfig {
   [key: string]: string[]; // ModuleID -> Array of Role Names
 }
 
+// --- MODULE: TRAINING ---
+// Training is intentionally separate from daily tasks. A module records
+// competence; a task records whether that competence was applied today.
+export type TrainingTrack = 'CORE_STAFF' | 'BARISTA' | 'KITCHEN' | 'MANAGER';
+export type TrainingModuleStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+export type TrainingFormat = 'THEORETICAL' | 'PRACTICAL';
+export type TrainingAssignmentStatus = 'ASSIGNED' | 'NOT_STARTED' | 'LEARNING' | 'COMPLETED' | 'DEMONSTRATION_COMPLETED' | 'PRACTISING_UNDER_SUPERVISION' | 'ASSESSMENT_PENDING' | 'PASSED' | 'CERTIFIED' | 'RETRAINING_REQUIRED' | 'EXPIRED';
+export type TrainingEvidence = { name: string; storagePath?: string; url?: string; type?: 'IMAGE' | 'VIDEO' | 'FILE' };
+
+export interface TrainingLesson {
+  id: string;
+  type: 'KNOWLEDGE' | 'DEMONSTRATION' | 'SUPERVISED_PRACTICE' | 'KNOWLEDGE_ASSESSMENT' | 'PRACTICAL_ASSESSMENT';
+  title: string;
+  content?: string;
+  objectives?: string[];
+  checklist?: string[];
+  required?: boolean;
+  media?: TrainingEvidence[];
+}
+
+export interface TrainingQuizQuestion {
+  id: string;
+  type: 'MULTIPLE_CHOICE' | 'MULTIPLE_SELECT' | 'TRUE_FALSE' | 'SHORT_ANSWER';
+  prompt: string;
+  options?: string[];
+  required?: boolean;
+}
+
+// Stored in the restricted trainingAssessmentKeys collection, never inside a
+// learner-readable module document.
+export interface TrainingQuizAnswerKey { questionId: string; acceptedAnswers: string[]; }
+
+export interface PracticalCriterion {
+  id: string;
+  name: string;
+  instructions?: string;
+  isCritical?: boolean;
+  scored?: boolean;
+  weight?: number;
+}
+
+export interface TrainingModule {
+  id?: string;
+  versionId?: string;
+  title: string;
+  description?: string;
+  track: TrainingTrack;
+  trainingFormat?: TrainingFormat;
+  applicableRoles: string[];
+  applicableOutletIds: string[];
+  learningObjectives: string[];
+  estimatedMinutes?: number;
+  mandatory: boolean;
+  ownerId?: string;
+  ownerName?: string;
+  instructions?: string;
+  media?: TrainingEvidence[];
+  safetyWarnings?: string[];
+  relatedRecipeIds?: string[];
+  relatedEquipment?: string[];
+  relatedTaskIds?: string[];
+  lessons: TrainingLesson[];
+  requiredLessonOrder: boolean;
+  requiredSupervisedAttempts: number;
+  knowledgeTestRequired: boolean;
+  practicalTestRequired: boolean;
+  minimumPassingScore: number;
+  quizQuestions?: TrainingQuizQuestion[];
+  quizAttemptLimit?: number;
+  practicalCriteria?: PracticalCriterion[];
+  managerSignOffRequired: boolean;
+  certificationValidityDays?: number;
+  version: number;
+  reviewDate?: string;
+  status: TrainingModuleStatus;
+  publishedAt?: any;
+  archivedAt?: any;
+  createdAt?: any;
+  updatedAt?: any;
+  updatedBy?: string;
+  changeSummary?: string;
+  updateRequirement?: 'NONE' | 'ACKNOWLEDGEMENT' | 'KNOWLEDGE_RETEST' | 'FULL_REASSESSMENT';
+}
+
+export interface TrainingAssignment {
+  id?: string;
+  employeeId: string;
+  employeeUid: string;
+  employeeName: string;
+  employeeRole?: string;
+  outletId: string;
+  moduleId: string;
+  moduleVersionId: string;
+  moduleTitle: string;
+  track: TrainingTrack;
+  trainingFormat?: TrainingFormat;
+  mandatory: boolean;
+  assignmentType: 'INITIAL' | 'REFRESHER';
+  reason?: string;
+  assignedBy: string;
+  assignedByName?: string;
+  assignedAt: any;
+  dueDate?: string;
+  status: TrainingAssignmentStatus;
+  completedLessonIds: string[];
+  acknowledgementAt?: any;
+  demonstration?: TrainingDemonstration;
+  supervisedAttempts: TrainingPracticeAttempt[];
+  quizResults: TrainingQuizResult[];
+  practicalAssessment?: TrainingPracticalAssessment;
+  practicalAssessmentRequestedAt?: any;
+  managerFeedback?: string;
+  certifiedAt?: any;
+  certificationId?: string;
+  updatedAt?: any;
+}
+
+export interface TrainingDemonstration { trainerId: string; trainerName: string; occurredAt: any; checklist: string[]; employeeAcknowledgedAt?: any; notes?: string; evidence?: TrainingEvidence[]; }
+export interface TrainingPracticeAttempt { id: string; trainerId: string; trainerName: string; occurredAt: any; outcome: 'MEETS_STANDARD' | 'NEEDS_IMPROVEMENT' | 'NOT_DEMONSTRATED'; notes?: string; evidence?: TrainingEvidence[]; }
+export interface TrainingQuizResult { attempt: number; score: number; passed: boolean; submittedAt: any; }
+export interface TrainingPracticalAssessment { assessorId: string; assessorName: string; assessedAt: any; score: number; result: 'PASSED' | 'RETRAINING_REQUIRED'; criticalFailure: boolean; criteria: Array<{ criterionId: string; outcome: 'MEETS_STANDARD' | 'NEEDS_IMPROVEMENT' | 'NOT_DEMONSTRATED' | 'CRITICAL_FAILURE' | 'NOT_APPLICABLE'; comment?: string; }>; managerComment?: string; evidence?: TrainingEvidence[]; }
+
+export interface TrainingCertification { id?: string; assignmentId: string; employeeId: string; employeeUid: string; employeeName: string; outletId: string; role?: string; moduleId: string; moduleVersionId: string; moduleTitle: string; moduleVersion: number; assessmentResult: 'PASSED'; score?: number; criticalFailures: string[]; certifyingManagerId: string; certifyingManagerName: string; certificationDate: any; expiryDate?: any; evidence?: TrainingEvidence[]; managerNotes?: string; employeeAcknowledgedAt?: any; }
+export interface TrainingAuditEvent { id?: string; actorId: string; actorName?: string; action: string; employeeId?: string; employeeName?: string; moduleId: string; moduleVersionId?: string; outletId?: string; previousStatus?: TrainingAssignmentStatus; newStatus?: TrainingAssignmentStatus; notes?: string; createdAt: any; }
+
 export interface RoleDef {
   id?: string;
   name: string;
-}
-
-// --- MODULE: BLUEBOOK (NEW) ---
-export interface BluebookItem {
-  id?: string;
-  title: string;
-  category: string;
-  shortText: string;
-  detailedText?: string;
-  imageUrl?: string;
-  createdAt: any;
-  createdBy: string;
-}
-
-export interface BluebookConfig {
-  categories: string[];
 }
 
 // --- MODULE: EMPLOYEES ---
@@ -94,7 +221,10 @@ export interface CrewDocument {
   id: string;
   name: string;
   type: 'OFFER_SIGNED' | 'ID_PROOF' | 'RESUME' | 'OTHER';
-  url: string;
+  // New documents keep only the private Storage path. url remains optional so
+  // existing legacy records continue to be viewable during the migration.
+  storagePath?: string;
+  url?: string;
   uploadedAt: any;
 }
 
@@ -391,71 +521,4 @@ export interface Recipe {
 
 export interface RecipeConfig {
   categories: string[];
-}
-
-// --- MODULE: COUNTER CONVERSATIONS ---
-export interface ConversationConfig {
-  recordingEnabled: boolean;
-  chunkMinutes: number;   // length of each recorded segment (default 5)
-  retentionDays: number;  // must match the GCS lifecycle rule on conversations/ (default 30)
-}
-
-export interface ConversationCoaching {
-  greeting: number;       // each rubric score is 1-10
-  friendliness: number;
-  clarity: number;
-  upsellAttempt: number;
-  closing: number;
-  overallScore: number;
-  tips: string[];
-}
-
-export interface ConversationRecording {
-  id?: string;
-  // Storage path is persisted (unlike task proofs, which only keep the URL)
-  // because the training-copy flow and cleanup need to address the object.
-  storagePath: string;
-  // Legacy only: chunks used to persist a download URL at upload time, but
-  // minting one is a Storage read the staff counter session isn't allowed.
-  // Newer docs omit it; the admin resolves a URL from storagePath on demand.
-  downloadUrl?: string;
-  startedAt: any;
-  durationSec: number;
-  recordedById: string;   // auth uid of the counter session (rules: isOwner)
-  recordedByName: string;
-  outletId?: string;
-  status: 'uploaded' | 'analyzed';
-  transcript?: string;
-  coaching?: ConversationCoaching;
-  isTraining: boolean;
-  trainingPath?: string;  // set once copied into the non-expiring training/ prefix
-  trainingUrl?: string;
-}
-
-// --- MODULE: MANAGER MEET ---
-export interface MeetingAgendaItem {
-  id: string;
-  text: string;
-  isDiscussed: boolean;
-  addedBy: string;
-}
-
-export interface MeetingActionItem {
-  id?: string;
-  description: string;
-  assigneeId: string;
-  assigneeName: string;
-  dueDate: string;
-  status: 'OPEN' | 'DONE';
-  originMeetingId: string;
-  createdAt: any;
-}
-
-export interface ManagerMeeting {
-  id?: string;
-  title: string;
-  date: string; // YYYY-MM-DD
-  status: 'PLANNED' | 'COMPLETED';
-  notes: string;
-  agenda: MeetingAgendaItem[];
 }

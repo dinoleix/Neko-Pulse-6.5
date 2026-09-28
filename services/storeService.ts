@@ -10,8 +10,19 @@ export const storeService = {
     return snap.docs.map(d => ({ ...d.data(), id: d.id } as Store));
   },
 
+  // Old store records may not have the field yet, so treat only an explicit
+  // false as closed. This keeps the migration safe while new closures take
+  // effect everywhere immediately.
+  getActiveStores: async (): Promise<Store[]> => {
+    const stores = await storeService.getStores();
+    return stores.filter(store => store.isActive !== false);
+  },
+
+  getActiveOutletIds: async (): Promise<Set<string>> =>
+    new Set((await storeService.getActiveStores()).map(store => store.outletId)),
+
   addStore: async (store: Partial<Store>) => {
-    return await db.collection('stores').add({ ...store, isActive: true });
+    return await db.collection('stores').add({ ...store, isActive: store.isActive ?? true });
   },
 
   updateStore: async (id: string, data: Partial<Store>) => {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CrewMember, CrewDocument } from '../../../types';
 import { hrService } from '../../../services/hrService';
-import { Button, Card, Input, Select, Badge, TextArea } from '../../../components/SharedComponents';
+import { Button, Card, Input, Select, Badge, TextArea, ProtectedFileLink } from '../../../components/SharedComponents';
 import { FileText, Upload, Printer, Trash2, Eye, User, Briefcase, Image as ImageIcon, RotateCcw, Save, Loader2, File, Star } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -738,9 +738,9 @@ export const HRAdminView: React.FC = () => {
                                                 </div>
                                             </div>
                                             <div className="flex gap-2">
-                                                <a href={doc.url} target="_blank" rel="noreferrer" className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg">
+                                                <ProtectedFileLink fileRef={doc.storagePath || doc.url} className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg">
                                                     <Eye className="w-5 h-5"/>
-                                                </a>
+                                                </ProtectedFileLink>
                                                 <button onClick={() => deleteDocument(doc.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
                                                     <Trash2 className="w-5 h-5"/>
                                                 </button>

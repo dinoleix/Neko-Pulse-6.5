@@ -72,4 +72,19 @@ export const loginLogService = {
             .get();
         return snap.docs.map(d => ({ ...d.data(), id: d.id } as LoginLog));
     },
+
+    // Super-admin-only in Firestore rules. Delete in bounded batches so this
+    // also works when the audit log grows beyond Firestore's 500-write limit.
+    clearAll: async (): Promise<number> => {
+        let deleted = 0;
+        while (true) {
+            const snap = await db.collection(COLLECTION).limit(400).get();
+            if (snap.empty) return deleted;
+
+            const batch = db.batch();
+            snap.docs.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+            deleted += snap.size;
+        }
+    },
 };

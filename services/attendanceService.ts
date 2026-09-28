@@ -2,6 +2,7 @@
 import { db, firebase } from '../firebaseConfig';
 import { AttendanceLog, LeaveRequest, AttendanceConfig, CrewMember, ShiftAssignment, AppConfig } from '../types';
 import { getCachedSettingsDoc } from './configCache';
+import { storeService } from './storeService';
 // @fix: Removed parseISO from date-fns as it's not exported in the available version
 import { differenceInDays } from 'date-fns';
 
@@ -20,6 +21,9 @@ export const attendanceService = {
         let query: firebase.firestore.Query = db.collection('attendanceLogs');
         if (since) query = query.where('timestamp', '>=', since);
         const snap = await query.orderBy('timestamp', 'desc').limit(limit).get();
+        // Store closure stops new operational use, not access to the
+        // attendance audit trail. Older logs can also use a legacy outlet ID,
+        // so filtering against today's active-store list hid valid records.
         return snap.docs.map(d => ({...d.data(), id: d.id} as AttendanceLog));
     },
 
@@ -27,8 +31,11 @@ export const attendanceService = {
     // collection grows forever and balances only need leaves after each
     // member's reset date, which recent-first ordering preserves in practice.
     getAllLeaves: async (limit: number = 1000): Promise<LeaveRequest[]> => {
-        const snap = await db.collection('leaveRequests').orderBy('appliedAt', 'desc').limit(limit).get();
-        return snap.docs.map(d => ({...d.data(), id: d.id} as LeaveRequest));
+        const [snap, activeOutletIds] = await Promise.all([
+            db.collection('leaveRequests').orderBy('appliedAt', 'desc').limit(limit).get(),
+            storeService.getActiveOutletIds()
+        ]);
+        return snap.docs.map(d => ({...d.data(), id: d.id} as LeaveRequest)).filter(request => activeOutletIds.has(request.outletId));
     },
 
     // One doc per crew member per day — unbounded, this was the single
@@ -36,8 +43,8 @@ export const attendanceService = {
     getAllShifts: async (sinceDate?: string): Promise<ShiftAssignment[]> => {
         let query: firebase.firestore.Query = db.collection('shiftAssignments');
         if (sinceDate) query = query.where('date', '>=', sinceDate);
-        const snap = await query.get();
-        return snap.docs.map(d => ({...d.data(), id: d.id} as ShiftAssignment));
+        const [snap, activeOutletIds] = await Promise.all([query.get(), storeService.getActiveOutletIds()]);
+        return snap.docs.map(d => ({...d.data(), id: d.id} as ShiftAssignment)).filter(assignment => activeOutletIds.has(assignment.outletId));
     },
 
     // --- CONFIG ---

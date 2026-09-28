@@ -2,17 +2,15 @@
 import React, { useState, useEffect } from 'react';
 import { CurrentUser, MODULE_IDS, AccessConfig, CrewMember, ShiftAssignment } from '../types';
 import { db } from '../firebaseConfig';
-import { ClipboardList, CalendarClock, Shield, ArrowRight, Lock, Calendar, Trophy, Gift, PartyPopper, X, Clock, BookOpen, Plane, ShieldCheck, ChefHat } from 'lucide-react';
+import { ClipboardList, CalendarClock, Shield, ArrowRight, Lock, Calendar, Trophy, Gift, PartyPopper, X, Clock, Plane, ShieldCheck, ChefHat, GraduationCap } from 'lucide-react';
 import { OrderCrewView } from '../modules/crew/orders/OrderCrewView'; 
 import { TaskCrewView } from '../modules/crew/tasks/TaskCrewView'; 
 import { AttendanceCrewView } from '../modules/crew/attendance/AttendanceCrewView'; 
 import { ShiftCrewView } from '../modules/crew/shifts/ShiftCrewView'; 
 import { EOMCrewView } from '../modules/crew/eom/EOMCrewView'; 
-import { BluebookCrewView } from '../modules/crew/bluebook/BluebookCrewView';
 import { RecipeCrewView } from '../modules/crew/recipes/RecipeCrewView';
+import { TrainingCrewView } from '../modules/crew/training/TrainingCrewView';
 import { shiftService } from '../services/shiftService';
-import { useConversationRecorder } from '../modules/crew/conversations/useConversationRecorder';
-import { RecordingIndicator, RecChip } from '../modules/crew/conversations/RecordingIndicator';
 import { getCachedSettingsDoc } from '../services/configCache';
 import { getCurrentTimeInTimeZone, DEFAULT_TIMEZONE } from '../utils/dateFormatter';
 import { format } from 'date-fns';
@@ -25,7 +23,6 @@ import { StoreAdminView } from '../modules/admin/stores/StoreAdminView';
 import { AttendanceAdminView } from '../modules/admin/attendance/AttendanceAdminView'; 
 import { ShiftAdminView } from '../modules/admin/shifts/ShiftAdminView'; 
 import { EOMAdminView } from '../modules/admin/eom/EOMAdminView';
-import { BluebookAdminView } from '../modules/admin/bluebook/BluebookAdminView';
 
 interface CrewLayoutProps {
   currentUser: CurrentUser;
@@ -36,9 +33,6 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
   const isCounterRole = currentUser.accessRole === 'Counter';
   const [activeTab, setActiveTab] = useState<string>(isCounterRole ? 'tasks' : 'attendance');
 
-  // Counter tablets follow the admin's remote switch and record customer
-  // conversations in the background while it's on.
-  const conversationRecorder = useConversationRecorder(currentUser, isCounterRole);
   const [allowedAdmin, setAllowedAdmin] = useState<string[]>([]);
   const [adminModule, setAdminModule] = useState<string | null>(null);
   
@@ -47,8 +41,8 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
   const [canViewTasks, setCanViewTasks] = useState(true);
   const [canViewShifts, setCanViewShifts] = useState(true);
   const [canViewEOM, setCanViewEOM] = useState(true);
-  const [canViewBluebook, setCanViewBluebook] = useState(true);
   const [canViewRecipe, setCanViewRecipe] = useState(false);
+  const [canViewTraining, setCanViewTraining] = useState(true);
   
   // Birthday State
   const [birthdays, setBirthdays] = useState<CrewMember[]>([]);
@@ -58,6 +52,17 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
   const [todayPilot, setTodayPilot] = useState<ShiftAssignment | null>(null);
   
   const [isLoading, setIsLoading] = useState(true);
+
+  // Store closures take effect for already-open crew sessions as well as the
+  // next login. Managers are rendered through AdminLayout and are unaffected.
+  useEffect(() => {
+     if (!currentUser.outletId) return;
+     const unsubscribe = db.collection('stores').where('outletId', '==', currentUser.outletId).onSnapshot(snapshot => {
+        const isOpen = snapshot.docs.some(doc => doc.data().isActive !== false);
+        if (!isOpen) onLogout();
+     }, error => console.warn('Store status check failed:', error));
+     return () => unsubscribe();
+  }, [currentUser.outletId, onLogout]);
 
   useEffect(() => {
      const checkAccess = async () => {
@@ -81,8 +86,8 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
                setCanViewOrders(conf[MODULE_IDS.CREW_ORDERS] ? conf[MODULE_IDS.CREW_ORDERS].includes(role) : true);
                setCanViewTasks(conf[MODULE_IDS.CREW_TASKS] ? conf[MODULE_IDS.CREW_TASKS].includes(role) : true);
                setCanViewEOM(conf[MODULE_IDS.CREW_EOM] ? conf[MODULE_IDS.CREW_EOM].includes(role) : true);
-               setCanViewBluebook(conf[MODULE_IDS.CREW_BLUEBOOK] ? conf[MODULE_IDS.CREW_BLUEBOOK].includes(role) : true);
                setCanViewRecipe(conf[MODULE_IDS.CREW_RECIPE] ? conf[MODULE_IDS.CREW_RECIPE].includes(role) : false);
+               setCanViewTraining(conf[MODULE_IDS.CREW_TRAINING] ? conf[MODULE_IDS.CREW_TRAINING].includes(role) : true);
             }
 
             // Cheap birthday lookup (~0-2 reads) against /crewDirectory — the
@@ -131,7 +136,6 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
                  {adminModule === MODULE_IDS.EMPLOYEE && <EmployeeAdminView currentUser={currentUser} />}
                  {adminModule === MODULE_IDS.STORES && <StoreAdminView />}
                  {adminModule === MODULE_IDS.SHIFTS && <ShiftAdminView />}
-                 {adminModule === MODULE_IDS.BLUEBOOK && <BluebookAdminView />}
                  {adminModule === MODULE_IDS.EOM && <EOMAdminView />}
                  {adminModule === MODULE_IDS.ATTENDANCE && <AttendanceAdminView launchKiosk={() => {}} />}
               </div>
@@ -154,12 +158,12 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
      return (
         <div className="pb-24 pt-4">
            {activeTab === 'attendance' && <AttendanceCrewView currentUser={currentUser} />}
-           {activeTab === 'bluebook' && (canViewBluebook ? <BluebookCrewView currentUser={currentUser} /> : <AccessDenied/>)}
            {activeTab === 'tasks' && (canViewTasks ? <TaskCrewView currentUser={currentUser} /> : <AccessDenied/>)}
            {activeTab === 'orders' && (canViewOrders ? <OrderCrewView currentUser={currentUser} /> : <AccessDenied/>)}
            {activeTab === 'shifts' && (canViewShifts ? <ShiftCrewView currentUser={currentUser} /> : <AccessDenied/>)}
            {activeTab === 'eom' && (canViewEOM ? <EOMCrewView currentUser={currentUser} /> : <AccessDenied/>)}
            {activeTab === 'recipe' && (canViewRecipe ? <RecipeCrewView currentUser={currentUser} /> : <AccessDenied/>)}
+           {activeTab === 'training' && (canViewTraining ? <TrainingCrewView currentUser={currentUser} /> : <AccessDenied/>)}
         </div>
      );
   };
@@ -170,9 +174,7 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
   const otherBirthdays = birthdays.filter(b => b.id !== myBirthday?.id);
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4">
-
-       <RecordingIndicator status={conversationRecorder.status} pendingUploads={conversationRecorder.pendingUploads} />
+    <div className="min-h-screen neko-shell px-4">
 
        {/* PILOT BANNER */}
        {todayPilot && (
@@ -192,12 +194,12 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
            </div>
        )}
 
-       <div className="flex justify-between items-center py-4 border-b border-slate-200 mb-2">
+       <div className="flex justify-between items-center py-5 border-b border-[#ded9ce] mb-2">
           <div>
-             <h3 className="text-xl font-bold text-slate-800">{currentUser.name}<RecChip status={conversationRecorder.status} pendingUploads={conversationRecorder.pendingUploads} /></h3>
-             <p className="text-xs text-slate-500">{currentUser.outletId}</p>
+             <p className="neko-eyebrow mb-1">Neko Pulse · {currentUser.outletId}</p>
+             <h3 className="text-2xl font-semibold text-[#123229]">Hello, {currentUser.name?.split(' ')[0]}</h3>
           </div>
-          <button onClick={onLogout} className="text-xs border px-3 py-1 rounded-lg">Exit</button>
+          <button onClick={onLogout} className="text-xs font-bold text-[#063b2c] border border-[#d9d5cb] bg-[#fffdf9] px-3 py-2 rounded-xl hover:bg-[#e6f0e9]">Exit</button>
        </div>
 
        {/* BIRTHDAY BANNER */}
@@ -239,12 +241,9 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
 
        {renderContent()}
 
-       <div className="fixed bottom-4 left-4 right-4 bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 p-2 flex justify-around z-30 overflow-x-auto">
+       <div className="fixed bottom-4 left-4 right-4 bg-[#fffdf9]/95 backdrop-blur-md rounded-2xl shadow-2xl shadow-emerald-950/10 border border-[#e7e2d9] p-2 flex justify-around z-30 overflow-x-auto">
           {!isCounterRole && (
              <NavBtn icon={<CalendarClock/>} label="Time" active={activeTab === 'attendance'} onClick={() => setActiveTab('attendance')} color="orange"/>
-          )}
-          {canViewBluebook && (
-             <NavBtn icon={<BookOpen/>} label="Bluebook" active={activeTab === 'bluebook'} onClick={() => setActiveTab('bluebook')} color="blue"/>
           )}
           {canViewTasks && (
              <NavBtn icon={<ClipboardList/>} label="Tasks" active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} color="indigo"/>
@@ -260,6 +259,9 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
           )}
           {canViewRecipe && (
              <NavBtn icon={<ChefHat/>} label="Recipes" active={activeTab === 'recipe'} onClick={() => setActiveTab('recipe')} color="teal"/>
+          )}
+          {canViewTraining && (
+             <NavBtn icon={<GraduationCap/>} label="Training" active={activeTab === 'training'} onClick={() => setActiveTab('training')} color="emerald"/>
           )}
           {allowedAdmin.length > 0 && (
              <NavBtn icon={<Shield/>} label="Admin" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} color="rose"/>
@@ -279,7 +281,7 @@ const AccessDenied = () => (
 
 const NavBtn = ({ icon, label, active, onClick, color }: any) => {
    const colors: any = { 
-       emerald: 'bg-emerald-500 shadow-emerald-200', 
+       emerald: 'bg-[#0b6b4d] shadow-emerald-200',
        indigo: 'bg-indigo-500 shadow-indigo-200', 
        orange: 'bg-orange-500 shadow-orange-200', 
        rose: 'bg-rose-500 shadow-rose-200',

@@ -62,7 +62,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
              employeeService.getAllCrew(),
              employeeService.getAllManagers(),
              employeeService.getRoles(),
-             storeService.getStores(),
+             storeService.getActiveStores(),
              attendanceService.getConfig()
          ]);
          

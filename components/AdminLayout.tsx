@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '../firebaseConfig';
 import { Button } from './SharedComponents';
-import { LogOut, ArrowLeft, CheckCircle, ClipboardList, Users, Store as StoreIcon, ShieldCheck, CalendarClock, Calendar, Briefcase, Lock, FileBarChart, Trophy, MessageSquare, Settings as SettingsIcon, BookOpen, ChefHat, LogIn, Mic } from 'lucide-react';
+import { LogOut, ArrowLeft, CheckCircle, ClipboardList, Users, Store as StoreIcon, ShieldCheck, CalendarClock, Calendar, Briefcase, Lock, FileBarChart, Trophy, Settings as SettingsIcon, ChefHat, LogIn, LayoutDashboard, GraduationCap } from 'lucide-react';
 import { MODULE_IDS, CurrentUser, AccessConfig } from '../types';
 import { OrderAdminView } from '../modules/admin/orders/OrderAdminView'; 
 import { TaskAdminView } from '../modules/admin/tasks/TaskAdminView'; 
@@ -14,12 +14,11 @@ import { ShiftAdminView } from '../modules/admin/shifts/ShiftAdminView';
 import { HRAdminView } from '../modules/admin/hr/HRAdminView'; 
 import { ReportsAdminView } from '../modules/admin/reports/ReportsAdminView';
 import { EOMAdminView } from '../modules/admin/eom/EOMAdminView'; 
-import { ManagerMeetAdminView } from '../modules/admin/meetings/ManagerMeetAdminView'; 
 import { SettingsAdminView } from '../modules/admin/settings/SettingsAdminView';
-import { BluebookAdminView } from '../modules/admin/bluebook/BluebookAdminView';
 import { RecipeAdminView } from '../modules/admin/recipes/RecipeAdminView';
 import { LoginActivityAdminView } from '../modules/admin/loginactivity/LoginActivityAdminView';
-import { ConversationAdminView } from '../modules/admin/conversations/ConversationAdminView';
+import { DailyOverviewAdminView } from '../modules/admin/overview/DailyOverviewAdminView';
+import { TrainingAdminView } from '../modules/admin/training/TrainingAdminView';
 import { getCachedSettingsDoc } from '../services/configCache';
 
 interface AdminLayoutProps {
@@ -57,46 +56,53 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
       if (!role) return false;
       const SUPER_ROLES = ['owner', 'super admin', 'admin', 'system admin'];
       if (SUPER_ROLES.includes(role)) return true;
+      // Store Managers run training today. Keep this explicit so the Training
+      // workspace remains available even if an older access-matrix document
+      // does not yet include the Store Manager role.
+      if (moduleId === MODULE_IDS.TRAINING && role === 'store manager') return true;
       if (!accessConfig) return false;
       const allowedRoles = accessConfig[moduleId];
       if (allowedRoles === undefined) return false;
       return allowedRoles.includes(currentUser.accessRole!);
   };
 
+  const isSecurityAdmin = ['owner', 'super admin', 'admin', 'system admin']
+    .includes(currentUser.accessRole?.trim().toLowerCase() || '');
+
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-emerald-600 font-bold">Loading Admin Hub...</div>;
 
   if (!activeModule) {
     return (
-      <div className="min-h-screen bg-emerald-50/50 p-6">
-        <header className="max-w-6xl mx-auto flex justify-between items-center mb-12 py-4">
+      <div className="min-h-screen neko-shell p-4 md:p-8">
+        <header className="max-w-6xl mx-auto flex justify-between items-center mb-8 md:mb-12 py-4 border-b border-[#ded9ce]">
           <div>
-             <h1 className="text-3xl font-bold text-slate-800">Admin Hub</h1>
-             <p className="text-slate-500">
-                Welcome, {currentUser.name} 
-                {currentUser.accessRole && <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-0.5 rounded ml-2">{currentUser.accessRole}</span>}
+             <p className="neko-eyebrow mb-2">Neko Pulse · Operations</p>
+             <h1 className="text-3xl md:text-4xl font-semibold text-[#123229]">Good to see you, {currentUser.name?.split(' ')[0] || 'there'}.</h1>
+             <p className="text-slate-500 mt-2">
+                Your café operations, in one considered place.
+                {currentUser.accessRole && <span className="bg-[#e6f0e9] text-[#063b2c] text-xs font-bold px-2.5 py-1 rounded-full ml-2">{currentUser.accessRole}</span>}
              </p>
           </div>
           <Button variant="secondary" className="!w-auto" onClick={onLogout}>
              <LogOut className="w-4 h-4 mr-2"/> Logout
           </Button>
         </header>
-        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-           {hasAccess(MODULE_IDS.ACCURACY) && <ModuleCard title="Order Accuracy" icon={<CheckCircle/>} color="bg-emerald-500" onClick={() => setActiveModule(MODULE_IDS.ACCURACY)}/>}
-           {hasAccess(MODULE_IDS.TASKS) && <ModuleCard title="Task Manager" icon={<ClipboardList/>} color="bg-indigo-500" onClick={() => setActiveModule(MODULE_IDS.TASKS)}/>}
-           {hasAccess(MODULE_IDS.EMPLOYEE) && <ModuleCard title="Employees" icon={<Users/>} color="bg-cyan-500" onClick={() => setActiveModule(MODULE_IDS.EMPLOYEE)}/>}
-           {hasAccess(MODULE_IDS.SHIFTS) && <ModuleCard title="Shift Management" icon={<Calendar/>} color="bg-blue-500" onClick={() => setActiveModule(MODULE_IDS.SHIFTS)}/>}
-           {hasAccess(MODULE_IDS.BLUEBOOK) && <ModuleCard title="Bluebook Training" icon={<BookOpen/>} color="bg-blue-700" onClick={() => setActiveModule(MODULE_IDS.BLUEBOOK)}/>}
-           {hasAccess(MODULE_IDS.RECIPE) && <ModuleCard title="Kitchen Recipes" icon={<ChefHat/>} color="bg-orange-500" onClick={() => setActiveModule(MODULE_IDS.RECIPE)}/>}
-           {hasAccess(MODULE_IDS.ATTENDANCE) && <ModuleCard title="Attendance" icon={<CalendarClock/>} color="bg-orange-500" onClick={() => setActiveModule(MODULE_IDS.ATTENDANCE)}/>}
-           {hasAccess(MODULE_IDS.MANAGER_MEET) && <ModuleCard title="Manager Meetings" icon={<MessageSquare/>} color="bg-teal-600" onClick={() => setActiveModule(MODULE_IDS.MANAGER_MEET)}/>}
-           {hasAccess(MODULE_IDS.REPORTS) && <ModuleCard title="Reports" icon={<FileBarChart/>} color="bg-pink-600" onClick={() => setActiveModule(MODULE_IDS.REPORTS)}/>}
-           {hasAccess(MODULE_IDS.EOM) && <ModuleCard title="Emp. of Month" icon={<Trophy/>} color="bg-amber-500" onClick={() => setActiveModule(MODULE_IDS.EOM)}/>}
-           {hasAccess(MODULE_IDS.HR) && <ModuleCard title="HR & Letters" icon={<Briefcase/>} color="bg-pink-400" onClick={() => setActiveModule(MODULE_IDS.HR)}/>}
-           {hasAccess(MODULE_IDS.STORES) && <ModuleCard title="Stores" icon={<StoreIcon/>} color="bg-purple-500" onClick={() => setActiveModule(MODULE_IDS.STORES)}/>}
-           {hasAccess(MODULE_IDS.LOGIN_ACTIVITY) && <ModuleCard title="Login Activity" icon={<LogIn/>} color="bg-sky-500" onClick={() => setActiveModule(MODULE_IDS.LOGIN_ACTIVITY)}/>}
-           {hasAccess(MODULE_IDS.CONVERSATIONS) && <ModuleCard title="Counter Conversations" icon={<Mic/>} color="bg-red-500" onClick={() => setActiveModule(MODULE_IDS.CONVERSATIONS)}/>}
-           {hasAccess(MODULE_IDS.SETTINGS) && <ModuleCard title="System Maint." icon={<SettingsIcon/>} color="bg-slate-700" onClick={() => setActiveModule(MODULE_IDS.SETTINGS)}/>}
-           {hasAccess('ACCESS') && <ModuleCard title="Access" icon={<ShieldCheck/>} color="bg-rose-500" onClick={() => setActiveModule('ACCESS')}/>}
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+           {hasAccess(MODULE_IDS.REPORTS) && <ModuleCard featured title="Today’s Overview" description="Start here: see what needs attention across both stores" icon={<LayoutDashboard/>} color="bg-[#0b6b4d]" onClick={() => setActiveModule('DAILY_OVERVIEW')}/>}
+           {hasAccess(MODULE_IDS.ACCURACY) && <ModuleCard title="Order Accuracy" description="Get every handoff right" icon={<CheckCircle/>} color="bg-[#0b6b4d]" onClick={() => setActiveModule(MODULE_IDS.ACCURACY)}/>}
+           {hasAccess(MODULE_IDS.TASKS) && <ModuleCard title="Task Manager" description="Keep the day moving" icon={<ClipboardList/>} color="bg-[#315e97]" onClick={() => setActiveModule(MODULE_IDS.TASKS)}/>}
+           {hasAccess(MODULE_IDS.EMPLOYEE) && <ModuleCard title="Employees" description="Your people, thoughtfully managed" icon={<Users/>} color="bg-[#4b7b72]" onClick={() => setActiveModule(MODULE_IDS.EMPLOYEE)}/>}
+           {hasAccess(MODULE_IDS.SHIFTS) && <ModuleCard title="Shift Management" description="Plan every service" icon={<Calendar/>} color="bg-[#456a93]" onClick={() => setActiveModule(MODULE_IDS.SHIFTS)}/>}
+           {hasAccess(MODULE_IDS.RECIPE) && <ModuleCard title="Kitchen Recipes" description="Protect every detail" icon={<ChefHat/>} color="bg-[#b9683f]" onClick={() => setActiveModule(MODULE_IDS.RECIPE)}/>}
+           {hasAccess(MODULE_IDS.ATTENDANCE) && <ModuleCard title="Attendance" description="A clear view of the team" icon={<CalendarClock/>} color="bg-[#bd7144]" onClick={() => setActiveModule(MODULE_IDS.ATTENDANCE)}/>}
+           {hasAccess(MODULE_IDS.REPORTS) && <ModuleCard title="Reports" description="See the important signals" icon={<FileBarChart/>} color="bg-[#a55261]" onClick={() => setActiveModule(MODULE_IDS.REPORTS)}/>}
+           {hasAccess(MODULE_IDS.EOM) && <ModuleCard title="Emp. of Month" description="Celebrate the people who shine" icon={<Trophy/>} color="bg-[#bd8538]" onClick={() => setActiveModule(MODULE_IDS.EOM)}/>}
+           {hasAccess(MODULE_IDS.HR) && <ModuleCard title="HR & Letters" description="Support the team well" icon={<Briefcase/>} color="bg-[#a55d73]" onClick={() => setActiveModule(MODULE_IDS.HR)}/>}
+           {hasAccess(MODULE_IDS.STORES) && <ModuleCard title="Stores" description="Keep every outlet aligned" icon={<StoreIcon/>} color="bg-[#665b8c]" onClick={() => setActiveModule(MODULE_IDS.STORES)}/>}
+           {hasAccess(MODULE_IDS.LOGIN_ACTIVITY) && <ModuleCard title="Login Activity" description="A record of daily access" icon={<LogIn/>} color="bg-[#477b8d]" onClick={() => setActiveModule(MODULE_IDS.LOGIN_ACTIVITY)}/>}
+           {hasAccess(MODULE_IDS.TRAINING) && <ModuleCard title="Training" description="Build skills and certify competence" icon={<GraduationCap/>} color="bg-[#4f6f56]" onClick={() => setActiveModule(MODULE_IDS.TRAINING)}/>}
+           {hasAccess(MODULE_IDS.SETTINGS) && <ModuleCard title="System Maint." description="Keep the system in shape" icon={<SettingsIcon/>} color="bg-[#4f5f57]" onClick={() => setActiveModule(MODULE_IDS.SETTINGS)}/>}
+           {hasAccess('ACCESS') && <ModuleCard title="Access" description="Set the right permissions" icon={<ShieldCheck/>} color="bg-[#ae5e5c]" onClick={() => setActiveModule('ACCESS')}/>}
         </div>
       </div>
     );
@@ -104,7 +110,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
 
   // No exemption for the ACCESS module — the matrix editor is super-role-only
   // (it never appears as a matrix row, so hasAccess only passes via SUPER_ROLES).
-  if (!hasAccess(activeModule)) {
+  if (activeModule !== 'DAILY_OVERVIEW' && !hasAccess(activeModule)) {
       return (
           <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
               <Lock className="w-16 h-16 text-slate-300 mb-4"/>
@@ -116,11 +122,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
   }
 
   return (
-    <div className="min-h-screen bg-emerald-50/50 pb-24 md:pb-0">
-       <nav className="bg-white border-b border-emerald-100 sticky top-0 z-20 px-6 py-4 flex justify-between items-center shadow-sm">
+    <div className="min-h-screen neko-shell pb-24 md:pb-0">
+       <nav className="bg-[#fffdf9]/95 border-b border-[#e7e2d9] sticky top-0 z-20 px-4 md:px-6 py-4 flex justify-between items-center backdrop-blur">
           <div className="flex items-center gap-4">
              <button onClick={() => setActiveModule(null)} className="p-2 hover:bg-slate-100 rounded-xl"><ArrowLeft/></button>
-             <h1 className="font-bold text-xl">{activeModule === MODULE_IDS.EOM ? 'Employee of the Month' : activeModule === MODULE_IDS.MANAGER_MEET ? 'Manager Meetings' : activeModule === MODULE_IDS.RECIPE ? 'Kitchen Recipes' : activeModule === MODULE_IDS.LOGIN_ACTIVITY ? 'Login Activity' : activeModule === MODULE_IDS.CONVERSATIONS ? 'Counter Conversations' : activeModule}</h1>
+             <h1 className="font-bold text-xl">{activeModule === 'DAILY_OVERVIEW' ? 'Today’s Overview' : activeModule === MODULE_IDS.EOM ? 'Employee of the Month' : activeModule === MODULE_IDS.RECIPE ? 'Kitchen Recipes' : activeModule === MODULE_IDS.LOGIN_ACTIVITY ? 'Login Activity' : activeModule === MODULE_IDS.TRAINING ? 'Training' : activeModule}</h1>
           </div>
           <Button variant="secondary" className="!w-auto !text-xs" onClick={onLogout}>Logout</Button>
        </nav>
@@ -129,14 +135,13 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
           {activeModule === MODULE_IDS.TASKS && <TaskAdminView />}
           {activeModule === MODULE_IDS.EMPLOYEE && <EmployeeAdminView currentUser={currentUser} />}
           {activeModule === MODULE_IDS.SHIFTS && <ShiftAdminView />}
-          {activeModule === MODULE_IDS.BLUEBOOK && <BluebookAdminView />}
           {activeModule === MODULE_IDS.RECIPE && <RecipeAdminView />}
-          {activeModule === MODULE_IDS.LOGIN_ACTIVITY && <LoginActivityAdminView />}
-          {activeModule === MODULE_IDS.CONVERSATIONS && <ConversationAdminView />}
+          {activeModule === MODULE_IDS.LOGIN_ACTIVITY && <LoginActivityAdminView canClearLogs={isSecurityAdmin} />}
+          {activeModule === MODULE_IDS.TRAINING && <TrainingAdminView currentUser={currentUser} canManageContent={hasAccess(MODULE_IDS.TRAINING)} />}
           {activeModule === MODULE_IDS.HR && <HRAdminView />}
           {activeModule === MODULE_IDS.REPORTS && <ReportsAdminView />}
+          {activeModule === 'DAILY_OVERVIEW' && <DailyOverviewAdminView currentUser={currentUser} onOpenTasks={() => setActiveModule(MODULE_IDS.TASKS)} onOpenAttendance={() => setActiveModule(MODULE_IDS.ATTENDANCE)} />}
           {activeModule === MODULE_IDS.EOM && <EOMAdminView />}
-          {activeModule === MODULE_IDS.MANAGER_MEET && <ManagerMeetAdminView currentUser={currentUser} />}
           {activeModule === MODULE_IDS.STORES && <StoreAdminView />}
           {activeModule === MODULE_IDS.SETTINGS && <SettingsAdminView />}
           {activeModule === 'ACCESS' && <AccessAdminView />}
@@ -146,11 +151,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
   );
 };
 
-const ModuleCard = ({ title, icon, color, onClick }: any) => (
-  <div onClick={onClick} className="bg-white p-6 rounded-3xl shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer border border-slate-100">
-     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 text-white shadow-lg ${color}`}>
+const ModuleCard = ({ title, description, icon, color, onClick, featured = false }: any) => (
+  <div onClick={onClick} className={`group p-6 rounded-2xl transition-all cursor-pointer border ${featured ? 'md:col-span-2 bg-[#063b2c] border-[#063b2c] shadow-[0_18px_42px_rgba(6,59,44,0.22)] hover:shadow-[0_24px_50px_rgba(6,59,44,0.3)] hover:-translate-y-1' : 'bg-[#fffdf9] shadow-[0_10px_30px_rgba(22,44,35,0.05)] hover:shadow-[0_18px_42px_rgba(22,44,35,0.12)] hover:-translate-y-1 border-[#e7e2d9]'}`}>
+     <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-6 text-white shadow-lg ${featured ? 'bg-[#ec5b4c]' : color}`}>
         {React.cloneElement(icon, { className: 'w-8 h-8' })}
      </div>
-     <h3 className="text-xl font-bold text-slate-800">{title}</h3>
+     {featured && <span className="inline-block mb-3 text-[10px] font-bold uppercase tracking-[.16em] text-[#f5c4b8]">Manager priority</span>}
+     <h3 className={`text-xl font-semibold neko-display ${featured ? 'text-white' : 'text-[#123229]'}`}>{title}</h3>
+     <p className={`text-sm mt-2 ${featured ? 'text-[#d6e8dc]' : 'text-slate-500'}`}>{description}</p>
+     <span className={`inline-block mt-6 text-xs font-bold uppercase tracking-[.14em] transition-colors ${featured ? 'text-[#f5c4b8] group-hover:text-white' : 'text-[#0b6b4d] group-hover:text-[#ec5b4c]'}`}>{featured ? 'Open overview →' : 'Open module →'}</span>
   </div>
 );

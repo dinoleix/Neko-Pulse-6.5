@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { orderService } from '../../../services/orderService';
 import { OrderValidation, OrderItem } from '../../../types';
-import { Button, Card, Badge, FullScreenImageViewer, Input, Checkbox, Select } from '../../../components/SharedComponents';
+import { Button, Card, Badge, ProtectedImageViewer, Input, Checkbox, Select } from '../../../components/SharedComponents';
 import { CheckCircle, Trash2, Share2, Filter, Sun, Moon } from 'lucide-react';
 import { format, isWithinInterval, endOfDay } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
@@ -158,8 +158,7 @@ export const OrderAdminView: React.FC = () => {
   };
 
   const shareViaWhatsapp = (v: OrderValidation) => {
-    const imageUrl = v.photos?.[0] || '';
-    const text = `*Order Validation Report*\nOrder ID: ${v.orderId}\nCustomer: ${v.customerName}\nItems: ${v.items.length}\nCrew: ${v.validatedByCrewName}\nTime: ${format(v.validatedAt.toDate(), 'p')}\n\nProof: ${imageUrl}`;
+    const text = `*Order Validation Report*\nOrder ID: ${v.orderId}\nCustomer: ${v.customerName}\nItems: ${v.items.length}\nCrew: ${v.validatedByCrewName}\nTime: ${format(v.validatedAt.toDate(), 'p')}\n\nProof is available securely in Neko Pulse.`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -364,11 +363,13 @@ export const OrderAdminView: React.FC = () => {
                         <td className="px-4 py-3">
                            <div className="flex -space-x-2 overflow-hidden">
                               {v.photos?.map((photo, i) => (
-                                 <FullScreenImageViewer key={i} src={photo}>
+                                 <ProtectedImageViewer key={i} fileRef={photo}>
+                                   {src => (
                                     <div className="relative group cursor-pointer w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-sm ring-1 ring-slate-100">
-                                       <img src={photo} className="w-full h-full object-cover" />
+                                       <img src={src} className="w-full h-full object-cover" />
                                     </div>
-                                 </FullScreenImageViewer>
+                                   )}
+                                 </ProtectedImageViewer>
                               ))}
                               {!v.photos?.length && <span className="text-slate-300 text-xs italic">No Img</span>}
                            </div>

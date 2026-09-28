@@ -1,25 +1,31 @@
 
 import React, { useRef, useState, useEffect } from 'react';
-import { db, storage, firebase, auth } from '../firebaseConfig';
-import { getCachedSettingsDoc } from '../services/configCache';
-import { AttendanceConfig, CrewMember, AttendanceLog, CurrentUser } from '../types';
-import { Clock, RefreshCw, LogIn, LogOut, XCircle, ChevronLeft, Lock, ShieldCheck, Grid3x3, MapPin } from 'lucide-react';
-import { format, differenceInMinutes, startOfDay } from 'date-fns';
-import { Input, Button } from './SharedComponents';
+import { AttendanceConfig, CrewMember } from '../types';
+import { Clock, RefreshCw, LogIn, LogOut, XCircle, ChevronLeft, Grid3x3, MapPin, LockKeyhole, RotateCcw } from 'lucide-react';
+import { format } from 'date-fns';
 import { getShiftedDate, DEFAULT_TIMEZONE } from '../utils/dateFormatter';
 
 interface KioskViewProps {
-  onExit: () => void;
   defaultOutletId?: string;
-  currentUser: CurrentUser | null;
 }
 
-export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, currentUser }) => {
-  // Authentication State for Kiosk
-  const [isLocked, setIsLocked] = useState(!currentUser); // Locked if no user logged in
-  const [adminEmail, setAdminEmail] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [isUnlocking, setIsUnlocking] = useState(false);
+type KioskStore = { outletId: string; name: string };
+const KIOSK_OUTLET_STORAGE_KEY = 'neko-pulse.kiosk-outlet-id';
+
+const readKioskResponse = async (response: Response) => {
+  const text = await response.text();
+  let payload: any = {};
+  try { payload = text ? JSON.parse(text) : {}; } catch { /* handled below with a useful kiosk message */ }
+  if (!response.ok) {
+    if (response.status === 404) throw new Error('Time Clock service is not running locally. Open the deployed app once the secure kiosk service is configured.');
+    throw new Error(payload.error || 'Time Clock is temporarily unavailable. Please contact a manager.');
+  }
+  if (!text) throw new Error('Time Clock returned an empty response. Please contact a manager.');
+  if (!payload || typeof payload !== 'object') throw new Error('Time Clock returned an invalid response. Please contact a manager.');
+  return payload;
+};
+
+export const KioskView: React.FC<KioskViewProps> = ({ defaultOutletId }) => {
 
   const [time, setTime] = useState(new Date());
   const [mode, setMode] = useState<'BEACON' | 'PIN' | 'SUCCESS' | 'ERROR'>('BEACON');
@@ -29,6 +35,11 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
   const [identifiedUser, setIdentifiedUser] = useState<CrewMember | null>(null);
   const [attendanceType, setAttendanceType] = useState<'CHECK_IN' | 'CHECK_OUT'>('CHECK_IN');
   const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
+  const [stores, setStores] = useState<KioskStore[]>([]);
+  const [selectedOutletId, setSelectedOutletId] = useState(defaultOutletId || '');
+  const [isConfiguringLocation, setIsConfiguringLocation] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  const [setupError, setSetupError] = useState('');
   
   // Configuration State
   const [kioskConfig, setKioskConfig] = useState<AttendanceConfig>({ enableQrScan: true, enablePinCode: true, permittedPinCrewIds: [] });
@@ -43,42 +54,48 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
     return () => clearInterval(timer);
   }, []);
 
-  // Config load — only once unlocked. While locked there's no auth session,
-  // so these reads just spam permission-denied errors and retry forever.
+  // The browser has no Firestore access. This endpoint returns only the safe
+  // kiosk configuration, while PIN validation and attendance writes stay on
+  // the server.
   useEffect(() => {
-    if (isLocked) return;
-
-    // Load App Config (Timezone)
-    getCachedSettingsDoc('appConfig').then(cfg => {
-        if(cfg) setTimezone(cfg.timezone || DEFAULT_TIMEZONE);
-    }).catch(err => console.warn('Kiosk appConfig load failed:', err));
-
-    // Load Attendance Config (Enabled Methods)
-    const unsubscribeConfig = db.collection('settings').doc('attendanceConfig').onSnapshot(doc => {
-        if (doc.exists) {
-            setKioskConfig(doc.data() as AttendanceConfig);
+    let active = true;
+    fetch('/api/kiosk-attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'config' }) })
+      .then(async response => {
+        const payload = await readKioskResponse(response);
+        if (!active) return;
+        const availableStores = Array.isArray(payload.stores) ? payload.stores as KioskStore[] : [];
+        const savedOutletId = window.localStorage.getItem(KIOSK_OUTLET_STORAGE_KEY) || '';
+        const hasValidSavedOutlet = availableStores.some(store => store.outletId === savedOutletId);
+        const preferredOutletId = hasValidSavedOutlet
+          ? savedOutletId
+          : (availableStores.some(store => store.outletId === defaultOutletId) ? defaultOutletId : availableStores[0]?.outletId || '');
+        setStores(availableStores);
+        setSelectedOutletId(preferredOutletId);
+        // A new device chooses its outlet once. If the saved store is later
+        // closed, setup is shown again rather than clocking staff to it.
+        setIsConfiguringLocation(!hasValidSavedOutlet && availableStores.length > 1);
+        if (availableStores.length === 1 && preferredOutletId) {
+          window.localStorage.setItem(KIOSK_OUTLET_STORAGE_KEY, preferredOutletId);
         }
-    }, err => console.warn('Kiosk attendanceConfig listener failed:', err));
-
-    return () => unsubscribeConfig();
-  }, [isLocked]);
+        setKioskConfig(payload.attendanceConfig || { enableQrScan: true, enablePinCode: true, permittedPinCrewIds: [] });
+        setTimezone(payload.timezone || DEFAULT_TIMEZONE);
+        setIsReady(true);
+      })
+      .catch(error => { if (active) setSetupError(error.message || 'Time Clock is unavailable.'); });
+    return () => { active = false; };
+  }, []);
 
   // Get time in target timezone
   const displayTime = getShiftedDate(time, timezone);
 
-  // Update Lock State if prop changes
-  useEffect(() => {
-      setIsLocked(!currentUser);
-  }, [currentUser]);
-
   // QR Rotator (Every 10 seconds)
   useEffect(() => {
-      if (mode !== 'BEACON' || isLocked) return;
+      if (mode !== 'BEACON' || !isReady || !selectedOutletId) return;
 
       const rotateQr = () => {
           const payload = JSON.stringify({
               type: 'NEKO_KIOSK_AUTH',
-              outletId: defaultOutletId || 'MAIN',
+              outletId: selectedOutletId,
               timestamp: Date.now(),
               nonce: Math.random().toString(36).substring(7)
           });
@@ -90,23 +107,7 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
       rotateQr(); // Initial
       const interval = setInterval(rotateQr, 10000); // Rotate every 10s
       return () => clearInterval(interval);
-  }, [mode, isLocked, defaultOutletId]);
-
-  const handleUnlock = async (e: React.FormEvent) => {
-      e.preventDefault();
-      setIsUnlocking(true);
-      try {
-          await auth.signInWithEmailAndPassword(adminEmail, adminPassword);
-      } catch (err: any) {
-          if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-              alert("Login Failed: Incorrect Email or Password.");
-          } else {
-              alert("Login Failed: " + err.message);
-          }
-      } finally {
-          setIsUnlocking(false);
-      }
-  };
+  }, [mode, isReady, selectedOutletId]);
 
   const handlePinSubmit = async () => {
     if (pin.length < 4) return;
@@ -115,94 +116,28 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
     setPin('');
   };
 
+  const saveKioskLocation = () => {
+    if (!selectedOutletId) return;
+    window.localStorage.setItem(KIOSK_OUTLET_STORAGE_KEY, selectedOutletId);
+    setIsConfiguringLocation(false);
+  };
+
+  const resetKioskLocation = () => {
+    window.localStorage.removeItem(KIOSK_OUTLET_STORAGE_KEY);
+    setIsConfiguringLocation(true);
+  };
+
   const processAttendance = async (code: string) => {
     setIsLoading(true);
     try {
-      // 1. Find User
-      const snap = await db.collection('crew').where('crewCode', '==', code).where('active', '==', true).get();
-      
-      if (snap.empty) {
-        setMessage("User not found");
-        setMode('ERROR');
-        setTimeout(() => {
-             setMode('PIN'); // Return to PIN screen
-             setIdentifiedUser(null);
-        }, 2500);
-        return;
-      }
-
-      const user = { ...snap.docs[0].data(), id: snap.docs[0].id } as CrewMember;
-
-      // 2. RESTRICTION CHECK: Is this user allowed to use PIN access?
-      const permittedIds = kioskConfig.permittedPinCrewIds || [];
-      if (permittedIds.length > 0 && !permittedIds.includes(user.id!)) {
-          setMessage("Keypad access restricted. Use QR Scan.");
-          setMode('ERROR');
-          setTimeout(() => {
-              setMode('BEACON');
-              setIdentifiedUser(null);
-          }, 4000);
-          return;
-      }
-      
-      // 3. Determine IN or OUT for TODAY (First-In, Last-Out)
-      const nowInTz = getShiftedDate(new Date(), timezone);
-      const startOfToday = startOfDay(nowInTz);
-      
-      const logSnap = await db.collection('attendanceLogs')
-          .where('crewId', '==', user.id)
-          .where('timestamp', '>=', startOfToday)
-          .get();
-      
-      const todayLogs = logSnap.docs.map(d => ({ ...d.data(), id: d.id } as AttendanceLog));
-      // Sort by timestamp asc
-      todayLogs.sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
-
-      const existingIn = todayLogs.find(l => l.type === 'CHECK_IN');
-      const existingOut = todayLogs.find(l => l.type === 'CHECK_OUT');
-
-      let type: 'CHECK_IN' | 'CHECK_OUT' = 'CHECK_IN';
-      let docToUpdateId: string | null = null;
-
-      if (existingIn) {
-          type = 'CHECK_OUT';
-          
-          // Cooldown check against the last scan of any type today
-          const lastLog = todayLogs[todayLogs.length - 1];
-          const lastTime = lastLog.timestamp?.toDate ? lastLog.timestamp.toDate() : new Date();
-          if (differenceInMinutes(new Date(), lastTime) < 5) {
-              setMessage("Please wait 5 mins between scans.");
-              setMode('ERROR');
-              setTimeout(() => { setMode('PIN'); setIdentifiedUser(null); }, 3000);
-              return;
-          }
-
-          if (existingOut) {
-              // We have both IN and OUT. We update the OUT to the new "Last Scan".
-              docToUpdateId = existingOut.id!;
-          }
-      }
-
-      setAttendanceType(type);
-      setIdentifiedUser(user);
-
-      // 4. Save or Update Log
-      if (docToUpdateId) {
-          await db.collection('attendanceLogs').doc(docToUpdateId).update({
-              timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-              method: 'PIN'
-          });
-      } else {
-          await db.collection('attendanceLogs').add({
-            crewId: user.id,
-            crewName: user.crewName,
-            outletId: defaultOutletId || 'Unknown',
-            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-            type: type,
-            method: 'PIN', 
-          });
-      }
-
+      if (!selectedOutletId) throw new Error('Choose a store before using the Time Clock.');
+      const response = await fetch('/api/kiosk-attendance', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clock', crewCode: code, outletId: selectedOutletId }),
+      });
+      const result = await readKioskResponse(response);
+      setAttendanceType(result.type);
+      setIdentifiedUser({ crewName: result.crewName } as CrewMember);
       setMode('SUCCESS');
       
       setTimeout(() => {
@@ -211,8 +146,8 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
       }, 3000);
 
     } catch (e: any) {
-      console.error(e);
-      setMessage(e.code === 'permission-denied' ? "Permission Denied. Kiosk not authorized." : `Error: ${e.message}`);
+      console.error('Kiosk time-clock request failed:', e);
+      setMessage(e.message || 'Time Clock request failed.');
       setMode('ERROR');
       setTimeout(() => setMode('BEACON'), 3000);
     } finally {
@@ -226,48 +161,6 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
      else if (pin.length < 6) setPin(prev => prev + n);
   };
 
-  // --- LOCK SCREEN (AUTHENTICATION REQ) ---
-  if (isLocked) {
-      return (
-          <div className="fixed inset-0 bg-slate-900 z-[200] flex items-center justify-center p-6 text-white">
-              <div className="max-w-md w-full bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700 text-center animate-in zoom-in">
-                  <div className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-red-500/50">
-                      <Lock className="w-10 h-10 text-white"/>
-                  </div>
-                  <h1 className="text-2xl font-bold mb-2">Kiosk Locked</h1>
-                  <p className="text-slate-400 mb-6">Device must be authorized by an Admin to access the secure database.</p>
-                  
-                  <form onSubmit={handleUnlock} className="space-y-4 text-left">
-                      <div>
-                          <label className="text-xs font-bold text-slate-500 uppercase ml-1">Manager Email</label>
-                          <Input 
-                             type="email" 
-                             value={adminEmail} 
-                             onChange={e => setAdminEmail(e.target.value)} 
-                             className="!bg-slate-900 !border-slate-700 !text-white focus:!bg-slate-900" 
-                          />
-                      </div>
-                      <div>
-                          <label className="text-xs font-bold text-slate-500 uppercase ml-1">Password</label>
-                          <Input 
-                             type="password" 
-                             value={adminPassword} 
-                             onChange={e => setAdminPassword(e.target.value)} 
-                             className="!bg-slate-900 !border-slate-700 !text-white focus:!bg-slate-900" 
-                          />
-                      </div>
-                      <Button type="submit" isLoading={isUnlocking} className="mt-4 shadow-emerald-500/20">
-                          <ShieldCheck className="w-4 h-4 mr-2"/> Authorize Device
-                      </Button>
-                  </form>
-                  <button onClick={onExit} className="mt-6 text-slate-500 text-sm hover:text-white underline">
-                      Exit Kiosk Mode
-                  </button>
-              </div>
-          </div>
-      );
-  }
-
   return (
     <div className="fixed inset-0 bg-slate-900 z-[100] text-white overflow-hidden flex flex-col font-sans">
       {/* Top Bar */}
@@ -278,7 +171,7 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
              </div>
              <div>
                 <h1 className="text-2xl font-bold tracking-tight">Kiosk Mode</h1>
-                <p className="text-slate-400 text-sm">{defaultOutletId ? `Outlet: ${defaultOutletId}` : 'Main Entrance'}</p>
+                <p className="text-slate-400 text-sm">24-hour staff time clock</p>
              </div>
          </div>
          <div className="text-right">
@@ -295,13 +188,20 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
       {/* Main Content */}
       <div className="flex-1 flex items-center justify-center p-6 relative">
          
-         <button onClick={onExit} className="absolute bottom-6 right-6 text-slate-700 hover:text-white p-2 flex items-center gap-2">
-            <span className="text-xs font-bold opacity-0 hover:opacity-100 transition-opacity">EXIT</span>
-            <LogOut className="w-5 h-5 opacity-50" />
-         </button>
+         {!isReady && <div className="text-center max-w-md"><RefreshCw className="w-10 h-10 animate-spin text-emerald-400 mx-auto mb-4" /><h2 className="text-2xl font-bold">Preparing Time Clock</h2><p className="text-slate-400 mt-2">{setupError || 'Loading the secure kiosk configuration…'}</p></div>}
 
-         {mode === 'BEACON' && (
+         {isReady && mode === 'BEACON' && (
             <div className="flex flex-col items-center gap-8 w-full max-w-4xl">
+               {isConfiguringLocation ? (
+                 <div className="w-full max-w-md rounded-3xl border border-emerald-400/30 bg-slate-800 p-8 shadow-2xl shadow-emerald-500/10">
+                   <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/15"><MapPin className="h-7 w-7 text-emerald-400" /></div>
+                   <h2 className="text-center text-2xl font-bold">Set kiosk location</h2>
+                   <p className="mt-2 text-center text-sm text-slate-400">Choose this device’s store once. It will stay locked until you reset it.</p>
+                   <label className="mt-6 block text-xs font-bold uppercase tracking-wider text-slate-400">This kiosk is at</label>
+                   <select value={selectedOutletId} onChange={event => setSelectedOutletId(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-white font-semibold"><option value="" disabled>Select store</option>{stores.map(store => <option key={store.outletId} value={store.outletId}>{store.name}</option>)}</select>
+                   <button onClick={saveKioskLocation} disabled={!selectedOutletId} className="mt-5 w-full rounded-xl bg-emerald-500 py-3 font-bold text-white transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50">Confirm this location</button>
+                 </div>
+               ) : <>
                <div className="flex flex-col md:flex-row items-center gap-12 w-full justify-center">
                    {/* QR Section */}
                    <div className="flex-1 flex flex-col items-center max-w-md">
@@ -320,7 +220,7 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
                    </div>
 
                    {/* Divider & Fallback */}
-                   {kioskConfig.enablePinCode && (
+                   {kioskConfig.enablePinCode && selectedOutletId && (
                        <>
                            <div className="hidden md:flex h-64 w-px bg-slate-700"></div>
 
@@ -341,13 +241,15 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
                </div>
                
                <div className="bg-slate-800/50 backdrop-blur px-6 py-2 rounded-full border border-slate-700 flex items-center gap-2 text-slate-400 text-sm">
-                   <MapPin className="w-4 h-4 text-emerald-500"/>
-                   Outlet ID: <span className="font-mono font-bold text-white">{defaultOutletId || 'Unassigned'}</span>
+                   <LockKeyhole className="w-4 h-4 text-emerald-500"/>
+                   Kiosk location: <span className="font-mono font-bold text-white">{stores.find(store => store.outletId === selectedOutletId)?.name || 'Select a store'}</span>
                </div>
+               <button onClick={resetKioskLocation} className="-mt-4 flex items-center gap-2 text-xs text-slate-500 transition-colors hover:text-slate-300"><RotateCcw className="h-3.5 w-3.5" />Reset kiosk location</button>
+               </>}
             </div>
          )}
 
-         {mode === 'PIN' && (
+         {isReady && mode === 'PIN' && (
             <div className="w-full max-w-sm bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700 animate-in slide-in-from-right">
                <h2 className="text-center text-xl font-bold mb-6 text-slate-300">Enter Crew Code</h2>
                <div className="bg-slate-900 p-4 rounded-xl mb-6 text-center text-4xl font-mono tracking-[0.5em] h-20 flex items-center justify-center text-white shadow-inner">
@@ -372,7 +274,7 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
             </div>
          )}
 
-         {mode === 'SUCCESS' && identifiedUser && (
+         {isReady && mode === 'SUCCESS' && identifiedUser && (
             <div className="text-center animate-in zoom-in duration-300">
                <div className={`w-32 h-32 rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl ${attendanceType === 'CHECK_IN' ? 'bg-emerald-500 shadow-emerald-500/50' : 'bg-orange-500 shadow-orange-500/50'}`}>
                   {attendanceType === 'CHECK_IN' ? <LogIn className="w-16 h-16 text-white"/> : <LogOut className="w-16 h-16 text-white"/>}
@@ -387,7 +289,7 @@ export const KioskView: React.FC<KioskViewProps> = ({ onExit, defaultOutletId, c
             </div>
          )}
 
-         {mode === 'ERROR' && (
+         {isReady && mode === 'ERROR' && (
             <div className="text-center animate-in shake duration-300">
                <div className="w-32 h-32 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-red-500/50">
                   <XCircle className="w-16 h-16 text-white"/>

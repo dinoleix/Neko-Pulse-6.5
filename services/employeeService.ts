@@ -53,6 +53,21 @@ const healCrewDirectory = async (crew: CrewMember[]) => {
 };
 
 export const employeeService = {
+    repairAuthUidRecords: async (): Promise<number> => {
+        const [crew, managers] = await Promise.all([employeeService.getAllCrew(), employeeService.getAllManagers()]);
+        const entries = [...crew.map(item => ['crew', item] as const), ...managers.map(item => ['managers', item] as const)]
+            .filter(([, item]) => item.authUid && item.id !== item.authUid);
+        let repaired = 0;
+        for (let index = 0; index < entries.length; index += 400) {
+            const batch = db.batch();
+            entries.slice(index, index + 400).forEach(([collection, item]) => {
+                batch.set(db.collection(collection).doc(item.authUid!), { ...item, id: firebase.firestore.FieldValue.delete() }, { merge: true });
+                repaired++;
+            });
+            if (entries.slice(index, index + 400).length) await batch.commit();
+        }
+        return repaired;
+    },
     // --- PHOTO ---
     uploadPhoto: async (data: Blob): Promise<string> => {
         const ref = storage.ref(`employees/${Date.now()}_photo.jpg`);
@@ -66,6 +81,14 @@ export const employeeService = {
         const crew = snap.docs.map(d => ({...d.data(), id: d.id} as CrewMember));
         healCrewDirectory(crew).catch(() => { /* non-blocking */ });
         return crew;
+    },
+
+    // Training managers only need the people at their outlet when assigning
+    // or reviewing training. This query matches the outlet-scoped rule.
+    getCrewAtOutlet: async (outletId: string): Promise<CrewMember[]> => {
+        const snap = await db.collection('crew').where('outletId', '==', outletId).get();
+        return snap.docs.map(d => ({...d.data(), id: d.id} as CrewMember))
+            .sort((a, b) => (a.crewName || '').localeCompare(b.crewName || ''));
     },
 
     saveCrew: async (data: Partial<CrewMember>, id?: string) => {
