@@ -62,9 +62,15 @@ service cloud.firestore {
 
     match /managers/{managerId} {
       allow read: if bootstrapOwner()
-        || (signedIn() && resource.data.authUid == request.auth.uid && activeMember(resource.data.tenantId));
+        || (signedIn() && resource.data.authUid == request.auth.uid && activeMember(resource.data.tenantId))
+        || managerOrOwner(resource.data.tenantId);
       allow create, update: if bootstrapOwner() && tenantRecord(request.resource.data.tenantId);
       allow delete: if false;
+    }
+
+    match /tenantSettings/{tenantId}/crewDirectory/{crewId} {
+      allow read: if activeMember(tenantId) || bootstrapOwner();
+      allow create, update, delete: if managerOrOwner(tenantId);
     }
 
     match /stores/{storeId} {
@@ -147,6 +153,25 @@ service cloud.firestore {
         && hasOutlet(request.resource.data.tenantId, request.resource.data.outletId);
       allow delete: if managerOrOwner(resource.data.tenantId)
         && hasOutlet(resource.data.tenantId, resource.data.outletId);
+    }
+
+    match /shifts/{shiftId} {
+      allow read: if (activeMember(resource.data.tenantId)
+        && hasOutlet(resource.data.tenantId, resource.data.outletId)) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId)
+        && tenantRecord(request.resource.data.tenantId)
+        && hasOutlet(request.resource.data.tenantId, request.resource.data.outletId);
+      allow update, delete: if managerOrOwner(resource.data.tenantId)
+        && hasOutlet(resource.data.tenantId, resource.data.outletId)
+        && (request.method == 'delete' || tenantRecord(resource.data.tenantId));
+    }
+
+    match /cafeHolidays/{holidayId} {
+      allow read: if activeMember(resource.data.tenantId) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId)
+        && tenantRecord(request.resource.data.tenantId);
+      allow update, delete: if managerOrOwner(resource.data.tenantId)
+        && (request.method == 'delete' || tenantRecord(resource.data.tenantId));
     }
 
     match /tenantSettings/{tenantId}/config/{configId} {

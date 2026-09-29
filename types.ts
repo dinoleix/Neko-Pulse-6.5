@@ -298,6 +298,7 @@ export interface CrewDirectoryEntry {
 // --- MODULE: SHIFTS ---
 export interface Shift {
   id?: string;
+  tenantId?: string;
   name: string; 
   startTime: string; 
   endTime: string; 
@@ -307,6 +308,7 @@ export interface Shift {
 
 export interface CafeHoliday {
   id?: string;
+  tenantId?: string;
   name: string;
   date: string; 
   outletId: string; 

@@ -2,11 +2,13 @@
 import { db, storage } from '../firebaseConfig';
 import { CrewMember, CrewDocument } from '../types';
 import { getCachedSettingsDoc, getSettingsDocRef, invalidateSettingsDoc } from './configCache';
+import { currentTenantId, withTenant } from './tenantScope';
 
 export const hrService = {
     // --- CREW ---
     getActiveCrew: async (): Promise<CrewMember[]> => {
-        const snap = await db.collection('crew').where('active', '==', true).get();
+        const tenantId = await currentTenantId();
+        const snap = await withTenant(db.collection('crew').where('active', '==', true), tenantId).get();
         return snap.docs.map(d => ({ ...d.data(), id: d.id } as CrewMember));
     },
 
