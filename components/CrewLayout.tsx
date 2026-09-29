@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { CurrentUser, MODULE_IDS, AccessConfig, CrewMember, ShiftAssignment } from '../types';
-import { db } from '../firebaseConfig';
+import { db, firebase } from '../firebaseConfig';
 import { ClipboardList, CalendarClock, Shield, ArrowRight, Lock, Calendar, Trophy, Gift, PartyPopper, X, Clock, Plane, ShieldCheck, ChefHat, GraduationCap } from 'lucide-react';
 import { OrderCrewView } from '../modules/crew/orders/OrderCrewView'; 
 import { TaskCrewView } from '../modules/crew/tasks/TaskCrewView'; 
@@ -57,7 +57,9 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
   // next login. Managers are rendered through AdminLayout and are unaffected.
   useEffect(() => {
      if (!currentUser.outletId) return;
-     const unsubscribe = db.collection('stores').where('outletId', '==', currentUser.outletId).onSnapshot(snapshot => {
+     let query: firebase.firestore.Query = db.collection('stores').where('outletId', '==', currentUser.outletId);
+     if (currentUser.tenantId) query = query.where('tenantId', '==', currentUser.tenantId);
+     const unsubscribe = query.onSnapshot(snapshot => {
         const isOpen = snapshot.docs.some(doc => doc.data().isActive !== false);
         if (!isOpen) onLogout();
      }, error => console.warn('Store status check failed:', error));
@@ -96,7 +98,10 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
             // pilot lookup below; isolate the failure domain just in case.
             try {
                 const todayMMDD = format(new Date(), 'MM-dd');
-                const dirSnap = await db.collection('crewDirectory').where('birthMMDD', '==', todayMMDD).get();
+                const directory = currentUser.tenantId
+                    ? db.collection('tenantSettings').doc(currentUser.tenantId).collection('crewDirectory')
+                    : db.collection('crewDirectory');
+                const dirSnap = await directory.where('birthMMDD', '==', todayMMDD).get();
 
                 const bdayMatches = dirSnap.docs
                     .map(doc => ({...doc.data(), id: doc.id} as CrewMember))

@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { db } from '../../../firebaseConfig';
+import { currentTenantId, withTenant } from '../../../services/tenantScope';
 import { Button, Card, Input, Select } from '../../../components/SharedComponents';
 import { Trash2, AlertTriangle, Archive, CheckCircle, Database, Download, Loader2, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
@@ -66,7 +67,8 @@ export const SettingsAdminView: React.FC = () => {
         setCutoffDate(cutoff);
 
         try {
-            let query: any = db.collection(config.id);
+            const tenantId = await currentTenantId();
+            let query: any = withTenant(db.collection(config.id), tenantId);
             
             if (config.type === 'TIMESTAMP') {
                 query = query.where(config.dateField, '<', cutoff);
@@ -116,7 +118,8 @@ export const SettingsAdminView: React.FC = () => {
         try {
             while (true) {
                 // Re-query in batches
-                let query = db.collection(config.id).limit(400); // 400 is safe batch size
+                const tenantId = await currentTenantId();
+                let query = withTenant(db.collection(config.id), tenantId).limit(400); // 400 is safe batch size
                 
                 if (config.type === 'TIMESTAMP') {
                     query = query.where(config.dateField, '<', cutoff);
