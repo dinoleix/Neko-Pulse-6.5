@@ -2,6 +2,7 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore, Timestamp } from 'firebase-admin/firestore';
 
 type KioskStore = { outletId: string; name: string };
+const tenantKioskMode = process.env.TENANT_MODE === 'sandbox' || process.env.TENANT_MODE === 'enabled';
 
 const attempts = new Map<string, { failures: number; resetAt: number }>();
 const MAX_FAILURES = 8;
@@ -49,12 +50,16 @@ export default async function handler(req: any, res: any) {
   try {
     const db = getDb();
     const action = req.body?.action;
+    const tenantId = String(req.body?.tenantId || '');
+    if (tenantKioskMode && !/^[A-Za-z0-9_-]{1,128}$/.test(tenantId)) {
+      return send(res, 400, { error: 'This Time Clock needs a valid business configuration.' });
+    }
 
     if (action === 'config') {
       const [storesSnap, configSnap, appConfigSnap] = await Promise.all([
-        db.collection('stores').get(),
-        db.collection('settings').doc('attendanceConfig').get(),
-        db.collection('settings').doc('appConfig').get(),
+        (tenantKioskMode ? db.collection('stores').where('tenantId', '==', tenantId) : db.collection('stores')).get(),
+        tenantKioskMode ? db.collection('tenantSettings').doc(tenantId).collection('config').doc('attendanceConfig').get() : db.collection('settings').doc('attendanceConfig').get(),
+        tenantKioskMode ? db.collection('tenantSettings').doc(tenantId).collection('config').doc('appConfig').get() : db.collection('settings').doc('appConfig').get(),
       ]);
       const stores: KioskStore[] = storesSnap.docs
         .map(doc => doc.data())
@@ -84,12 +89,14 @@ export default async function handler(req: any, res: any) {
     }
 
     const [storeSnap, attendanceConfigSnap] = await Promise.all([
-      db.collection('stores').where('outletId', '==', outletId).limit(1).get(),
-      db.collection('settings').doc('attendanceConfig').get(),
+      (tenantKioskMode ? db.collection('stores').where('tenantId', '==', tenantId).where('outletId', '==', outletId) : db.collection('stores').where('outletId', '==', outletId)).limit(1).get(),
+      tenantKioskMode ? db.collection('tenantSettings').doc(tenantId).collection('config').doc('attendanceConfig').get() : db.collection('settings').doc('attendanceConfig').get(),
     ]);
     if (storeSnap.empty || storeSnap.docs[0].data().isActive === false) return send(res, 403, { error: 'This store is closed or unavailable.' });
 
-    const crewSnap = await db.collection('crew').where('crewCode', '==', crewCode).where('active', '==', true).limit(2).get();
+    let crewQuery = db.collection('crew').where('crewCode', '==', crewCode).where('active', '==', true);
+    if (tenantKioskMode) crewQuery = crewQuery.where('tenantId', '==', tenantId);
+    const crewSnap = await crewQuery.limit(2).get();
     if (crewSnap.size !== 1) {
       recordFailure(key);
       return send(res, 401, { error: 'Crew code not recognised.' });
@@ -106,7 +113,9 @@ export default async function handler(req: any, res: any) {
       return send(res, 403, { error: 'Keypad access is restricted for this employee.' });
     }
 
-    const logSnap = await db.collection('attendanceLogs').where('crewId', '==', crewDoc.id).get();
+    let logQuery = db.collection('attendanceLogs').where('crewId', '==', crewDoc.id);
+    if (tenantKioskMode) logQuery = logQuery.where('tenantId', '==', tenantId);
+    const logSnap = await logQuery.get();
     const todayStart = indiaDayStart();
     const todayLogs = logSnap.docs
       .map(doc => ({ id: doc.id, ...doc.data() as any }))
@@ -125,6 +134,7 @@ export default async function handler(req: any, res: any) {
     } else {
       await db.collection('attendanceLogs').add({
         crewId: crewDoc.id, crewName: crew.crewName, outletId,
+        ...(tenantKioskMode ? { tenantId } : {}),
         timestamp: FieldValue.serverTimestamp(), type, method: 'PIN',
       });
     }

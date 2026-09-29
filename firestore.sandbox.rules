@@ -1,0 +1,162 @@
+rules_version = '2';
+
+// Isolated rules for Firebase project nekopulse-5db8e only.
+// Do not deploy this file to the production project.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function bootstrapOwner() {
+      return signedIn() && request.auth.uid == '50Xu86KlvRUvR3z9JQxxOwKIe6W2';
+    }
+
+    function membership(tenantId) {
+      return get(/databases/$(database)/documents/tenantMemberships/$(tenantId + '_' + request.auth.uid));
+    }
+
+    function activeMember(tenantId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/tenantMemberships/$(tenantId + '_' + request.auth.uid))
+        && membership(tenantId).data.active == true;
+    }
+
+    function tenantRecord(tenantId) {
+      return request.resource.data.tenantId == tenantId;
+    }
+
+    function managerOrOwner(tenantId) {
+      return activeMember(tenantId)
+        && membership(tenantId).data.personType != 'CREW';
+    }
+
+    function hasOutlet(tenantId, outletId) {
+      return activeMember(tenantId)
+        && outletId in membership(tenantId).data.outletIds;
+    }
+
+    match /tenants/{tenantId} {
+      allow read: if activeMember(tenantId) || bootstrapOwner();
+      allow create, update: if bootstrapOwner();
+      allow delete: if false;
+    }
+
+    match /tenantMemberships/{membershipId} {
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || activeMember(resource.data.tenantId) || bootstrapOwner());
+      allow create, update: if bootstrapOwner() && tenantRecord(request.resource.data.tenantId);
+      allow delete: if false;
+    }
+
+    // The first tenant-aware application slice needs profiles and stores.
+    // Bootstrap writes are intentionally limited to the synthetic sandbox
+    // owner; normal access is tenant-scoped and profile reads are self-only
+    // for crew.
+    match /crew/{crewId} {
+      allow read: if bootstrapOwner()
+        || (signedIn() && resource.data.authUid == request.auth.uid && activeMember(resource.data.tenantId))
+        || (managerOrOwner(resource.data.tenantId) && hasOutlet(resource.data.tenantId, resource.data.outletId));
+      allow create, update: if bootstrapOwner() && tenantRecord(request.resource.data.tenantId);
+      allow delete: if false;
+    }
+
+    match /managers/{managerId} {
+      allow read: if bootstrapOwner()
+        || (signedIn() && resource.data.authUid == request.auth.uid && activeMember(resource.data.tenantId));
+      allow create, update: if bootstrapOwner() && tenantRecord(request.resource.data.tenantId);
+      allow delete: if false;
+    }
+
+    match /stores/{storeId} {
+      allow read: if activeMember(resource.data.tenantId) || bootstrapOwner();
+      allow create, update: if bootstrapOwner() && tenantRecord(request.resource.data.tenantId);
+      allow delete: if false;
+    }
+
+    match /taskTemplates/{templateId} {
+      allow read: if activeMember(resource.data.tenantId) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId)
+        && tenantRecord(request.resource.data.tenantId);
+      allow update: if managerOrOwner(resource.data.tenantId)
+        && tenantRecord(resource.data.tenantId);
+      allow delete: if managerOrOwner(resource.data.tenantId);
+    }
+
+    match /tasks/{taskId} {
+      allow read: if (activeMember(resource.data.tenantId)
+        && hasOutlet(resource.data.tenantId, resource.data.outletId)) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId)
+        && tenantRecord(request.resource.data.tenantId)
+        && hasOutlet(request.resource.data.tenantId, request.resource.data.outletId);
+      allow update: if managerOrOwner(resource.data.tenantId)
+        && tenantRecord(resource.data.tenantId)
+        && hasOutlet(resource.data.tenantId, resource.data.outletId);
+      allow delete: if managerOrOwner(resource.data.tenantId)
+        && hasOutlet(resource.data.tenantId, resource.data.outletId);
+    }
+
+    match /taskLogs/{logId} {
+      allow read: if (activeMember(resource.data.tenantId)
+        && (resource.data.crewId == request.auth.uid
+          || (managerOrOwner(resource.data.tenantId)
+            && hasOutlet(resource.data.tenantId, resource.data.outletId)))) || bootstrapOwner();
+      allow create: if activeMember(request.resource.data.tenantId)
+        && request.resource.data.crewId == request.auth.uid
+        && tenantRecord(request.resource.data.tenantId)
+        && hasOutlet(request.resource.data.tenantId, request.resource.data.outletId);
+      allow update, delete: if managerOrOwner(resource.data.tenantId)
+        && hasOutlet(resource.data.tenantId, resource.data.outletId);
+    }
+
+    match /attendanceLogs/{logId} {
+      allow read: if (activeMember(resource.data.tenantId)
+        && (resource.data.crewId == request.auth.uid
+          || (managerOrOwner(resource.data.tenantId)
+            && hasOutlet(resource.data.tenantId, resource.data.outletId)))) || bootstrapOwner();
+      allow create: if activeMember(request.resource.data.tenantId)
+        && request.resource.data.crewId == request.auth.uid
+        && tenantRecord(request.resource.data.tenantId)
+        && hasOutlet(request.resource.data.tenantId, request.resource.data.outletId);
+      allow update: if activeMember(resource.data.tenantId)
+        && resource.data.crewId == request.auth.uid
+        && tenantRecord(resource.data.tenantId);
+      allow delete: if managerOrOwner(resource.data.tenantId)
+        && hasOutlet(resource.data.tenantId, resource.data.outletId);
+    }
+
+    match /leaveRequests/{requestId} {
+      allow read: if (activeMember(resource.data.tenantId)
+        && (resource.data.crewId == request.auth.uid
+          || (managerOrOwner(resource.data.tenantId)
+            && hasOutlet(resource.data.tenantId, resource.data.outletId)))) || bootstrapOwner();
+      allow create: if activeMember(request.resource.data.tenantId)
+        && request.resource.data.crewId == request.auth.uid
+        && tenantRecord(request.resource.data.tenantId)
+        && hasOutlet(request.resource.data.tenantId, request.resource.data.outletId);
+      allow update, delete: if managerOrOwner(resource.data.tenantId)
+        && hasOutlet(resource.data.tenantId, resource.data.outletId);
+    }
+
+    match /shiftAssignments/{assignmentId} {
+      allow read: if (activeMember(resource.data.tenantId)
+        && (resource.data.crewId == request.auth.uid
+          || (managerOrOwner(resource.data.tenantId)
+            && hasOutlet(resource.data.tenantId, resource.data.outletId)))) || bootstrapOwner();
+      allow create, update: if managerOrOwner(request.resource.data.tenantId)
+        && tenantRecord(request.resource.data.tenantId)
+        && hasOutlet(request.resource.data.tenantId, request.resource.data.outletId);
+      allow delete: if managerOrOwner(resource.data.tenantId)
+        && hasOutlet(resource.data.tenantId, resource.data.outletId);
+    }
+
+    match /tenantSettings/{tenantId}/config/{configId} {
+      allow read: if activeMember(tenantId) || bootstrapOwner();
+      allow create, update: if managerOrOwner(tenantId);
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

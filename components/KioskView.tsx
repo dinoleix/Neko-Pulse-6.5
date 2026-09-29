@@ -4,13 +4,15 @@ import { AttendanceConfig, CrewMember } from '../types';
 import { Clock, RefreshCw, LogIn, LogOut, XCircle, ChevronLeft, Grid3x3, MapPin, LockKeyhole, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { getShiftedDate, DEFAULT_TIMEZONE } from '../utils/dateFormatter';
+import { isTenantModeEnabled } from '../services/tenantService';
 
 interface KioskViewProps {
   defaultOutletId?: string;
+  tenantId?: string;
 }
 
 type KioskStore = { outletId: string; name: string };
-const KIOSK_OUTLET_STORAGE_KEY = 'neko-pulse.kiosk-outlet-id';
+const KIOSK_OUTLET_STORAGE_KEY = (tenantId?: string) => `neko-pulse.kiosk-outlet-id.${tenantId || 'legacy'}`;
 
 const readKioskResponse = async (response: Response) => {
   const text = await response.text();
@@ -25,7 +27,7 @@ const readKioskResponse = async (response: Response) => {
   return payload;
 };
 
-export const KioskView: React.FC<KioskViewProps> = ({ defaultOutletId }) => {
+export const KioskView: React.FC<KioskViewProps> = ({ defaultOutletId, tenantId }) => {
 
   const [time, setTime] = useState(new Date());
   const [mode, setMode] = useState<'BEACON' | 'PIN' | 'SUCCESS' | 'ERROR'>('BEACON');
@@ -59,12 +61,16 @@ export const KioskView: React.FC<KioskViewProps> = ({ defaultOutletId }) => {
   // the server.
   useEffect(() => {
     let active = true;
-    fetch('/api/kiosk-attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'config' }) })
+    if (isTenantModeEnabled && !tenantId) {
+      setSetupError('This Time Clock needs a business link from a manager.');
+      return () => { active = false; };
+    }
+    fetch('/api/kiosk-attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'config', tenantId }) })
       .then(async response => {
         const payload = await readKioskResponse(response);
         if (!active) return;
         const availableStores = Array.isArray(payload.stores) ? payload.stores as KioskStore[] : [];
-        const savedOutletId = window.localStorage.getItem(KIOSK_OUTLET_STORAGE_KEY) || '';
+        const savedOutletId = window.localStorage.getItem(KIOSK_OUTLET_STORAGE_KEY(tenantId)) || '';
         const hasValidSavedOutlet = availableStores.some(store => store.outletId === savedOutletId);
         const preferredOutletId = hasValidSavedOutlet
           ? savedOutletId
@@ -75,7 +81,7 @@ export const KioskView: React.FC<KioskViewProps> = ({ defaultOutletId }) => {
         // closed, setup is shown again rather than clocking staff to it.
         setIsConfiguringLocation(!hasValidSavedOutlet && availableStores.length > 1);
         if (availableStores.length === 1 && preferredOutletId) {
-          window.localStorage.setItem(KIOSK_OUTLET_STORAGE_KEY, preferredOutletId);
+          window.localStorage.setItem(KIOSK_OUTLET_STORAGE_KEY(tenantId), preferredOutletId);
         }
         setKioskConfig(payload.attendanceConfig || { enableQrScan: true, enablePinCode: true, permittedPinCrewIds: [] });
         setTimezone(payload.timezone || DEFAULT_TIMEZONE);
@@ -83,7 +89,7 @@ export const KioskView: React.FC<KioskViewProps> = ({ defaultOutletId }) => {
       })
       .catch(error => { if (active) setSetupError(error.message || 'Time Clock is unavailable.'); });
     return () => { active = false; };
-  }, []);
+  }, [defaultOutletId, tenantId]);
 
   // Get time in target timezone
   const displayTime = getShiftedDate(time, timezone);
@@ -95,6 +101,7 @@ export const KioskView: React.FC<KioskViewProps> = ({ defaultOutletId }) => {
       const rotateQr = () => {
           const payload = JSON.stringify({
               type: 'NEKO_KIOSK_AUTH',
+              tenantId,
               outletId: selectedOutletId,
               timestamp: Date.now(),
               nonce: Math.random().toString(36).substring(7)
@@ -107,7 +114,7 @@ export const KioskView: React.FC<KioskViewProps> = ({ defaultOutletId }) => {
       rotateQr(); // Initial
       const interval = setInterval(rotateQr, 10000); // Rotate every 10s
       return () => clearInterval(interval);
-  }, [mode, isReady, selectedOutletId]);
+  }, [mode, isReady, selectedOutletId, tenantId]);
 
   const handlePinSubmit = async () => {
     if (pin.length < 4) return;
@@ -118,12 +125,12 @@ export const KioskView: React.FC<KioskViewProps> = ({ defaultOutletId }) => {
 
   const saveKioskLocation = () => {
     if (!selectedOutletId) return;
-    window.localStorage.setItem(KIOSK_OUTLET_STORAGE_KEY, selectedOutletId);
+    window.localStorage.setItem(KIOSK_OUTLET_STORAGE_KEY(tenantId), selectedOutletId);
     setIsConfiguringLocation(false);
   };
 
   const resetKioskLocation = () => {
-    window.localStorage.removeItem(KIOSK_OUTLET_STORAGE_KEY);
+    window.localStorage.removeItem(KIOSK_OUTLET_STORAGE_KEY(tenantId));
     setIsConfiguringLocation(true);
   };
 
@@ -133,7 +140,7 @@ export const KioskView: React.FC<KioskViewProps> = ({ defaultOutletId }) => {
       if (!selectedOutletId) throw new Error('Choose a store before using the Time Clock.');
       const response = await fetch('/api/kiosk-attendance', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'clock', crewCode: code, outletId: selectedOutletId }),
+        body: JSON.stringify({ action: 'clock', crewCode: code, outletId: selectedOutletId, tenantId }),
       });
       const result = await readKioskResponse(response);
       setAttendanceType(result.type);
