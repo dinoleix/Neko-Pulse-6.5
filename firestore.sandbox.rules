@@ -199,6 +199,77 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /trainingModules/{moduleId} {
+      allow read: if activeMember(resource.data.tenantId) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId)
+        && tenantRecord(request.resource.data.tenantId);
+      allow update: if managerOrOwner(resource.data.tenantId)
+        && tenantRecord(resource.data.tenantId);
+      allow delete: if managerOrOwner(resource.data.tenantId)
+        && resource.data.status == 'DRAFT';
+    }
+
+    match /trainingModules/{moduleId}/versions/{versionId} {
+      allow read: if activeMember(resource.data.tenantId) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId)
+        && tenantRecord(request.resource.data.tenantId);
+      allow update, delete: if false;
+    }
+
+    match /trainingAssessmentKeys/{keyId} {
+      allow read: if managerOrOwner(resource.data.tenantId) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId)
+        && tenantRecord(request.resource.data.tenantId);
+      allow update: if managerOrOwner(resource.data.tenantId)
+        && tenantRecord(resource.data.tenantId);
+      allow delete: if false;
+    }
+
+    match /trainingAssignments/{assignmentId} {
+      allow read: if (activeMember(resource.data.tenantId)
+        && resource.data.employeeUid == request.auth.uid)
+        || (managerOrOwner(resource.data.tenantId)
+          && hasOutlet(resource.data.tenantId, resource.data.outletId)) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId)
+        && tenantRecord(request.resource.data.tenantId)
+        && hasOutlet(request.resource.data.tenantId, request.resource.data.outletId);
+      allow update: if (managerOrOwner(resource.data.tenantId)
+          && tenantRecord(resource.data.tenantId)
+          && hasOutlet(resource.data.tenantId, resource.data.outletId))
+        || (activeMember(resource.data.tenantId)
+          && resource.data.employeeUid == request.auth.uid
+          && tenantRecord(resource.data.tenantId)
+          && resource.data.trainingFormat == 'THEORETICAL'
+          && request.resource.data.status == 'COMPLETED'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'completedLessonIds', 'acknowledgementAt', 'updatedAt']));
+      allow delete: if managerOrOwner(resource.data.tenantId)
+        && hasOutlet(resource.data.tenantId, resource.data.outletId)
+        && resource.data.status != 'CERTIFIED';
+    }
+
+    match /trainingCertifications/{certificationId} {
+      allow read: if (activeMember(resource.data.tenantId)
+        && resource.data.employeeUid == request.auth.uid)
+        || (managerOrOwner(resource.data.tenantId)
+          && hasOutlet(resource.data.tenantId, resource.data.outletId)) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId)
+        && tenantRecord(request.resource.data.tenantId)
+        && hasOutlet(request.resource.data.tenantId, request.resource.data.outletId)
+        && request.resource.data.employeeUid != request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /trainingAudit/{auditId} {
+      allow read: if (activeMember(resource.data.tenantId)
+        && (resource.data.employeeId == request.auth.uid
+          || resource.data.employeeId == membership(resource.data.tenantId).data.personId))
+        || (managerOrOwner(resource.data.tenantId)
+          && (!('outletId' in resource.data) || hasOutlet(resource.data.tenantId, resource.data.outletId))) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId)
+        && tenantRecord(request.resource.data.tenantId);
+      allow update, delete: if false;
+    }
+
     match /tenantSettings/{tenantId}/config/{configId} {
       allow read: if activeMember(tenantId) || bootstrapOwner();
       allow create, update: if managerOrOwner(tenantId);
