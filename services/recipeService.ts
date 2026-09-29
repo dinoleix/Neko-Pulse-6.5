@@ -1,6 +1,7 @@
 
 import { db, storage, firebase } from '../firebaseConfig';
 import { Recipe, RecipeConfig } from '../types';
+import { getCachedSettingsDoc, getSettingsDocRef, invalidateSettingsDoc } from './configCache';
 
 const COLLECTION = 'recipes';
 
@@ -41,14 +42,16 @@ export const recipeService = {
     },
 
     getConfig: async (): Promise<RecipeConfig> => {
-        const snap = await db.collection('settings').doc('recipeConfig').get();
-        if (!snap.exists) {
+        const config = await getCachedSettingsDoc('recipeConfig') as RecipeConfig | null;
+        if (!config) {
             return { categories: ['Main Course', 'Beverage', 'Dessert', 'Snack', 'Sauce & Condiment'] };
         }
-        return snap.data() as RecipeConfig;
+        return config;
     },
 
     saveConfig: async (config: RecipeConfig) => {
-        return await db.collection('settings').doc('recipeConfig').set(config);
+        const res = await (await getSettingsDocRef('recipeConfig')).set(config);
+        invalidateSettingsDoc('recipeConfig');
+        return res;
     }
 };

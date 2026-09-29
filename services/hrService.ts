@@ -1,6 +1,7 @@
 
 import { db, storage } from '../firebaseConfig';
 import { CrewMember, CrewDocument } from '../types';
+import { getCachedSettingsDoc, getSettingsDocRef, invalidateSettingsDoc } from './configCache';
 
 export const hrService = {
     // --- CREW ---
@@ -28,34 +29,36 @@ export const hrService = {
 
     // --- SETTINGS (LOGO) ---
     getCompanyLogo: async (): Promise<string> => {
-        const snap = await db.collection('settings').doc('companyLogo').get();
-        return snap.exists ? snap.data()?.url || '' : '';
+        return ((await getCachedSettingsDoc('companyLogo')) as { url?: string } | null)?.url || '';
     },
 
     uploadCompanyLogo: async (file: File): Promise<string> => {
         const ref = storage.ref(`settings/company_logo_${Date.now()}`);
         await ref.put(file);
         const url = await ref.getDownloadURL();
-        await db.collection('settings').doc('companyLogo').set({ url });
+        await (await getSettingsDocRef('companyLogo')).set({ url });
+        invalidateSettingsDoc('companyLogo');
         return url;
     },
 
     // --- SETTINGS (TEMPLATES & CONFIG) ---
     getTemplates: async () => {
-        const snap = await db.collection('settings').doc('hrTemplates').get();
-        return snap.exists ? snap.data() : {};
+        return (await getCachedSettingsDoc('hrTemplates')) || {};
     },
 
     saveTemplates: async (templates: any) => {
-        return await db.collection('settings').doc('hrTemplates').set(templates, { merge: true });
+        const res = await (await getSettingsDocRef('hrTemplates')).set(templates, { merge: true });
+        invalidateSettingsDoc('hrTemplates');
+        return res;
     },
 
     getLetterheadConfig: async () => {
-        const snap = await db.collection('settings').doc('hrConfig').get();
-        return snap.exists ? snap.data() : null;
+        return await getCachedSettingsDoc('hrConfig');
     },
 
     saveLetterheadConfig: async (config: any) => {
-        return await db.collection('settings').doc('hrConfig').set(config);
+        const res = await (await getSettingsDocRef('hrConfig')).set(config);
+        invalidateSettingsDoc('hrConfig');
+        return res;
     }
 };

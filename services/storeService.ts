@@ -1,7 +1,7 @@
 
 import { db, firebase, storage } from '../firebaseConfig';
 import { Store, AppConfig } from '../types';
-import { getCachedSettingsDoc, invalidateSettingsDoc } from './configCache';
+import { getCachedSettingsDoc, getSettingsDocRef, invalidateSettingsDoc } from './configCache';
 
 export const storeService = {
   // --- STORES ---
@@ -47,7 +47,7 @@ export const storeService = {
   },
 
   updateAppConfig: async (config: AppConfig) => {
-    const res = await db.collection('settings').doc('appConfig').set(config, { merge: true });
+    const res = await (await getSettingsDocRef('appConfig')).set(config, { merge: true });
     invalidateSettingsDoc('appConfig');
     return res;
   }
