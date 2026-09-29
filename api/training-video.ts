@@ -27,7 +27,12 @@ export default async function handler(req: any, res: any) {
     if (!module.exists || module.data()?.status !== 'PUBLISHED') return res.status(403).json({ error: 'Not authorised.' });
     const tenantId = String(module.data()?.tenantId || '');
     if (process.env.TENANT_MODE === 'sandbox' || process.env.TENANT_MODE === 'enabled') {
-      if (!tenantPathMatch || tenantPathMatch[1] !== tenantId) return res.status(403).json({ error: 'Not authorised.' });
+      // New uploads include their tenant in the path. Existing videos use the
+      // legacy training/{moduleId}/... shape; they remain playable only via
+      // this route, where the module's tenant and the caller membership are
+      // both checked below. A tenant-prefixed path must always agree with the
+      // module record, preventing a swapped-path cross-tenant request.
+      if (tenantPathMatch && tenantPathMatch[1] !== tenantId) return res.status(403).json({ error: 'Not authorised.' });
       const membership = await db.collection('tenantMemberships').where('uid', '==', uid).where('tenantId', '==', tenantId).where('active', '==', true).limit(1).get();
       if (membership.empty) return res.status(403).json({ error: 'Not authorised.' });
     }
