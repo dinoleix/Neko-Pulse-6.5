@@ -2,6 +2,7 @@
 import { db, storage, firebase, firebaseConfig } from '../firebaseConfig';
 import { CrewMember, CrewDirectoryEntry, RoleDef } from '../types';
 import { getSettingsCollectionRef } from './configCache';
+import { currentTenantId, tenantPayload, withTenant } from './tenantScope';
 
 // Extract the public-safe fields mirrored into /crewDirectory. Only fields
 // present on the partial are included, so merge-writes never blank a value.
@@ -18,11 +19,19 @@ const directoryFields = (data: Partial<CrewMember>): Partial<CrewDirectoryEntry>
 // batch-write only what's missing, stale, or orphaned. Backfills the mirror
 // for crew created before it existed. Fire-and-forget from getAllCrew.
 let directoryHealAttempted = false;
+const crewDirectoryRef = async () => {
+    const tenantId = await currentTenantId();
+    return tenantId
+        ? db.collection('tenantSettings').doc(tenantId).collection('crewDirectory')
+        : db.collection('crewDirectory');
+};
+
 const healCrewDirectory = async (crew: CrewMember[]) => {
     if (directoryHealAttempted) return;
     directoryHealAttempted = true;
     try {
-        const dirSnap = await db.collection('crewDirectory').get();
+        const directory = await crewDirectoryRef();
+        const dirSnap = await directory.get();
         const existing = new Map(dirSnap.docs.map(d => [d.id, d.data() as Partial<CrewDirectoryEntry>]));
         const batch = db.batch();
         let writes = 0;
@@ -34,14 +43,14 @@ const healCrewDirectory = async (crew: CrewMember[]) => {
             const stale = !have || (Object.keys(want) as (keyof CrewDirectoryEntry)[])
                 .some(k => (have as any)[k] !== (want as any)[k]);
             if (stale) {
-                batch.set(db.collection('crewDirectory').doc(c.id), want, { merge: true });
+                batch.set(directory.doc(c.id), want, { merge: true });
                 writes++;
             }
         });
 
         existing.forEach((_, id) => {
             if (!crew.some(c => c.id === id)) {
-                batch.delete(db.collection('crewDirectory').doc(id));
+                batch.delete(directory.doc(id));
                 writes++;
             }
         });
@@ -78,8 +87,10 @@ export const employeeService = {
 
     // --- CREW CRUD (Staff) ---
     getAllCrew: async (): Promise<CrewMember[]> => {
-        const snap = await db.collection('crew').orderBy('crewName').get();
-        const crew = snap.docs.map(d => ({...d.data(), id: d.id} as CrewMember));
+        const tenantId = await currentTenantId();
+        const snap = await withTenant(db.collection('crew'), tenantId).get();
+        const crew = snap.docs.map(d => ({...d.data(), id: d.id} as CrewMember))
+            .sort((a, b) => (a.crewName || '').localeCompare(b.crewName || ''));
         healCrewDirectory(crew).catch(() => { /* non-blocking */ });
         return crew;
     },
@@ -87,45 +98,50 @@ export const employeeService = {
     // Training managers only need the people at their outlet when assigning
     // or reviewing training. This query matches the outlet-scoped rule.
     getCrewAtOutlet: async (outletId: string): Promise<CrewMember[]> => {
-        const snap = await db.collection('crew').where('outletId', '==', outletId).get();
+        const tenantId = await currentTenantId();
+        const snap = await withTenant(db.collection('crew').where('outletId', '==', outletId), tenantId).get();
         return snap.docs.map(d => ({...d.data(), id: d.id} as CrewMember))
             .sort((a, b) => (a.crewName || '').localeCompare(b.crewName || ''));
     },
 
     saveCrew: async (data: Partial<CrewMember>, id?: string) => {
+        const payload = await tenantPayload(data);
         let docId = id;
         if (id) {
-            await db.collection('crew').doc(id).set(data, { merge: true });
-        } else if (data.authUid) {
-            docId = data.authUid;
-            await db.collection('crew').doc(data.authUid).set(data, { merge: true });
+            await db.collection('crew').doc(id).set(payload, { merge: true });
+        } else if (payload.authUid) {
+            docId = payload.authUid;
+            await db.collection('crew').doc(payload.authUid).set(payload, { merge: true });
         } else {
-            const ref = await db.collection('crew').add(data);
+            const ref = await db.collection('crew').add(payload);
             docId = ref.id;
         }
-        await db.collection('crewDirectory').doc(docId!).set(directoryFields(data), { merge: true });
+        await (await crewDirectoryRef()).doc(docId!).set(directoryFields(payload), { merge: true });
     },
 
     deleteCrew: async (id: string) => {
         await db.collection('crew').doc(id).delete();
-        await db.collection('crewDirectory').doc(id).delete();
+        await (await crewDirectoryRef()).doc(id).delete();
     },
 
     // --- MANAGER CRUD (Admins) ---
     getAllManagers: async (): Promise<CrewMember[]> => {
-        const snap = await db.collection('managers').orderBy('crewName').get();
-        return snap.docs.map(d => ({...d.data(), id: d.id} as CrewMember));
+        const tenantId = await currentTenantId();
+        const snap = await withTenant(db.collection('managers'), tenantId).get();
+        return snap.docs.map(d => ({...d.data(), id: d.id} as CrewMember))
+            .sort((a, b) => (a.crewName || '').localeCompare(b.crewName || ''));
     },
 
     saveManager: async (data: Partial<CrewMember>, id?: string) => {
+        const payload = await tenantPayload(data);
         if (id) {
-            return await db.collection('managers').doc(id).set(data, { merge: true });
+            return await db.collection('managers').doc(id).set(payload, { merge: true });
         } else {
             // Managers MUST have an authUid (email login)
-            if (data.authUid) {
-                return await db.collection('managers').doc(data.authUid).set(data, { merge: true });
+            if (payload.authUid) {
+                return await db.collection('managers').doc(payload.authUid).set(payload, { merge: true });
             }
-            return await db.collection('managers').add(data);
+            return await db.collection('managers').add(payload);
         }
     },
 
