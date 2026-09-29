@@ -46,7 +46,10 @@ export const orderService = {
     },
 
     uploadProof: async (blob: Blob): Promise<string> => {
-        const filename = `proofs/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.jpg`;
+        const tenantId = await currentTenantId();
+        const filename = tenantId
+            ? `proofs/${tenantId}/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.jpg`
+            : `proofs/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.jpg`;
         const ref = storage.ref(filename);
         await ref.put(blob);
         return filename;

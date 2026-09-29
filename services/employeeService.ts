@@ -80,7 +80,9 @@ export const employeeService = {
     },
     // --- PHOTO ---
     uploadPhoto: async (data: Blob): Promise<string> => {
-        const ref = storage.ref(`employees/${Date.now()}_photo.jpg`);
+        const tenantId = await currentTenantId();
+        const path = tenantId ? `employees/${tenantId}/${Date.now()}_photo.jpg` : `employees/${Date.now()}_photo.jpg`;
+        const ref = storage.ref(path);
         await ref.put(data);
         return await ref.getDownloadURL();
     },

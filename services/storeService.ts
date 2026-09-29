@@ -2,6 +2,7 @@
 import { db, firebase, storage } from '../firebaseConfig';
 import { Store, AppConfig } from '../types';
 import { getCachedSettingsDoc, getSettingsDocRef, invalidateSettingsDoc } from './configCache';
+import { currentTenantId } from './tenantScope';
 
 export const storeService = {
   // --- STORES ---
@@ -36,7 +37,11 @@ export const storeService = {
   },
 
   uploadCert: async (file: File, type: 'FSSAI' | 'GST'): Promise<string> => {
-    const ref = storage.ref(`stores/certs/${Date.now()}_${type}_${file.name}`);
+    const tenantId = await currentTenantId();
+    const path = tenantId
+      ? `stores/${tenantId}/certs/${Date.now()}_${type}_${file.name}`
+      : `stores/certs/${Date.now()}_${type}_${file.name}`;
+    const ref = storage.ref(path);
     await ref.put(file);
     return await ref.getDownloadURL();
   },

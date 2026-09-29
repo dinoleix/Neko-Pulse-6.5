@@ -33,8 +33,11 @@ export const trainingService = {
   uploadTrainingVideo: async (moduleId: string, file: File) => {
     if (!file.type.startsWith('video/')) throw new Error('Choose a video file.');
     if (file.size > 100 * 1024 * 1024) throw new Error('Video must be 100 MB or smaller.');
+    const tenantId = await currentTenantId();
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const storagePath = `training/${moduleId}/${Date.now()}_${safeName}`;
+    const storagePath = tenantId
+      ? `training/${tenantId}/${moduleId}/${Date.now()}_${safeName}`
+      : `training/${moduleId}/${Date.now()}_${safeName}`;
     await storage.ref(storagePath).put(file, { contentType: file.type });
     return { name: file.name, storagePath, type: 'VIDEO' as const };
   },
