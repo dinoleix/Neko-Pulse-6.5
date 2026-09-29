@@ -21,12 +21,20 @@ export default async function handler(req: any, res: any) {
     const match = /^training\/([^/]+)\//.exec(path);
     if (!match) return res.status(400).json({ error: 'Invalid training video.' });
     const { db } = admin();
-    const [manager, module, assignments] = await Promise.all([
-      db.collection('managers').doc(uid).get(), db.collection('trainingModules').doc(match[1]).get(),
+    const module = await db.collection('trainingModules').doc(match[1]).get();
+    if (!module.exists || module.data()?.status !== 'PUBLISHED') return res.status(403).json({ error: 'Not authorised.' });
+    const tenantId = String(module.data()?.tenantId || '');
+    if (process.env.TENANT_MODE === 'sandbox' || process.env.TENANT_MODE === 'enabled') {
+      const membership = await db.collection('tenantMemberships').where('uid', '==', uid).where('tenantId', '==', tenantId).where('active', '==', true).limit(1).get();
+      if (membership.empty) return res.status(403).json({ error: 'Not authorised.' });
+    }
+    const [manager, assignments] = await Promise.all([
+      db.collection('managers').doc(uid).get(),
       db.collection('trainingAssignments').where('employeeUid', '==', uid).get(),
     ]);
-    const assigned = assignments.docs.some(doc => doc.data().moduleId === match[1]);
-    if ((!manager.exists && !assigned) || !module.exists || module.data()?.status !== 'PUBLISHED') return res.status(403).json({ error: 'Not authorised.' });
+    const managerAllowed = manager.exists && (!tenantId || manager.data()?.tenantId === tenantId);
+    const assigned = assignments.docs.some(doc => doc.data().moduleId === match[1] && (!tenantId || doc.data().tenantId === tenantId));
+    if ((!managerAllowed && !assigned)) return res.status(403).json({ error: 'Not authorised.' });
     const bucketName = process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET;
     if (!bucketName) throw new Error('Training video storage bucket is not configured.');
     const file = getStorage().bucket(bucketName).file(path); const [exists] = await file.exists(); if (!exists) return res.status(404).json({ error: 'Video not found.' });

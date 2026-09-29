@@ -1,6 +1,7 @@
 import { db, firebase, storage } from '../firebaseConfig';
 import { CrewMember, TrainingAssignment, TrainingAuditEvent, TrainingCertification, TrainingModule, TrainingQuizAnswerKey } from '../types';
 import { canAssignModule, canCertifyAssignment, isTrainingEligible, versionSnapshotId } from './trainingPolicy';
+import { currentTenantId, tenantPayload, withTenant } from './tenantScope';
 
 const MODULES = 'trainingModules';
 const ASSIGNMENTS = 'trainingAssignments';
@@ -26,7 +27,7 @@ const withoutUndefined = (value: any): any => {
 };
 
 const audit = async (event: Omit<TrainingAuditEvent, 'id' | 'createdAt'>) =>
-  db.collection(AUDIT).add({ ...event, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  db.collection(AUDIT).add({ ...(await tenantPayload(event)), createdAt: firebase.firestore.FieldValue.serverTimestamp() });
 
 export const trainingService = {
   uploadTrainingVideo: async (moduleId: string, file: File) => {
@@ -38,29 +39,34 @@ export const trainingService = {
     return { name: file.name, storagePath, type: 'VIDEO' as const };
   },
   getModules: async (includeArchived = false): Promise<TrainingModule[]> => {
-    const snap = await db.collection(MODULES).orderBy('updatedAt', 'desc').get();
-    return clean<TrainingModule>(snap).filter(module => includeArchived || module.status !== 'ARCHIVED');
+    const tenantId = await currentTenantId();
+    const snap = await withTenant(db.collection(MODULES), tenantId).get();
+    return clean<TrainingModule>(snap)
+      .filter(module => includeArchived || module.status !== 'ARCHIVED')
+      .sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
   },
 
   // Staff must not query the whole training catalogue. Fetching a known module
   // by ID lets Firestore enforce that the signed-in employee may read this
   // specific published, outlet- and role-scoped module.
   getAssignedModule: async (moduleId: string): Promise<TrainingModule | undefined> => {
+    const tenantId = await currentTenantId();
     const snap = await db.collection(MODULES).doc(moduleId).get();
-    return snap.exists ? ({ ...snap.data(), id: snap.id } as TrainingModule) : undefined;
+    return snap.exists && (!tenantId || snap.data()?.tenantId === tenantId) ? ({ ...snap.data(), id: snap.id } as TrainingModule) : undefined;
   },
 
   getEligibleModules: async (role?: string, outletId?: string): Promise<TrainingModule[]> =>
     (await trainingService.getModules()).filter(module => isTrainingEligible(module, role, outletId)),
 
   saveModule: async (module: TrainingModule, actorId: string, actorName: string, answerKeys: TrainingQuizAnswerKey[] = []) => {
+    const tenantId = await currentTenantId();
     const now = firebase.firestore.FieldValue.serverTimestamp();
     const moduleId = module.id || db.collection(MODULES).doc().id;
     const previous = module.id ? await db.collection(MODULES).doc(moduleId).get() : null;
     const version = previous?.exists ? (previous.data()?.version || 1) + 1 : Math.max(1, module.version || 1);
     const versionId = versionSnapshotId(moduleId, version);
     const payload: TrainingModule = {
-      ...module, id: moduleId, version, versionId, updatedBy: actorId,
+      ...module, ...(tenantId ? { tenantId } : {}), id: moduleId, version, versionId, updatedBy: actorId,
       updatedAt: now, createdAt: module.createdAt || now,
       publishedAt: module.status === 'PUBLISHED' ? (module.publishedAt || now) : module.publishedAt,
       archivedAt: module.status === 'ARCHIVED' ? now : module.archivedAt,
@@ -71,7 +77,7 @@ export const trainingService = {
     // Immutable snapshot keeps assignment history attached to the exact content.
     batch.set(db.collection(`${MODULES}/${moduleId}/versions`).doc(versionId), storedPayload);
     // Answer keys are deliberately not included in module or version payloads.
-    batch.set(db.collection(KEYS).doc(versionId), { moduleId, versionId, answers: answerKeys, updatedAt: now, updatedBy: actorId });
+    batch.set(db.collection(KEYS).doc(versionId), { ...(tenantId ? { tenantId } : {}), moduleId, versionId, answers: answerKeys, updatedAt: now, updatedBy: actorId });
     await batch.commit();
     await audit({ actorId, actorName, action: previous?.exists ? 'MODULE_VERSION_CREATED' : 'MODULE_CREATED', moduleId, moduleVersionId: versionId, notes: module.changeSummary });
     return payload;
@@ -84,8 +90,8 @@ export const trainingService = {
     if (!module.id) throw new Error('This module has not been saved yet.');
     if (module.status !== 'DRAFT') throw new Error('Only unassigned draft modules can be deleted. Archive published content instead.');
     const [assignments, certifications, versions] = await Promise.all([
-      db.collection(ASSIGNMENTS).where('moduleId', '==', module.id).limit(1).get(),
-      db.collection(CERTIFICATIONS).where('moduleId', '==', module.id).limit(1).get(),
+      withTenant(db.collection(ASSIGNMENTS).where('moduleId', '==', module.id), await currentTenantId()).limit(1).get(),
+      withTenant(db.collection(CERTIFICATIONS).where('moduleId', '==', module.id), await currentTenantId()).limit(1).get(),
       db.collection(`${MODULES}/${module.id}/versions`).get(),
     ]);
     if (!assignments.empty || !certifications.empty) throw new Error('This module has training history. Archive it instead so its records remain intact.');
@@ -104,17 +110,20 @@ export const trainingService = {
     trainingService.saveModule({ ...module, id: undefined, versionId: undefined, version: 1, title: `${module.title} (copy)`, status: 'DRAFT', publishedAt: undefined, archivedAt: undefined, changeSummary: 'Duplicated from existing module' }, actorId, actorName),
 
   getMyAssignments: async (uid: string): Promise<TrainingAssignment[]> => {
-    const snap = await db.collection(ASSIGNMENTS).where('employeeUid', '==', uid).get();
+    const tenantId = await currentTenantId();
+    const snap = await withTenant(db.collection(ASSIGNMENTS).where('employeeUid', '==', uid), tenantId).get();
     return clean<TrainingAssignment>(snap).sort((a, b) => String(b.assignedAt?.seconds || 0).localeCompare(String(a.assignedAt?.seconds || 0)));
   },
 
   getAssignments: async (outletId?: string): Promise<TrainingAssignment[]> => {
-    let query: firebase.firestore.Query = db.collection(ASSIGNMENTS);
+    const tenantId = await currentTenantId();
+    let query: firebase.firestore.Query = withTenant(db.collection(ASSIGNMENTS), tenantId);
     if (outletId) query = query.where('outletId', '==', outletId);
     return clean<TrainingAssignment>(await query.get());
   },
 
   assignEmployees: async (module: TrainingModule, employees: CrewMember[], actorId: string, actorName: string, options: { dueDate?: string; mandatory?: boolean; reason?: string; assignmentType?: 'INITIAL' | 'REFRESHER' }) => {
+    const tenantId = await currentTenantId();
     if (!canAssignModule(module)) throw new Error('Only published training can be assigned.');
     const eligible = employees.filter(employee => isTrainingEligible(module, employee.role, employee.outletId));
     // A manager can select the same person through multiple role/bulk controls.
@@ -130,6 +139,7 @@ export const trainingService = {
     newAssignments.forEach(employee => {
       const ref = db.collection(ASSIGNMENTS).doc();
       batch.set(ref, {
+        ...(tenantId ? { tenantId } : {}),
         employeeId: employee.id, employeeUid: employee.authUid || employee.id, employeeName: employee.crewName, employeeRole: employee.role,
         outletId: employee.outletId, moduleId: module.id, moduleVersionId: module.versionId, moduleTitle: module.title, track: module.track, trainingFormat: module.trainingFormat || 'PRACTICAL',
         mandatory: options.mandatory ?? module.mandatory, assignmentType: options.assignmentType || 'INITIAL', reason: options.reason || '',
@@ -152,6 +162,7 @@ export const trainingService = {
     const batch = db.batch();
     batch.delete(db.collection(ASSIGNMENTS).doc(assignment.id));
     batch.set(db.collection(AUDIT).doc(), {
+      ...(await tenantPayload({})),
       actorId, actorName, action: 'ASSIGNMENT_REVOKED', employeeId: assignment.employeeId, employeeName: assignment.employeeName,
       moduleId: assignment.moduleId, moduleVersionId: assignment.moduleVersionId, outletId: assignment.outletId,
       previousStatus: assignment.status, notes: reason.trim(), createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -168,6 +179,7 @@ export const trainingService = {
   },
 
   certify: async (assignment: TrainingAssignment, module: TrainingModule, actorId: string, actorName: string, notes?: string) => {
+    const tenantId = await currentTenantId();
     if ((assignment.trainingFormat || module.trainingFormat || 'PRACTICAL') !== 'PRACTICAL') throw new Error('Theory training is completed by the employee and cannot be certified.');
     if (!canCertifyAssignment(actorId, assignment.employeeUid, assignment.status)) throw new Error(assignment.employeeUid === actorId ? 'You cannot certify yourself.' : 'Only passed training can be certified.');
     const assessment = assignment.practicalAssessment;
@@ -175,7 +187,7 @@ export const trainingService = {
     const certificationRef = db.collection(CERTIFICATIONS).doc();
     const certifiedAt = new Date();
     const expiry = module.certificationValidityDays ? new Date(certifiedAt.getTime() + module.certificationValidityDays * 86400000) : null;
-    const certification: TrainingCertification = { assignmentId: assignment.id!, employeeId: assignment.employeeId, employeeUid: assignment.employeeUid, employeeName: assignment.employeeName, outletId: assignment.outletId, role: assignment.employeeRole, moduleId: assignment.moduleId, moduleVersionId: assignment.moduleVersionId, moduleTitle: assignment.moduleTitle, moduleVersion: module.version, assessmentResult: 'PASSED', score: assessment?.score, criticalFailures: [], certifyingManagerId: actorId, certifyingManagerName: actorName, certificationDate: firebase.firestore.FieldValue.serverTimestamp(), ...(expiry ? { expiryDate: firebase.firestore.Timestamp.fromDate(expiry) } : {}), ...(notes?.trim() ? { managerNotes: notes.trim() } : {}) };
+    const certification: TrainingCertification = { ...(tenantId ? { tenantId } : {}), assignmentId: assignment.id!, employeeId: assignment.employeeId, employeeUid: assignment.employeeUid, employeeName: assignment.employeeName, outletId: assignment.outletId, role: assignment.employeeRole, moduleId: assignment.moduleId, moduleVersionId: assignment.moduleVersionId, moduleTitle: assignment.moduleTitle, moduleVersion: module.version, assessmentResult: 'PASSED', score: assessment?.score, criticalFailures: [], certifyingManagerId: actorId, certifyingManagerName: actorName, certificationDate: firebase.firestore.FieldValue.serverTimestamp(), ...(expiry ? { expiryDate: firebase.firestore.Timestamp.fromDate(expiry) } : {}), ...(notes?.trim() ? { managerNotes: notes.trim() } : {}) };
     const batch = db.batch();
     batch.set(certificationRef, certification);
     batch.update(db.collection(ASSIGNMENTS).doc(assignment.id!), { status: 'CERTIFIED', certifiedAt: firebase.firestore.FieldValue.serverTimestamp(), certificationId: certificationRef.id, managerFeedback: notes || assignment.managerFeedback || '', updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
@@ -184,15 +196,17 @@ export const trainingService = {
   },
 
   getCertifications: async (filters: { uid?: string; outletId?: string } = {}): Promise<TrainingCertification[]> => {
-    let query: firebase.firestore.Query = db.collection(CERTIFICATIONS);
+    const tenantId = await currentTenantId();
+    let query: firebase.firestore.Query = withTenant(db.collection(CERTIFICATIONS), tenantId);
     if (filters.uid) query = query.where('employeeUid', '==', filters.uid);
     if (filters.outletId) query = query.where('outletId', '==', filters.outletId);
     return clean<TrainingCertification>(await query.get());
   },
 
   getAudit: async (employeeId?: string): Promise<TrainingAuditEvent[]> => {
-    let query: firebase.firestore.Query = db.collection(AUDIT).orderBy('createdAt', 'desc').limit(300);
-    if (employeeId) query = db.collection(AUDIT).where('employeeId', '==', employeeId).orderBy('createdAt', 'desc').limit(300);
+    const tenantId = await currentTenantId();
+    let query: firebase.firestore.Query = withTenant(db.collection(AUDIT), tenantId).orderBy('createdAt', 'desc').limit(300);
+    if (employeeId) query = withTenant(db.collection(AUDIT).where('employeeId', '==', employeeId), tenantId).orderBy('createdAt', 'desc').limit(300);
     return clean<TrainingAuditEvent>(await query.get());
   },
 };

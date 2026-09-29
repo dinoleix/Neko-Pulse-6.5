@@ -159,6 +159,7 @@ export interface PracticalCriterion {
 
 export interface TrainingModule {
   id?: string;
+  tenantId?: string;
   versionId?: string;
   title: string;
   description?: string;
@@ -202,6 +203,7 @@ export interface TrainingModule {
 
 export interface TrainingAssignment {
   id?: string;
+  tenantId?: string;
   employeeId: string;
   employeeUid: string;
   employeeName: string;
@@ -238,8 +240,8 @@ export interface TrainingPracticeAttempt { id: string; trainerId: string; traine
 export interface TrainingQuizResult { attempt: number; score: number; passed: boolean; submittedAt: any; }
 export interface TrainingPracticalAssessment { assessorId: string; assessorName: string; assessedAt: any; score: number; result: 'PASSED' | 'RETRAINING_REQUIRED'; criticalFailure: boolean; criteria: Array<{ criterionId: string; outcome: 'MEETS_STANDARD' | 'NEEDS_IMPROVEMENT' | 'NOT_DEMONSTRATED' | 'CRITICAL_FAILURE' | 'NOT_APPLICABLE'; comment?: string; }>; managerComment?: string; evidence?: TrainingEvidence[]; }
 
-export interface TrainingCertification { id?: string; assignmentId: string; employeeId: string; employeeUid: string; employeeName: string; outletId: string; role?: string; moduleId: string; moduleVersionId: string; moduleTitle: string; moduleVersion: number; assessmentResult: 'PASSED'; score?: number; criticalFailures: string[]; certifyingManagerId: string; certifyingManagerName: string; certificationDate: any; expiryDate?: any; evidence?: TrainingEvidence[]; managerNotes?: string; employeeAcknowledgedAt?: any; }
-export interface TrainingAuditEvent { id?: string; actorId: string; actorName?: string; action: string; employeeId?: string; employeeName?: string; moduleId: string; moduleVersionId?: string; outletId?: string; previousStatus?: TrainingAssignmentStatus; newStatus?: TrainingAssignmentStatus; notes?: string; createdAt: any; }
+export interface TrainingCertification { id?: string; tenantId?: string; assignmentId: string; employeeId: string; employeeUid: string; employeeName: string; outletId: string; role?: string; moduleId: string; moduleVersionId: string; moduleTitle: string; moduleVersion: number; assessmentResult: 'PASSED'; score?: number; criticalFailures: string[]; certifyingManagerId: string; certifyingManagerName: string; certificationDate: any; expiryDate?: any; evidence?: TrainingEvidence[]; managerNotes?: string; employeeAcknowledgedAt?: any; }
+export interface TrainingAuditEvent { id?: string; tenantId?: string; actorId: string; actorName?: string; action: string; employeeId?: string; employeeName?: string; moduleId: string; moduleVersionId?: string; outletId?: string; previousStatus?: TrainingAssignmentStatus; newStatus?: TrainingAssignmentStatus; notes?: string; createdAt: any; }
 
 export interface RoleDef {
   id?: string;
