@@ -1,0 +1,58 @@
+rules_version = '2';
+
+// Isolated Storage rules for Firebase project nekopulse-5db8e only.
+// New files are placed below a tenant ID; legacy unscoped paths are not used
+// for new sandbox uploads and must be migrated deliberately before cutover.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function membership(tenantId) {
+      return firestore.get(/databases/(default)/documents/tenantMemberships/$(tenantId + '_' + request.auth.uid));
+    }
+    function activeMember(tenantId) {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/tenantMemberships/$(tenantId + '_' + request.auth.uid))
+        && membership(tenantId).data.active == true;
+    }
+    function managerOrOwner(tenantId) {
+      return activeMember(tenantId) && membership(tenantId).data.personType != 'CREW';
+    }
+    function imageUnder(maxMb) {
+      return request.resource.size < maxMb * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+    }
+
+    match /{allPaths=**} { allow read, write: if false; }
+
+    match /proofs/{tenantId}/{fileName} {
+      allow read: if activeMember(tenantId);
+      allow create: if activeMember(tenantId) && request.resource.size < 10 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*') || request.resource.contentType.matches('audio/.*'));
+      allow delete: if managerOrOwner(tenantId);
+    }
+    match /employees/{tenantId}/{fileName} {
+      allow read: if activeMember(tenantId);
+      allow create, update: if managerOrOwner(tenantId) && imageUnder(10);
+      allow delete: if managerOrOwner(tenantId);
+    }
+    match /stores/{tenantId}/certs/{fileName} {
+      allow read, create, update, delete: if managerOrOwner(tenantId);
+    }
+    match /hr_docs/{tenantId}/{crewId}/{fileName} {
+      allow read, create, update, delete: if managerOrOwner(tenantId) && (request.method == 'get' || request.method == 'delete' || request.resource.size < 20 * 1024 * 1024);
+    }
+    match /training/{tenantId}/{moduleId}/{fileName} {
+      allow read: if activeMember(tenantId)
+        && firestore.exists(/databases/(default)/documents/trainingModules/$(moduleId))
+        && firestore.get(/databases/(default)/documents/trainingModules/$(moduleId)).data.tenantId == tenantId
+        && firestore.get(/databases/(default)/documents/trainingModules/$(moduleId)).data.status == 'PUBLISHED';
+      allow create, update: if managerOrOwner(tenantId)
+        && firestore.exists(/databases/(default)/documents/trainingModules/$(moduleId))
+        && firestore.get(/databases/(default)/documents/trainingModules/$(moduleId)).data.tenantId == tenantId
+        && request.resource.size < 100 * 1024 * 1024 && request.resource.contentType.matches('video/.*');
+      allow delete: if managerOrOwner(tenantId);
+    }
+    match /settings/{tenantId}/{fileName} {
+      allow read, create, update, delete: if managerOrOwner(tenantId) && (request.method == 'get' || request.method == 'delete' || imageUnder(5));
+    }
+  }
+}

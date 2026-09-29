@@ -18,7 +18,11 @@ export const hrService = {
 
     // --- DOCUMENTS ---
     uploadDocument: async (file: File, crewId: string, docType: string): Promise<CrewDocument> => {
-        const ref = storage.ref(`hr_docs/${crewId}/${Date.now()}_${file.name}`);
+        const tenantId = await currentTenantId();
+        const path = tenantId
+            ? `hr_docs/${tenantId}/${crewId}/${Date.now()}_${file.name}`
+            : `hr_docs/${crewId}/${Date.now()}_${file.name}`;
+        const ref = storage.ref(path);
         await ref.put(file);
         return {
             id: Date.now().toString(),
@@ -35,7 +39,9 @@ export const hrService = {
     },
 
     uploadCompanyLogo: async (file: File): Promise<string> => {
-        const ref = storage.ref(`settings/company_logo_${Date.now()}`);
+        const tenantId = await currentTenantId();
+        const path = tenantId ? `settings/${tenantId}/company_logo_${Date.now()}` : `settings/company_logo_${Date.now()}`;
+        const ref = storage.ref(path);
         await ref.put(file);
         const url = await ref.getDownloadURL();
         await (await getSettingsDocRef('companyLogo')).set({ url });

@@ -2,5 +2,8 @@
   "firestore": {
     "rules": "firestore.sandbox.rules",
     "indexes": "firestore.sandbox.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.sandbox.rules"
   }
 }

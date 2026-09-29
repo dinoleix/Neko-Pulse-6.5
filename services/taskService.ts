@@ -147,7 +147,10 @@ export const taskService = {
 
     uploadProof: async (blob: Blob, type: 'IMAGE' | 'AUDIO'): Promise<string> => {
         const ext = type === 'IMAGE' ? 'jpg' : 'webm';
-        const path = `proofs/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
+        const tenantId = await currentTenantId();
+        const path = tenantId
+            ? `proofs/${tenantId}/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`
+            : `proofs/${Date.now()}_${Math.random().toString(36).substr(2, 5)}.${ext}`;
         const ref = storage.ref(path);
         await ref.put(blob);
         return path;

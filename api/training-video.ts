@@ -18,13 +18,16 @@ export default async function handler(req: any, res: any) {
     try { ({ uid } = await admin().auth.verifyIdToken(token)); }
     catch { return res.status(401).json({ error: 'Please sign in again to watch this video.' }); }
     const path = String(req.query.path || '');
-    const match = /^training\/([^/]+)\//.exec(path);
-    if (!match) return res.status(400).json({ error: 'Invalid training video.' });
+    const tenantPathMatch = /^training\/([^/]+)\/([^/]+)\//.exec(path);
+    const legacyPathMatch = /^training\/([^/]+)\//.exec(path);
+    const moduleId = tenantPathMatch?.[2] || legacyPathMatch?.[1];
+    if (!moduleId) return res.status(400).json({ error: 'Invalid training video.' });
     const { db } = admin();
-    const module = await db.collection('trainingModules').doc(match[1]).get();
+    const module = await db.collection('trainingModules').doc(moduleId).get();
     if (!module.exists || module.data()?.status !== 'PUBLISHED') return res.status(403).json({ error: 'Not authorised.' });
     const tenantId = String(module.data()?.tenantId || '');
     if (process.env.TENANT_MODE === 'sandbox' || process.env.TENANT_MODE === 'enabled') {
+      if (!tenantPathMatch || tenantPathMatch[1] !== tenantId) return res.status(403).json({ error: 'Not authorised.' });
       const membership = await db.collection('tenantMemberships').where('uid', '==', uid).where('tenantId', '==', tenantId).where('active', '==', true).limit(1).get();
       if (membership.empty) return res.status(403).json({ error: 'Not authorised.' });
     }
@@ -33,7 +36,7 @@ export default async function handler(req: any, res: any) {
       db.collection('trainingAssignments').where('employeeUid', '==', uid).get(),
     ]);
     const managerAllowed = manager.exists && (!tenantId || manager.data()?.tenantId === tenantId);
-    const assigned = assignments.docs.some(doc => doc.data().moduleId === match[1] && (!tenantId || doc.data().tenantId === tenantId));
+    const assigned = assignments.docs.some(doc => doc.data().moduleId === moduleId && (!tenantId || doc.data().tenantId === tenantId));
     if ((!managerAllowed && !assigned)) return res.status(403).json({ error: 'Not authorised.' });
     const bucketName = process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET;
     if (!bucketName) throw new Error('Training video storage bucket is not configured.');
