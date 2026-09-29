@@ -1,7 +1,8 @@
 
-import { db } from '../firebaseConfig';
+import { auth, db } from '../firebaseConfig';
 import { AccessConfig, RoleDef } from '../types';
 import { getCachedSettingsDoc, invalidateSettingsDoc } from './configCache';
+import { isTenantModeEnabled, tenantService } from './tenantService';
 
 export const accessService = {
     getRoles: async (): Promise<string[]> => {
@@ -16,7 +17,15 @@ export const accessService = {
     },
 
     saveAccessConfig: async (config: AccessConfig) => {
-        const res = await db.collection('settings').doc('accessConfig').set(config);
+        let ref = db.collection('settings').doc('accessConfig');
+        if (isTenantModeEnabled) {
+            const uid = auth.currentUser?.uid;
+            if (!uid) throw new Error('Sign in is required to update access settings.');
+            const membership = await tenantService.getActiveMembership(uid);
+            if (!membership) throw new Error('No active business membership was found.');
+            ref = db.collection('tenantSettings').doc(membership.tenantId).collection('config').doc('accessConfig');
+        }
+        const res = await ref.set(config);
         invalidateSettingsDoc('accessConfig');
         return res;
     }
