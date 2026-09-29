@@ -478,6 +478,7 @@ export interface LeaveRequest {
 // --- MODULE: EMPLOYEE OF THE MONTH (EOM) ---
 export interface EOMCycle {
   id: string; // YYYY-MM
+  tenantId?: string;
   monthName: string;
   status: 'OPEN' | 'VOTING' | 'SCORING' | 'COMPLETED';
   winnerId?: string;
@@ -487,6 +488,7 @@ export interface EOMCycle {
 
 export interface EOMVote {
   id?: string;
+  tenantId?: string;
   cycleId: string;
   voterId: string;
   nomineeId: string;
@@ -495,6 +497,7 @@ export interface EOMVote {
 
 export interface EOMScore {
   id?: string;
+  tenantId?: string;
   cycleId: string;
   nomineeId: string;
   score: number; // 1-10

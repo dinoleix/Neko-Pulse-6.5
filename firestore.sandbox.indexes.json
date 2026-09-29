@@ -12,7 +12,10 @@
     {"collectionGroup":"leaveRequests","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"appliedAt","order":"DESCENDING"}]},
     {"collectionGroup":"leaveRequests","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"crewId","order":"ASCENDING"},{"fieldPath":"appliedAt","order":"DESCENDING"}]},
     {"collectionGroup":"shiftAssignments","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"date","order":"ASCENDING"}]},
-    {"collectionGroup":"shiftAssignments","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"crewId","order":"ASCENDING"}]}
+    {"collectionGroup":"shiftAssignments","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"crewId","order":"ASCENDING"}]},
+    {"collectionGroup":"eom_cycles","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"}]},
+    {"collectionGroup":"eom_votes","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"cycleId","order":"ASCENDING"},{"fieldPath":"voterId","order":"ASCENDING"}]},
+    {"collectionGroup":"eom_scores","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"cycleId","order":"ASCENDING"}]}
   ],
   "fieldOverrides": []
 }
