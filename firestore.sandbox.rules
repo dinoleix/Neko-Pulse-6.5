@@ -174,6 +174,31 @@ service cloud.firestore {
         && (request.method == 'delete' || tenantRecord(resource.data.tenantId));
     }
 
+    match /eom_cycles/{cycleId} {
+      allow read: if activeMember(resource.data.tenantId) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId)
+        && tenantRecord(request.resource.data.tenantId);
+      allow update: if managerOrOwner(resource.data.tenantId)
+        && tenantRecord(resource.data.tenantId);
+      allow delete: if false;
+    }
+
+    match /eom_votes/{voteId} {
+      allow read: if (activeMember(resource.data.tenantId)
+        && resource.data.voterId == request.auth.uid) || managerOrOwner(resource.data.tenantId) || bootstrapOwner();
+      allow create: if activeMember(request.resource.data.tenantId)
+        && request.resource.data.voterId == request.auth.uid
+        && tenantRecord(request.resource.data.tenantId);
+      allow update, delete: if false;
+    }
+
+    match /eom_scores/{scoreId} {
+      allow read: if managerOrOwner(resource.data.tenantId) || bootstrapOwner();
+      allow create, update: if managerOrOwner(request.resource.data.tenantId)
+        && tenantRecord(request.resource.data.tenantId);
+      allow delete: if false;
+    }
+
     match /tenantSettings/{tenantId}/config/{configId} {
       allow read: if activeMember(tenantId) || bootstrapOwner();
       allow create, update: if managerOrOwner(tenantId);
