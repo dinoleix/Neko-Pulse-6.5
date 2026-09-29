@@ -1,6 +1,7 @@
 
 import { db, storage, firebase, firebaseConfig } from '../firebaseConfig';
 import { CrewMember, CrewDirectoryEntry, RoleDef } from '../types';
+import { getSettingsCollectionRef } from './configCache';
 
 // Extract the public-safe fields mirrored into /crewDirectory. Only fields
 // present on the partial are included, so merge-writes never blank a value.
@@ -134,16 +135,16 @@ export const employeeService = {
 
     // --- ROLES ---
     getRoles: async (): Promise<RoleDef[]> => {
-        const snap = await db.collection('roles').get();
+        const snap = await (await getSettingsCollectionRef('roles')).get();
         return snap.docs.map(d => ({...d.data(), id: d.id} as RoleDef));
     },
 
     addRole: async (name: string) => {
-        return await db.collection('roles').add({ name });
+        return await (await getSettingsCollectionRef('roles')).add({ name });
     },
 
     deleteRole: async (id: string) => {
-        return await db.collection('roles').doc(id).delete();
+        return await (await getSettingsCollectionRef('roles')).doc(id).delete();
     },
 
     // --- AUTH HELPERS ---
