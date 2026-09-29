@@ -352,6 +352,7 @@ export interface OrderItem {
 
 export interface OrderValidation {
   id?: string;
+  tenantId?: string;
   orderId: string;
   customerName: string;
   customerOrderCount?: number; 
@@ -519,6 +520,7 @@ export interface EOMResult {
 // --- MODULE: LOGIN ACTIVITY ---
 export interface LoginLog {
   id?: string;
+  tenantId?: string;
   userId: string;        // Firebase Auth UID
   dbId?: string;         // Firestore document ID of the crew/manager profile
   userName: string;

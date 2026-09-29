@@ -1,6 +1,7 @@
 
 import { db, firebase } from '../firebaseConfig';
 import { LoginLog } from '../types';
+import { currentTenantId, tenantPayload, withTenant } from './tenantScope';
 
 const COLLECTION = 'loginLogs';
 
@@ -47,26 +48,29 @@ export const loginLogService = {
     // Fire-and-forget: records a successful login. Never throws — a failed
     // audit write must not block the user from getting into the app.
     record: async (entry: Omit<LoginLog, 'id' | 'timestamp' | 'device' | 'userAgent' | 'location' | 'ip'>) => {
-        const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-        const geo = await fetchLocation();
-        const payload: any = {
-            ...entry,
-            device: describeDevice(ua),
-            userAgent: ua,
-            ...geo,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-        };
-        // Strip undefined fields (Firestore rejects them).
-        Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+        try {
+            const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+            const geo = await fetchLocation();
+            const payload: any = {
+                ...(await tenantPayload(entry)),
+                device: describeDevice(ua),
+                userAgent: ua,
+                ...geo,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            };
+            // Strip undefined fields (Firestore rejects them).
+            Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
 
-        db.collection(COLLECTION).add(payload).catch(err => {
+            await db.collection(COLLECTION).add(payload);
+        } catch (err) {
             console.warn('Login log write failed (non-blocking):', err);
-        });
+        }
     },
 
     // Admin: fetch recent login records, newest first.
     getRecent: async (max: number = 500): Promise<LoginLog[]> => {
-        const snap = await db.collection(COLLECTION)
+        const tenantId = await currentTenantId();
+        const snap = await withTenant(db.collection(COLLECTION), tenantId)
             .orderBy('timestamp', 'desc')
             .limit(max)
             .get();
@@ -76,9 +80,10 @@ export const loginLogService = {
     // Super-admin-only in Firestore rules. Delete in bounded batches so this
     // also works when the audit log grows beyond Firestore's 500-write limit.
     clearAll: async (): Promise<number> => {
+        const tenantId = await currentTenantId();
         let deleted = 0;
         while (true) {
-            const snap = await db.collection(COLLECTION).limit(400).get();
+            const snap = await withTenant(db.collection(COLLECTION), tenantId).limit(400).get();
             if (snap.empty) return deleted;
 
             const batch = db.batch();
