@@ -67,6 +67,7 @@ export interface Store {
 // --- MODULE: DAILY MANAGER OVERVIEW ---
 export interface ManagerAction {
   id?: string;
+  tenantId?: string;
   title: string;
   details?: string;
   outletId: string | 'ALL';

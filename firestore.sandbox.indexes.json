@@ -16,6 +16,7 @@
     {"collectionGroup":"validations","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"outletId","order":"ASCENDING"},{"fieldPath":"validatedAt","order":"DESCENDING"}]},
     {"collectionGroup":"validations","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"validatedByCrewId","order":"ASCENDING"},{"fieldPath":"validatedAt","order":"DESCENDING"}]},
     {"collectionGroup":"loginLogs","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"timestamp","order":"DESCENDING"}]},
+    {"collectionGroup":"managerActions","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
     {"collectionGroup":"eom_cycles","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"}]},
     {"collectionGroup":"eom_votes","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"cycleId","order":"ASCENDING"},{"fieldPath":"voterId","order":"ASCENDING"}]},
     {"collectionGroup":"eom_scores","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"cycleId","order":"ASCENDING"}]},

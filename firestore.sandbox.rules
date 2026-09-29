@@ -197,6 +197,15 @@ service cloud.firestore {
       allow delete: if bootstrapOwner();
     }
 
+    match /managerActions/{actionId} {
+      allow read: if managerOrOwner(resource.data.tenantId) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId)
+        && tenantRecord(request.resource.data.tenantId);
+      allow update: if managerOrOwner(resource.data.tenantId)
+        && tenantRecord(resource.data.tenantId);
+      allow delete: if false;
+    }
+
     match /eom_cycles/{cycleId} {
       allow read: if activeMember(resource.data.tenantId) || bootstrapOwner();
       allow create: if managerOrOwner(request.resource.data.tenantId)
