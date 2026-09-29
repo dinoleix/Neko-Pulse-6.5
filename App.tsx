@@ -8,6 +8,7 @@ import { KioskView } from './components/KioskView';
 import { DynamicBranding } from './components/DynamicBranding';
 import { CurrentUser, UserRole, CrewMember } from './types';
 import { storeService } from './services/storeService';
+import { isTenantModeEnabled, tenantService } from './services/tenantService';
 
 // Auto-logout after inactivity. Most roles get 5 minutes; the "Counter" role
 // runs unattended on a shared device, so it gets 14 hours.
@@ -30,6 +31,10 @@ function App() {
   const [kioskOutletId, setKioskOutletId] = useState<string | undefined>(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('outletId') || undefined;
+  });
+  const [kioskTenantId] = useState<string | undefined>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('tenant') || undefined;
   });
 
   const [init, setInit] = useState(true);
@@ -55,6 +60,36 @@ function App() {
         let dbId = undefined;
 
         try {
+            if (isTenantModeEnabled) {
+                const tenantUser = await tenantService.resolveCurrentUser(user.uid, user.email || undefined);
+                if (!tenantUser) {
+                    throw new Error('No active tenant membership found for this account.');
+                }
+
+                if (tenantUser.role === UserRole.CREW && tenantUser.outletId) {
+                    const activeStores = await storeService.getActiveStores(tenantUser.tenantId);
+                    if (!activeStores.some(store => store.outletId === tenantUser.outletId)) {
+                        throw new Error('This outlet is no longer active.');
+                    }
+                }
+
+                if (!didInitialIdleCheck) {
+                    didInitialIdleCheck = true;
+                    const last = Number(localStorage.getItem(LAST_ACTIVITY_KEY));
+                    if (last && Date.now() - last > getIdleTimeoutMs(tenantUser.accessRole)) {
+                        localStorage.removeItem(LAST_ACTIVITY_KEY);
+                        await auth.signOut();
+                        setCurrentUser(null);
+                        setInit(false);
+                        return;
+                    }
+                }
+
+                setCurrentUser(tenantUser);
+                setInit(false);
+                return;
+            }
+
             let userProfile: CrewMember | undefined;
             let docId: string | undefined;
 
@@ -198,7 +233,7 @@ function App() {
       return (
         <>
           <DynamicBranding />
-          <KioskView defaultOutletId={kioskOutletId} />
+          <KioskView defaultOutletId={kioskOutletId} tenantId={kioskTenantId} />
         </>
       );
   }

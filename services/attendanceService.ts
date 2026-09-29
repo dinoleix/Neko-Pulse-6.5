@@ -1,10 +1,28 @@
 
-import { db, firebase } from '../firebaseConfig';
+import { auth, db, firebase } from '../firebaseConfig';
 import { AttendanceLog, LeaveRequest, AttendanceConfig, CrewMember, ShiftAssignment, AppConfig } from '../types';
 import { getCachedSettingsDoc } from './configCache';
 import { storeService } from './storeService';
 // @fix: Removed parseISO from date-fns as it's not exported in the available version
 import { differenceInDays } from 'date-fns';
+import { isTenantModeEnabled, tenantService } from './tenantService';
+
+const currentTenantId = async (): Promise<string | undefined> => {
+    if (!isTenantModeEnabled) return undefined;
+    const uid = auth.currentUser?.uid;
+    if (!uid) throw new Error('Please sign in to access this business data.');
+    const membership = await tenantService.getActiveMembership(uid);
+    if (!membership) throw new Error('No active business membership was found.');
+    return membership.tenantId;
+};
+
+const withTenant = (query: firebase.firestore.Query, tenantId?: string) =>
+    tenantId ? query.where('tenantId', '==', tenantId) : query;
+
+const tenantPayload = async <T extends object>(payload: T) => {
+    const tenantId = await currentTenantId();
+    return tenantId ? { ...payload, tenantId } : payload;
+};
 
 // @fix: Implemented local parseISO helper to handle YYYY-MM-DD strings in local timezone
 const parseISO = (str: string) => {
@@ -18,7 +36,8 @@ export const attendanceService = {
     // `since` bounds the read to the window the caller actually renders —
     // without it every admin view open pays for the full `limit`.
     getAllLogs: async (limit: number = 1000, since?: Date): Promise<AttendanceLog[]> => {
-        let query: firebase.firestore.Query = db.collection('attendanceLogs');
+        const tenantId = await currentTenantId();
+        let query: firebase.firestore.Query = withTenant(db.collection('attendanceLogs'), tenantId);
         if (since) query = query.where('timestamp', '>=', since);
         const snap = await query.orderBy('timestamp', 'desc').limit(limit).get();
         // Store closure stops new operational use, not access to the
@@ -31,9 +50,10 @@ export const attendanceService = {
     // collection grows forever and balances only need leaves after each
     // member's reset date, which recent-first ordering preserves in practice.
     getAllLeaves: async (limit: number = 1000): Promise<LeaveRequest[]> => {
+        const tenantId = await currentTenantId();
         const [snap, activeOutletIds] = await Promise.all([
-            db.collection('leaveRequests').orderBy('appliedAt', 'desc').limit(limit).get(),
-            storeService.getActiveOutletIds()
+            withTenant(db.collection('leaveRequests'), tenantId).orderBy('appliedAt', 'desc').limit(limit).get(),
+            storeService.getActiveOutletIds(tenantId)
         ]);
         return snap.docs.map(d => ({...d.data(), id: d.id} as LeaveRequest)).filter(request => activeOutletIds.has(request.outletId));
     },
@@ -41,23 +61,33 @@ export const attendanceService = {
     // One doc per crew member per day — unbounded, this was the single
     // biggest read on the admin attendance screen.
     getAllShifts: async (sinceDate?: string): Promise<ShiftAssignment[]> => {
-        let query: firebase.firestore.Query = db.collection('shiftAssignments');
+        const tenantId = await currentTenantId();
+        let query: firebase.firestore.Query = withTenant(db.collection('shiftAssignments'), tenantId);
         if (sinceDate) query = query.where('date', '>=', sinceDate);
-        const [snap, activeOutletIds] = await Promise.all([query.get(), storeService.getActiveOutletIds()]);
+        const [snap, activeOutletIds] = await Promise.all([query.get(), storeService.getActiveOutletIds(tenantId)]);
         return snap.docs.map(d => ({...d.data(), id: d.id} as ShiftAssignment)).filter(assignment => activeOutletIds.has(assignment.outletId));
     },
 
     // --- CONFIG ---
     getConfig: async (): Promise<AttendanceConfig | null> => {
-        const snap = await db.collection('settings').doc('attendanceConfig').get();
+        const tenantId = await currentTenantId();
+        const ref = tenantId ? db.collection('tenantSettings').doc(tenantId).collection('config').doc('attendanceConfig') : db.collection('settings').doc('attendanceConfig');
+        const snap = await ref.get();
         return snap.exists ? (snap.data() as AttendanceConfig) : null;
     },
 
     saveConfig: async (config: any) => {
-        return await db.collection('settings').doc('attendanceConfig').set(config, { merge: true });
+        const tenantId = await currentTenantId();
+        const ref = tenantId ? db.collection('tenantSettings').doc(tenantId).collection('config').doc('attendanceConfig') : db.collection('settings').doc('attendanceConfig');
+        return await ref.set(config, { merge: true });
     },
 
     getAppConfig: async (): Promise<AppConfig | null> => {
+        const tenantId = await currentTenantId();
+        if (tenantId) {
+            const snap = await db.collection('tenantSettings').doc(tenantId).collection('config').doc('appConfig').get();
+            return snap.exists ? (snap.data() as AppConfig) : null;
+        }
         return (await getCachedSettingsDoc('appConfig')) as AppConfig | null;
     },
 
@@ -71,8 +101,9 @@ export const attendanceService = {
     },
 
     submitLeave: async (request: Omit<LeaveRequest, 'id' | 'appliedAt'>) => {
+        const payload = await tenantPayload(request);
         return await db.collection('leaveRequests').add({
-            ...request,
+            ...payload,
             appliedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
     },
@@ -132,11 +163,11 @@ export const attendanceService = {
 
     // --- CREW: SPECIFIC FETCHING ---
     getCrewLogs: async (crewId: string, limit: number = 20, altId?: string): Promise<AttendanceLog[]> => {
+        const tenantId = await currentTenantId();
         // Server-side ordering + limit so we read at most `limit` docs (×2 if a
         // legacy altId is also queried), instead of the crew member's whole history.
         // Requires composite index: attendanceLogs (crewId ASC, timestamp DESC).
-        const fetch = (id: string) => db.collection('attendanceLogs')
-            .where('crewId', '==', id)
+        const fetch = (id: string) => withTenant(db.collection('attendanceLogs').where('crewId', '==', id), tenantId)
             .orderBy('timestamp', 'desc')
             .limit(limit)
             .get();
@@ -159,11 +190,11 @@ export const attendanceService = {
     },
 
     getCrewLeaves: async (crewId: string, limit: number = 20, altId?: string): Promise<LeaveRequest[]> => {
+        const tenantId = await currentTenantId();
         // Server-side ordering + limit (composite index: leaveRequests
         // crewId ASC, appliedAt DESC) instead of reading the member's whole
         // leave history and slicing client-side.
-        const fetch = (id: string) => db.collection('leaveRequests')
-            .where('crewId', '==', id)
+        const fetch = (id: string) => withTenant(db.collection('leaveRequests').where('crewId', '==', id), tenantId)
             .orderBy('appliedAt', 'desc')
             .limit(limit)
             .get();
@@ -186,13 +217,14 @@ export const attendanceService = {
     },
 
     getCrewShifts: async (dbId?: string, uid?: string): Promise<ShiftAssignment[]> => {
+        const tenantId = await currentTenantId();
         let fetchedShifts: ShiftAssignment[] = [];
         if (dbId) {
-            const s1 = await db.collection('shiftAssignments').where('crewId', '==', dbId).get();
+            const s1 = await withTenant(db.collection('shiftAssignments').where('crewId', '==', dbId), tenantId).get();
             fetchedShifts = [...fetchedShifts, ...s1.docs.map(d => d.data() as ShiftAssignment)];
         }
         if (uid && uid !== dbId) {
-            const s2 = await db.collection('shiftAssignments').where('crewId', '==', uid).get();
+            const s2 = await withTenant(db.collection('shiftAssignments').where('crewId', '==', uid), tenantId).get();
             const s2Data = s2.docs.map(d => d.data() as ShiftAssignment);
             const existingKeys = new Set(fetchedShifts.map(s => `${s.date}_${s.shiftName}`));
             s2Data.forEach(s => {
@@ -204,15 +236,17 @@ export const attendanceService = {
 
     // --- ATTENDANCE ACTIONS ---
     logAttendance: async (data: any) => {
+        const payload = await tenantPayload(data);
         return await db.collection('attendanceLogs').add({
-            ...data,
+            ...payload,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
     },
 
     // --- CONTEXT ---
     getCrew: async (): Promise<CrewMember[]> => {
-        const snap = await db.collection('crew').get();
+        const tenantId = await currentTenantId();
+        const snap = await withTenant(db.collection('crew'), tenantId).get();
         return snap.docs.map(d => ({...d.data(), id: d.id} as CrewMember));
     }
 };

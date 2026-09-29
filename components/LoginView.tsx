@@ -4,6 +4,7 @@ import { auth, db } from '../firebaseConfig';
 import { Button, Input, Card } from './SharedComponents';
 import { CurrentUser, UserRole, CrewMember } from '../types';
 import { loginLogService } from '../services/loginLogService';
+import { isTenantModeEnabled, tenantService } from '../services/tenantService';
 import { Coffee, Lock, User } from 'lucide-react';
 
 interface LoginViewProps {
@@ -108,6 +109,19 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
       
       if (userCredential.user) {
         const uid = userCredential.user.uid;
+
+        // The sandbox tenant path resolves a signed-in account through its
+        // membership instead of assuming every email login is a global
+        // manager. This remains feature-flagged until production cutover.
+        if (isTenantModeEnabled) {
+          const tenantUser = await tenantService.resolveCurrentUser(uid, userCredential.user.email || undefined);
+          if (!tenantUser) {
+            await auth.signOut();
+            throw new Error('No active business membership was found for this account.');
+          }
+          onLogin(tenantUser);
+          return;
+        }
         
         // STRICT CHECK: MANAGERS COLLECTION ONLY
         let managerDoc = await db.collection('managers').doc(uid).get();

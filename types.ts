@@ -9,12 +9,41 @@ export enum UserRole {
 export interface CurrentUser {
   role: UserRole;
   uid: string;
+  // Present only when the tenant-aware session path is enabled. Keeping this
+  // optional lets the existing production records continue working during the
+  // additive migration.
+  tenantId?: string;
+  membershipId?: string;
   name?: string;
   outletId?: string;
   // Specific role from the Crew table (e.g. "Manager", "HR") used for Admin Matrix checks
   accessRole?: string; 
   // The Firestore Document ID (required because Auth UID might differ from legacy Crew Doc ID)
   dbId?: string;
+}
+
+export type TenantPersonType = 'CREW' | 'MANAGER' | 'OWNER' | 'ADMINISTRATOR';
+
+export interface TenantMembership {
+  id?: string;
+  tenantId: string;
+  uid: string;
+  personId: string;
+  personType: TenantPersonType;
+  role?: string;
+  outletIds: string[];
+  active: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface TenantContext {
+  tenantId: string;
+  membershipId: string;
+  personId: string;
+  personType: TenantPersonType;
+  role?: string;
+  outletIds: string[];
 }
 
 export interface AppConfig {
@@ -24,6 +53,7 @@ export interface AppConfig {
 
 export interface Store {
   id?: string;
+  tenantId?: string;
   outletId: string;
   name: string;
   address?: string;
@@ -230,6 +260,7 @@ export interface CrewDocument {
 
 export interface CrewMember {
   id?: string;
+  tenantId?: string;
   authUid?: string; // LINK TO FIREBASE AUTH
   crewName: string;
   crewCode: string;
@@ -294,6 +325,7 @@ export interface ShiftAssignment {
   date: string; 
   isDayOff?: boolean; 
   isPilot?: boolean; 
+  tenantId?: string;
 }
 
 // --- VISUAL ASSETS ---
@@ -360,6 +392,7 @@ export interface TaskTemplate {
   proofType: TaskProofType;
   proofTypes?: TaskProofType[];
   proofPhotoCount?: number; // How many photos are required when PHOTO proof is selected (default 1)
+  tenantId?: string;
 }
 
 export interface Task {
@@ -379,6 +412,7 @@ export interface Task {
   proofPhotoCount?: number; // How many photos are required when PHOTO proof is selected (default 1)
   isActive: boolean;
   createdAt?: any;
+  tenantId?: string;
 }
 
 export interface TaskLog {
@@ -394,6 +428,7 @@ export interface TaskLog {
   proofType: TaskProofType;
   proofData?: { type: TaskProofType; value: string | string[] }[];
   status: 'completed' | 'late';
+  tenantId?: string;
 }
 
 export interface TaskConfig {
@@ -421,6 +456,7 @@ export interface AttendanceLog {
   type: 'CHECK_IN' | 'CHECK_OUT';
   method: 'FACE' | 'QR' | 'PIN' | 'QR_SCAN';
   photoUrl?: string;
+  tenantId?: string;
 }
 
 export interface LeaveRequest {
@@ -434,6 +470,7 @@ export interface LeaveRequest {
   reason: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   appliedAt: any;
+  tenantId?: string;
 }
 
 // --- MODULE: EMPLOYEE OF THE MONTH (EOM) ---

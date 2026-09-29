@@ -1,10 +1,16 @@
 
 import React, { useEffect } from 'react';
 import { db } from '../firebaseConfig';
+import { isTenantModeEnabled } from '../services/tenantService';
 
 export const DynamicBranding: React.FC = () => {
   useEffect(() => {
     const updateIcons = async () => {
+      // Tenant branding belongs to a tenant setting, not the legacy global
+      // document. Until a user has selected a tenant, keep the static app
+      // icons instead of issuing a pre-login global settings read.
+      if (isTenantModeEnabled) return;
+
       try {
         // 1. Fetch the logo from settings
         const doc = await db.collection('settings').doc('companyLogo').get();
