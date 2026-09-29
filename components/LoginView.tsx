@@ -119,6 +119,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
             await auth.signOut();
             throw new Error('No active business membership was found for this account.');
           }
+          loginLogService.record({
+            userId: uid,
+            dbId: tenantUser.dbId,
+            userName: tenantUser.name,
+            role: 'ADMIN',
+            accessRole: tenantUser.accessRole,
+            outletId: tenantUser.outletId,
+            loginMethod: 'MANAGER_EMAIL',
+          });
           onLogin(tenantUser);
           return;
         }
