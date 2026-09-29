@@ -2,7 +2,7 @@
 import { db, firebase, storage } from '../firebaseConfig';
 import { Store, AppConfig } from '../types';
 import { getCachedSettingsDoc, getSettingsDocRef, invalidateSettingsDoc } from './configCache';
-import { currentTenantId } from './tenantScope';
+import { currentTenantId, tenantPayload } from './tenantScope';
 
 export const storeService = {
   // --- STORES ---
@@ -25,7 +25,7 @@ export const storeService = {
     new Set((await storeService.getActiveStores(tenantId)).map(store => store.outletId)),
 
   addStore: async (store: Partial<Store>) => {
-    return await db.collection('stores').add({ ...store, isActive: store.isActive ?? true });
+    return await db.collection('stores').add(await tenantPayload({ ...store, isActive: store.isActive ?? true }));
   },
 
   updateStore: async (id: string, data: Partial<Store>) => {
