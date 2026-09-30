@@ -18,6 +18,21 @@ export const currentTenantId = async (): Promise<string | undefined> => {
   return (await currentTenantContext())?.tenantId;
 };
 
+// During the production compatibility window, legacy reads deliberately remain
+// global until the tenant cutover is approved. New writes can still carry the
+// fixed Green Neko tenant ID, preventing the live data gap from growing while
+// preserving the existing production user experience. This value must be set
+// only in the production environment and never enables tenant-scoped reads.
+const legacyWriteTenantId = () => {
+  if (isTenantModeEnabled) return undefined;
+  const value = String(import.meta.env.VITE_LEGACY_TENANT_ID || '').trim();
+  return value || undefined;
+};
+
+export const currentTenantWriteId = async (): Promise<string | undefined> => {
+  return (await currentTenantContext())?.tenantId || legacyWriteTenantId();
+};
+
 export const isTenantWideMember = (context?: TenantContext) =>
   context?.personType === 'OWNER' || context?.personType === 'ADMINISTRATOR' || context?.allOutlets === true;
 
@@ -25,6 +40,6 @@ export const withTenant = (query: firebase.firestore.Query, tenantId?: string) =
   tenantId ? query.where('tenantId', '==', tenantId) : query;
 
 export const tenantPayload = async <T extends object>(payload: T) => {
-  const tenantId = await currentTenantId();
+  const tenantId = await currentTenantWriteId();
   return tenantId ? { ...payload, tenantId } : payload;
 };

@@ -4,6 +4,7 @@ import { Task, TaskTemplate, TaskLog, TaskConfig, Store, CrewMember, TaskProofTy
 import { storeService } from './storeService';
 import { auth } from '../firebaseConfig';
 import { isTenantModeEnabled, tenantService } from './tenantService';
+import { currentTenantWriteId } from './tenantScope';
 
 const currentTenantId = async (): Promise<string | undefined> => {
     if (!isTenantModeEnabled) return undefined;
@@ -18,7 +19,7 @@ const withTenant = (query: firebase.firestore.Query, tenantId?: string) =>
     tenantId ? query.where('tenantId', '==', tenantId) : query;
 
 const tenantPayload = async <T extends object>(payload: T) => {
-    const tenantId = await currentTenantId();
+    const tenantId = await currentTenantWriteId();
     return tenantId ? { ...payload, tenantId } : payload;
 };
 

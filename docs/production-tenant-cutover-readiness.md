@@ -64,6 +64,43 @@ The current tool treats `recipes`, `bluebook_items`, `conversationStatus`,
 archives. Recipes are outside this cutover unless a separately approved
 retention decision changes that scope.
 
+## Fresh production inventory — 30 September 2026
+
+The following results were produced by read-only runs against
+`order-accuracy-ce844`. No production document was written.
+
+### Clear checks
+
+- 21 active, unambiguous identity mappings were found: 17 crew, 3 managers,
+  and 1 owner. There were no missing or duplicate Firebase Auth UID mappings.
+- Green Neko tenant configuration and crew-directory copies already exist.
+- 19 operational collection families, training-module versions, and all
+  existing stores, people, task definitions, training records, and settings
+  scanned without a conflicting tenant ID.
+- The archived Recipe, Blue Book, Counter Conversations, Manager Meetings, and
+  table-monitoring collections remain excluded and unchanged.
+
+### Blocking discrepancy
+
+65 records created after the earlier backfill are missing `tenantId`. They are
+not safe to include in tenant-only reads until a final bounded backfill has
+been approved and verified:
+
+| Collection | Current count | Missing `tenantId` | Previously compliant |
+| --- | ---: | ---: | ---: |
+| `shiftAssignments` | 2,897 | 14 | 2,883 |
+| `attendanceLogs` | 2,804 | 9 | 2,795 |
+| `taskLogs` | 7,381 | 29 | 7,352 |
+| `loginLogs` | 26 | 13 | 13 |
+
+This is expected while production continues using the legacy compatibility
+write path: new operational activity remains live, but does not yet attach a
+tenant value. The cutover candidate therefore needs a compatibility dual-write
+mode that attaches `green-neko` to new operational records **without** enabling
+tenant-only reads or publishing restrictive rules. That candidate must be
+rehearsed in sandbox, then released and observed before the final dry-run and
+approved cutover window.
+
 ## Required migration ledger
 
 The dry-run report must be converted into a reviewed ledger before the window.
@@ -95,6 +132,11 @@ write phase until it has a documented ownership decision.
 4. Review the exact production Firebase client/server environment values. The
    production application must point only to the production Firebase project;
    sandbox variables and sandbox service accounts must not be present.
+   For the compatibility dual-write release, set both
+   `VITE_LEGACY_TENANT_ID=green-neko` (client writes) and
+   `LEGACY_TENANT_ID=green-neko` (trusted kiosk-attendance writes). These
+   values add tenant ownership to new records only; they must not set
+   `VITE_TENANT_MODE=enabled` or `TENANT_MODE=enabled`.
 5. Rehearse the same collection scope in sandbox from the final candidate SHA.
    Produce the same ledger and acceptance evidence.
 6. Publish the tenant-aware application in compatibility mode only. Confirm
@@ -151,4 +193,3 @@ cutover:
   access.
 - Browser sessions on desktop and iPhone receive the release without serving a
   stale application bundle.
-

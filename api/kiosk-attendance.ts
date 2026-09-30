@@ -2,7 +2,10 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore, Timestamp } from 'firebase-admin/firestore';
 
 type KioskStore = { outletId: string; name: string };
-const tenantKioskMode = process.env.TENANT_MODE === 'sandbox' || process.env.TENANT_MODE === 'enabled';
+    const tenantKioskMode = process.env.TENANT_MODE === 'sandbox' || process.env.TENANT_MODE === 'enabled';
+    // Compatibility dual-write: preserve legacy kiosk reads until the approved
+    // tenant cutover, while attaching the fixed tenant ID to new attendance.
+    const legacyWriteTenantId = !tenantKioskMode ? String(process.env.LEGACY_TENANT_ID || '').trim() : '';
 
 const attempts = new Map<string, { failures: number; resetAt: number }>();
 const MAX_FAILURES = 8;
@@ -134,7 +137,7 @@ export default async function handler(req: any, res: any) {
     } else {
       await db.collection('attendanceLogs').add({
         crewId: crewDoc.id, crewName: crew.crewName, outletId,
-        ...(tenantKioskMode ? { tenantId } : {}),
+        ...((tenantKioskMode ? tenantId : legacyWriteTenantId) ? { tenantId: tenantKioskMode ? tenantId : legacyWriteTenantId } : {}),
         timestamp: FieldValue.serverTimestamp(), type, method: 'PIN',
       });
     }
