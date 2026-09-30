@@ -9,12 +9,45 @@ export enum UserRole {
 export interface CurrentUser {
   role: UserRole;
   uid: string;
+  // Present only when the tenant-aware session path is enabled. Keeping this
+  // optional lets the existing production records continue working during the
+  // additive migration.
+  tenantId?: string;
+  membershipId?: string;
   name?: string;
   outletId?: string;
   // Specific role from the Crew table (e.g. "Manager", "HR") used for Admin Matrix checks
   accessRole?: string; 
   // The Firestore Document ID (required because Auth UID might differ from legacy Crew Doc ID)
   dbId?: string;
+}
+
+export type TenantPersonType = 'CREW' | 'MANAGER' | 'OWNER' | 'ADMINISTRATOR';
+
+export interface TenantMembership {
+  id?: string;
+  tenantId: string;
+  uid: string;
+  personId: string;
+  personType: TenantPersonType;
+  role?: string;
+  outletIds: string[];
+  // A specifically authorised manager can manage every current and future
+  // outlet in this tenant. This is not implied by the Manager role.
+  allOutlets?: boolean;
+  active: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface TenantContext {
+  tenantId: string;
+  membershipId: string;
+  personId: string;
+  personType: TenantPersonType;
+  role?: string;
+  outletIds: string[];
+  allOutlets?: boolean;
 }
 
 export interface AppConfig {
@@ -24,6 +57,7 @@ export interface AppConfig {
 
 export interface Store {
   id?: string;
+  tenantId?: string;
   outletId: string;
   name: string;
   address?: string;
@@ -37,6 +71,7 @@ export interface Store {
 // --- MODULE: DAILY MANAGER OVERVIEW ---
 export interface ManagerAction {
   id?: string;
+  tenantId?: string;
   title: string;
   details?: string;
   outletId: string | 'ALL';
@@ -129,6 +164,7 @@ export interface PracticalCriterion {
 
 export interface TrainingModule {
   id?: string;
+  tenantId?: string;
   versionId?: string;
   title: string;
   description?: string;
@@ -172,6 +208,7 @@ export interface TrainingModule {
 
 export interface TrainingAssignment {
   id?: string;
+  tenantId?: string;
   employeeId: string;
   employeeUid: string;
   employeeName: string;
@@ -208,8 +245,8 @@ export interface TrainingPracticeAttempt { id: string; trainerId: string; traine
 export interface TrainingQuizResult { attempt: number; score: number; passed: boolean; submittedAt: any; }
 export interface TrainingPracticalAssessment { assessorId: string; assessorName: string; assessedAt: any; score: number; result: 'PASSED' | 'RETRAINING_REQUIRED'; criticalFailure: boolean; criteria: Array<{ criterionId: string; outcome: 'MEETS_STANDARD' | 'NEEDS_IMPROVEMENT' | 'NOT_DEMONSTRATED' | 'CRITICAL_FAILURE' | 'NOT_APPLICABLE'; comment?: string; }>; managerComment?: string; evidence?: TrainingEvidence[]; }
 
-export interface TrainingCertification { id?: string; assignmentId: string; employeeId: string; employeeUid: string; employeeName: string; outletId: string; role?: string; moduleId: string; moduleVersionId: string; moduleTitle: string; moduleVersion: number; assessmentResult: 'PASSED'; score?: number; criticalFailures: string[]; certifyingManagerId: string; certifyingManagerName: string; certificationDate: any; expiryDate?: any; evidence?: TrainingEvidence[]; managerNotes?: string; employeeAcknowledgedAt?: any; }
-export interface TrainingAuditEvent { id?: string; actorId: string; actorName?: string; action: string; employeeId?: string; employeeName?: string; moduleId: string; moduleVersionId?: string; outletId?: string; previousStatus?: TrainingAssignmentStatus; newStatus?: TrainingAssignmentStatus; notes?: string; createdAt: any; }
+export interface TrainingCertification { id?: string; tenantId?: string; assignmentId: string; employeeId: string; employeeUid: string; employeeName: string; outletId: string; role?: string; moduleId: string; moduleVersionId: string; moduleTitle: string; moduleVersion: number; assessmentResult: 'PASSED'; score?: number; criticalFailures: string[]; certifyingManagerId: string; certifyingManagerName: string; certificationDate: any; expiryDate?: any; evidence?: TrainingEvidence[]; managerNotes?: string; employeeAcknowledgedAt?: any; }
+export interface TrainingAuditEvent { id?: string; tenantId?: string; actorId: string; actorName?: string; action: string; employeeId?: string; employeeName?: string; moduleId: string; moduleVersionId?: string; outletId?: string; previousStatus?: TrainingAssignmentStatus; newStatus?: TrainingAssignmentStatus; notes?: string; createdAt: any; }
 
 export interface RoleDef {
   id?: string;
@@ -230,6 +267,7 @@ export interface CrewDocument {
 
 export interface CrewMember {
   id?: string;
+  tenantId?: string;
   authUid?: string; // LINK TO FIREBASE AUTH
   crewName: string;
   crewCode: string;
@@ -267,6 +305,7 @@ export interface CrewDirectoryEntry {
 // --- MODULE: SHIFTS ---
 export interface Shift {
   id?: string;
+  tenantId?: string;
   name: string; 
   startTime: string; 
   endTime: string; 
@@ -276,6 +315,7 @@ export interface Shift {
 
 export interface CafeHoliday {
   id?: string;
+  tenantId?: string;
   name: string;
   date: string; 
   outletId: string; 
@@ -294,6 +334,7 @@ export interface ShiftAssignment {
   date: string; 
   isDayOff?: boolean; 
   isPilot?: boolean; 
+  tenantId?: string;
 }
 
 // --- VISUAL ASSETS ---
@@ -316,6 +357,7 @@ export interface OrderItem {
 
 export interface OrderValidation {
   id?: string;
+  tenantId?: string;
   orderId: string;
   customerName: string;
   customerOrderCount?: number; 
@@ -360,6 +402,7 @@ export interface TaskTemplate {
   proofType: TaskProofType;
   proofTypes?: TaskProofType[];
   proofPhotoCount?: number; // How many photos are required when PHOTO proof is selected (default 1)
+  tenantId?: string;
 }
 
 export interface Task {
@@ -379,6 +422,7 @@ export interface Task {
   proofPhotoCount?: number; // How many photos are required when PHOTO proof is selected (default 1)
   isActive: boolean;
   createdAt?: any;
+  tenantId?: string;
 }
 
 export interface TaskLog {
@@ -394,6 +438,7 @@ export interface TaskLog {
   proofType: TaskProofType;
   proofData?: { type: TaskProofType; value: string | string[] }[];
   status: 'completed' | 'late';
+  tenantId?: string;
 }
 
 export interface TaskConfig {
@@ -421,6 +466,7 @@ export interface AttendanceLog {
   type: 'CHECK_IN' | 'CHECK_OUT';
   method: 'FACE' | 'QR' | 'PIN' | 'QR_SCAN';
   photoUrl?: string;
+  tenantId?: string;
 }
 
 export interface LeaveRequest {
@@ -434,11 +480,13 @@ export interface LeaveRequest {
   reason: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   appliedAt: any;
+  tenantId?: string;
 }
 
 // --- MODULE: EMPLOYEE OF THE MONTH (EOM) ---
 export interface EOMCycle {
   id: string; // YYYY-MM
+  tenantId?: string;
   monthName: string;
   status: 'OPEN' | 'VOTING' | 'SCORING' | 'COMPLETED';
   winnerId?: string;
@@ -448,6 +496,7 @@ export interface EOMCycle {
 
 export interface EOMVote {
   id?: string;
+  tenantId?: string;
   cycleId: string;
   voterId: string;
   nomineeId: string;
@@ -456,6 +505,7 @@ export interface EOMVote {
 
 export interface EOMScore {
   id?: string;
+  tenantId?: string;
   cycleId: string;
   nomineeId: string;
   score: number; // 1-10
@@ -475,6 +525,7 @@ export interface EOMResult {
 // --- MODULE: LOGIN ACTIVITY ---
 export interface LoginLog {
   id?: string;
+  tenantId?: string;
   userId: string;        // Firebase Auth UID
   dbId?: string;         // Firestore document ID of the crew/manager profile
   userName: string;

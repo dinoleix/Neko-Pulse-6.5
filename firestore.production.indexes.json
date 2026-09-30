@@ -1,0 +1,32 @@
+{
+  "indexes": [
+    {"collectionGroup":"stores","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"outletId","order":"ASCENDING"}]},
+    {"collectionGroup":"crew","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"crewCode","order":"ASCENDING"},{"fieldPath":"active","order":"ASCENDING"}]},
+    {"collectionGroup":"tasks","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"tasks","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"isActive","order":"ASCENDING"}]},
+    {"collectionGroup":"taskTemplates","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"title","order":"ASCENDING"}]},
+    {"collectionGroup":"taskLogs","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"completedAt","order":"ASCENDING"}]},
+    {"collectionGroup":"taskLogs","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"outletId","order":"ASCENDING"},{"fieldPath":"completedAt","order":"ASCENDING"}]},
+    {"collectionGroup":"attendanceLogs","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"timestamp","order":"DESCENDING"}]},
+    {"collectionGroup":"attendanceLogs","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"crewId","order":"ASCENDING"},{"fieldPath":"timestamp","order":"DESCENDING"}]},
+    {"collectionGroup":"leaveRequests","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"appliedAt","order":"DESCENDING"}]},
+    {"collectionGroup":"leaveRequests","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"crewId","order":"ASCENDING"},{"fieldPath":"appliedAt","order":"DESCENDING"}]},
+    {"collectionGroup":"shiftAssignments","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"date","order":"ASCENDING"}]},
+    {"collectionGroup":"shiftAssignments","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"crewId","order":"ASCENDING"}]},
+    {"collectionGroup":"validations","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"outletId","order":"ASCENDING"},{"fieldPath":"validatedAt","order":"DESCENDING"}]},
+    {"collectionGroup":"validations","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"validatedByCrewId","order":"ASCENDING"},{"fieldPath":"validatedAt","order":"DESCENDING"}]},
+    {"collectionGroup":"loginLogs","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"timestamp","order":"DESCENDING"}]},
+    {"collectionGroup":"managerActions","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"eom_cycles","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"}]},
+    {"collectionGroup":"eom_votes","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"cycleId","order":"ASCENDING"},{"fieldPath":"voterId","order":"ASCENDING"}]},
+    {"collectionGroup":"eom_scores","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"cycleId","order":"ASCENDING"}]},
+    {"collectionGroup":"trainingAssignments","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"employeeUid","order":"ASCENDING"}]},
+    {"collectionGroup":"trainingAssignments","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"outletId","order":"ASCENDING"}]},
+    {"collectionGroup":"trainingAssignments","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"moduleId","order":"ASCENDING"}]},
+    {"collectionGroup":"trainingCertifications","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"employeeUid","order":"ASCENDING"}]},
+    {"collectionGroup":"trainingCertifications","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"outletId","order":"ASCENDING"}]},
+    {"collectionGroup":"trainingAudit","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"trainingAudit","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"employeeId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]}
+  ],
+  "fieldOverrides": []
+}

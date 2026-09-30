@@ -4,6 +4,7 @@ import { auth, db } from '../firebaseConfig';
 import { Button, Input, Card } from './SharedComponents';
 import { CurrentUser, UserRole, CrewMember } from '../types';
 import { loginLogService } from '../services/loginLogService';
+import { isTenantModeEnabled, tenantService } from '../services/tenantService';
 import { Coffee, Lock, User } from 'lucide-react';
 
 interface LoginViewProps {
@@ -69,6 +70,28 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
          throw new Error("Account is inactive. Please contact your administrator.");
       }
 
+      // A valid crew PIN is only the authentication step. In tenant mode the
+      // session must also resolve its active business membership; otherwise a
+      // crew member could receive a legacy, unscoped session after sign-in.
+      if (isTenantModeEnabled) {
+        const tenantUser = await tenantService.resolveCurrentUser(uid, userCred.user.email || undefined);
+        if (!tenantUser || tenantUser.role !== UserRole.CREW) {
+          await auth.signOut();
+          throw new Error('No active business membership was found for this staff account.');
+        }
+        loginLogService.record({
+          userId: uid,
+          dbId,
+          userName: tenantUser.name || userProfile.crewName,
+          role: 'CREW',
+          accessRole: tenantUser.accessRole,
+          outletId: tenantUser.outletId,
+          loginMethod: 'STAFF_CODE',
+        });
+        onLogin(tenantUser);
+        return;
+      }
+
       loginLogService.record({
         userId: uid,
         dbId: dbId,
@@ -108,6 +131,28 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
       
       if (userCredential.user) {
         const uid = userCredential.user.uid;
+
+        // The sandbox tenant path resolves a signed-in account through its
+        // membership instead of assuming every email login is a global
+        // manager. This remains feature-flagged until production cutover.
+        if (isTenantModeEnabled) {
+          const tenantUser = await tenantService.resolveCurrentUser(uid, userCredential.user.email || undefined);
+          if (!tenantUser) {
+            await auth.signOut();
+            throw new Error('No active business membership was found for this account.');
+          }
+          loginLogService.record({
+            userId: uid,
+            dbId: tenantUser.dbId,
+            userName: tenantUser.name,
+            role: 'ADMIN',
+            accessRole: tenantUser.accessRole,
+            outletId: tenantUser.outletId,
+            loginMethod: 'MANAGER_EMAIL',
+          });
+          onLogin(tenantUser);
+          return;
+        }
         
         // STRICT CHECK: MANAGERS COLLECTION ONLY
         let managerDoc = await db.collection('managers').doc(uid).get();

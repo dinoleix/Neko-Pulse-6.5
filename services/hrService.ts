@@ -1,11 +1,14 @@
 
 import { db, storage } from '../firebaseConfig';
 import { CrewMember, CrewDocument } from '../types';
+import { getCachedSettingsDoc, getSettingsDocRef, invalidateSettingsDoc } from './configCache';
+import { currentTenantId, withTenant } from './tenantScope';
 
 export const hrService = {
     // --- CREW ---
     getActiveCrew: async (): Promise<CrewMember[]> => {
-        const snap = await db.collection('crew').where('active', '==', true).get();
+        const tenantId = await currentTenantId();
+        const snap = await withTenant(db.collection('crew').where('active', '==', true), tenantId).get();
         return snap.docs.map(d => ({ ...d.data(), id: d.id } as CrewMember));
     },
 
@@ -15,7 +18,11 @@ export const hrService = {
 
     // --- DOCUMENTS ---
     uploadDocument: async (file: File, crewId: string, docType: string): Promise<CrewDocument> => {
-        const ref = storage.ref(`hr_docs/${crewId}/${Date.now()}_${file.name}`);
+        const tenantId = await currentTenantId();
+        const path = tenantId
+            ? `hr_docs/${tenantId}/${crewId}/${Date.now()}_${file.name}`
+            : `hr_docs/${crewId}/${Date.now()}_${file.name}`;
+        const ref = storage.ref(path);
         await ref.put(file);
         return {
             id: Date.now().toString(),
@@ -28,34 +35,38 @@ export const hrService = {
 
     // --- SETTINGS (LOGO) ---
     getCompanyLogo: async (): Promise<string> => {
-        const snap = await db.collection('settings').doc('companyLogo').get();
-        return snap.exists ? snap.data()?.url || '' : '';
+        return ((await getCachedSettingsDoc('companyLogo')) as { url?: string } | null)?.url || '';
     },
 
     uploadCompanyLogo: async (file: File): Promise<string> => {
-        const ref = storage.ref(`settings/company_logo_${Date.now()}`);
+        const tenantId = await currentTenantId();
+        const path = tenantId ? `settings/${tenantId}/company_logo_${Date.now()}` : `settings/company_logo_${Date.now()}`;
+        const ref = storage.ref(path);
         await ref.put(file);
         const url = await ref.getDownloadURL();
-        await db.collection('settings').doc('companyLogo').set({ url });
+        await (await getSettingsDocRef('companyLogo')).set({ url });
+        invalidateSettingsDoc('companyLogo');
         return url;
     },
 
     // --- SETTINGS (TEMPLATES & CONFIG) ---
     getTemplates: async () => {
-        const snap = await db.collection('settings').doc('hrTemplates').get();
-        return snap.exists ? snap.data() : {};
+        return (await getCachedSettingsDoc('hrTemplates')) || {};
     },
 
     saveTemplates: async (templates: any) => {
-        return await db.collection('settings').doc('hrTemplates').set(templates, { merge: true });
+        const res = await (await getSettingsDocRef('hrTemplates')).set(templates, { merge: true });
+        invalidateSettingsDoc('hrTemplates');
+        return res;
     },
 
     getLetterheadConfig: async () => {
-        const snap = await db.collection('settings').doc('hrConfig').get();
-        return snap.exists ? snap.data() : null;
+        return await getCachedSettingsDoc('hrConfig');
     },
 
     saveLetterheadConfig: async (config: any) => {
-        return await db.collection('settings').doc('hrConfig').set(config);
+        const res = await (await getSettingsDocRef('hrConfig')).set(config);
+        invalidateSettingsDoc('hrConfig');
+        return res;
     }
 };

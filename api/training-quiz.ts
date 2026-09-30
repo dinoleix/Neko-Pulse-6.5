@@ -28,11 +28,26 @@ export default async function handler(req: any, res: any) {
     const assignmentSnap = await assignmentRef.get();
     if (!assignmentSnap.exists || assignmentSnap.data()?.employeeUid !== user.uid) return send(res, 403, { error: 'This training assignment is not yours.' });
     const assignment = assignmentSnap.data()!;
+    const tenantMode = process.env.TENANT_MODE === 'sandbox' || process.env.TENANT_MODE === 'enabled';
+    const tenantId = String(assignment.tenantId || '');
+    if (tenantMode) {
+      if (!tenantId) return send(res, 403, { error: 'This training assignment is not linked to a business.' });
+      const membership = await db.collection('tenantMemberships')
+        .where('uid', '==', user.uid)
+        .where('tenantId', '==', tenantId)
+        .where('active', '==', true)
+        .limit(1)
+        .get();
+      if (membership.empty) return send(res, 403, { error: 'This training assignment is not yours.' });
+    }
     const [moduleSnap, keySnap] = await Promise.all([
       db.collection('trainingModules').doc(assignment.moduleId).get(),
       db.collection('trainingAssessmentKeys').doc(assignment.moduleVersionId).get(),
     ]);
-    if (!moduleSnap.exists || moduleSnap.data()?.status !== 'PUBLISHED' || !keySnap.exists) return send(res, 409, { error: 'This assessment is unavailable.' });
+    if (!moduleSnap.exists || moduleSnap.data()?.status !== 'PUBLISHED' || !keySnap.exists
+      || (tenantMode && (moduleSnap.data()?.tenantId !== tenantId || keySnap.data()?.tenantId !== tenantId))) {
+      return send(res, 409, { error: 'This assessment is unavailable.' });
+    }
     const module = moduleSnap.data()!;
     const previous = Array.isArray(assignment.quizResults) ? assignment.quizResults : [];
     if (previous.length >= (module.quizAttemptLimit || 2)) return send(res, 429, { error: 'No quiz attempts remain. Please speak with your manager.' });
@@ -49,8 +64,7 @@ export default async function handler(req: any, res: any) {
     const result = { attempt: previous.length + 1, score, passed, submittedAt: Timestamp.now() };
     const nextStatus = passed ? (module.practicalTestRequired ? 'ASSESSMENT_PENDING' : 'PASSED') : 'LEARNING';
     await assignmentRef.update({ quizResults: [...previous, result], status: nextStatus, updatedAt: FieldValue.serverTimestamp() });
-    const tenantId = String(process.env.LEGACY_TENANT_ID || '').trim();
-    await db.collection('trainingAudit').add({ actorId: user.uid, action: 'KNOWLEDGE_TESTED', employeeId: assignment.employeeId, employeeName: assignment.employeeName, moduleId: assignment.moduleId, moduleVersionId: assignment.moduleVersionId, outletId: assignment.outletId, previousStatus: assignment.status, newStatus: nextStatus, notes: `Quiz attempt ${result.attempt}: ${score}%`, createdAt: FieldValue.serverTimestamp(), ...(tenantId ? { tenantId } : {}) });
+    await db.collection('trainingAudit').add({ ...(tenantMode ? { tenantId } : {}), actorId: user.uid, action: 'KNOWLEDGE_TESTED', employeeId: assignment.employeeId, employeeName: assignment.employeeName, moduleId: assignment.moduleId, moduleVersionId: assignment.moduleVersionId, outletId: assignment.outletId, previousStatus: assignment.status, newStatus: nextStatus, notes: `Quiz attempt ${result.attempt}: ${score}%`, createdAt: FieldValue.serverTimestamp() });
     return send(res, 200, { score, passed, attemptsRemaining: Math.max(0, (module.quizAttemptLimit || 2) - result.attempt), status: nextStatus });
   } catch (error: any) {
     console.error('Training quiz endpoint failed:', error?.message || error);

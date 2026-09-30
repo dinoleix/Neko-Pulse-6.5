@@ -142,6 +142,10 @@ export const AttendanceCrewView: React.FC<{ currentUser: CurrentUser }> = ({ cur
            console.log("QR Data detected:", data);
            const payload = JSON.parse(data);
            if (payload.type === 'NEKO_KIOSK_AUTH' && payload.timestamp) {
+               if (currentUser.tenantId && payload.tenantId !== currentUser.tenantId) {
+                   setScanStatus('This kiosk belongs to another business.');
+                   return;
+               }
                if (Math.abs(Date.now() - payload.timestamp) > 60000) {
                    setScanStatus("Expired QR. Refresh Kiosk.");
                    return;
