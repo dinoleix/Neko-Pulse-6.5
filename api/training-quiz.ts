@@ -49,7 +49,8 @@ export default async function handler(req: any, res: any) {
     const result = { attempt: previous.length + 1, score, passed, submittedAt: Timestamp.now() };
     const nextStatus = passed ? (module.practicalTestRequired ? 'ASSESSMENT_PENDING' : 'PASSED') : 'LEARNING';
     await assignmentRef.update({ quizResults: [...previous, result], status: nextStatus, updatedAt: FieldValue.serverTimestamp() });
-    await db.collection('trainingAudit').add({ actorId: user.uid, action: 'KNOWLEDGE_TESTED', employeeId: assignment.employeeId, employeeName: assignment.employeeName, moduleId: assignment.moduleId, moduleVersionId: assignment.moduleVersionId, outletId: assignment.outletId, previousStatus: assignment.status, newStatus: nextStatus, notes: `Quiz attempt ${result.attempt}: ${score}%`, createdAt: FieldValue.serverTimestamp() });
+    const tenantId = String(process.env.LEGACY_TENANT_ID || '').trim();
+    await db.collection('trainingAudit').add({ actorId: user.uid, action: 'KNOWLEDGE_TESTED', employeeId: assignment.employeeId, employeeName: assignment.employeeName, moduleId: assignment.moduleId, moduleVersionId: assignment.moduleVersionId, outletId: assignment.outletId, previousStatus: assignment.status, newStatus: nextStatus, notes: `Quiz attempt ${result.attempt}: ${score}%`, createdAt: FieldValue.serverTimestamp(), ...(tenantId ? { tenantId } : {}) });
     return send(res, 200, { score, passed, attemptsRemaining: Math.max(0, (module.quizAttemptLimit || 2) - result.attempt), status: nextStatus });
   } catch (error: any) {
     console.error('Training quiz endpoint failed:', error?.message || error);

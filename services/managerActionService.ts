@@ -1,5 +1,6 @@
 import { db, firebase } from '../firebaseConfig';
 import { ManagerAction } from '../types';
+import { withLegacyTenant } from './legacyTenantWrite';
 
 const COLLECTION = 'managerActions';
 
@@ -10,10 +11,10 @@ export const managerActionService = {
   },
 
   create: async (action: Omit<ManagerAction, 'id' | 'createdAt'>) => {
-    return db.collection(COLLECTION).add({
+    return db.collection(COLLECTION).add(withLegacyTenant({
       ...action,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
+    }));
   },
 
   saveUpdate: async (id: string, note: string, userId: string, userName: string) => {

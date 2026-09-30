@@ -1,6 +1,7 @@
 
 import { db, storage, firebase, firebaseConfig } from '../firebaseConfig';
 import { CrewMember, CrewDirectoryEntry, RoleDef } from '../types';
+import { withLegacyTenant } from './legacyTenantWrite';
 
 // Extract the public-safe fields mirrored into /crewDirectory. Only fields
 // present on the partial are included, so merge-writes never blank a value.
@@ -61,7 +62,7 @@ export const employeeService = {
         for (let index = 0; index < entries.length; index += 400) {
             const batch = db.batch();
             entries.slice(index, index + 400).forEach(([collection, item]) => {
-                batch.set(db.collection(collection).doc(item.authUid!), { ...item, id: firebase.firestore.FieldValue.delete() }, { merge: true });
+                batch.set(db.collection(collection).doc(item.authUid!), withLegacyTenant({ ...item, id: firebase.firestore.FieldValue.delete() }), { merge: true });
                 repaired++;
             });
             if (entries.slice(index, index + 400).length) await batch.commit();
@@ -94,15 +95,15 @@ export const employeeService = {
     saveCrew: async (data: Partial<CrewMember>, id?: string) => {
         let docId = id;
         if (id) {
-            await db.collection('crew').doc(id).set(data, { merge: true });
+            await db.collection('crew').doc(id).set(withLegacyTenant(data), { merge: true });
         } else if (data.authUid) {
             docId = data.authUid;
-            await db.collection('crew').doc(data.authUid).set(data, { merge: true });
+            await db.collection('crew').doc(data.authUid).set(withLegacyTenant(data), { merge: true });
         } else {
-            const ref = await db.collection('crew').add(data);
+            const ref = await db.collection('crew').add(withLegacyTenant(data));
             docId = ref.id;
         }
-        await db.collection('crewDirectory').doc(docId!).set(directoryFields(data), { merge: true });
+        await db.collection('crewDirectory').doc(docId!).set(withLegacyTenant(directoryFields(data)), { merge: true });
     },
 
     deleteCrew: async (id: string) => {
@@ -118,13 +119,13 @@ export const employeeService = {
 
     saveManager: async (data: Partial<CrewMember>, id?: string) => {
         if (id) {
-            return await db.collection('managers').doc(id).set(data, { merge: true });
+            return await db.collection('managers').doc(id).set(withLegacyTenant(data), { merge: true });
         } else {
             // Managers MUST have an authUid (email login)
             if (data.authUid) {
-                return await db.collection('managers').doc(data.authUid).set(data, { merge: true });
+                return await db.collection('managers').doc(data.authUid).set(withLegacyTenant(data), { merge: true });
             }
-            return await db.collection('managers').add(data);
+            return await db.collection('managers').add(withLegacyTenant(data));
         }
     },
 
@@ -139,7 +140,7 @@ export const employeeService = {
     },
 
     addRole: async (name: string) => {
-        return await db.collection('roles').add({ name });
+        return await db.collection('roles').add(withLegacyTenant({ name }));
     },
 
     deleteRole: async (id: string) => {

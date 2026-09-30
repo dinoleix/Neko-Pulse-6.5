@@ -2,6 +2,7 @@
 import { db, storage } from '../firebaseConfig';
 import { Store, AppConfig } from '../types';
 import { getCachedSettingsDoc, invalidateSettingsDoc } from './configCache';
+import { withLegacyTenant } from './legacyTenantWrite';
 
 export const storeService = {
   // --- STORES ---
@@ -22,7 +23,7 @@ export const storeService = {
     new Set((await storeService.getActiveStores()).map(store => store.outletId)),
 
   addStore: async (store: Partial<Store>) => {
-    return await db.collection('stores').add({ ...store, isActive: store.isActive ?? true });
+    return await db.collection('stores').add(withLegacyTenant({ ...store, isActive: store.isActive ?? true }));
   },
 
   updateStore: async (id: string, data: Partial<Store>) => {

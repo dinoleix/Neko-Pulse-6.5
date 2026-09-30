@@ -1,6 +1,7 @@
 import { db, firebase, storage } from '../firebaseConfig';
 import { CrewMember, TrainingAssignment, TrainingAuditEvent, TrainingCertification, TrainingModule, TrainingQuizAnswerKey } from '../types';
 import { canAssignModule, canCertifyAssignment, isTrainingEligible, versionSnapshotId } from './trainingPolicy';
+import { withLegacyTenant } from './legacyTenantWrite';
 
 const MODULES = 'trainingModules';
 const ASSIGNMENTS = 'trainingAssignments';
@@ -26,7 +27,7 @@ const withoutUndefined = (value: any): any => {
 };
 
 const audit = async (event: Omit<TrainingAuditEvent, 'id' | 'createdAt'>) =>
-  db.collection(AUDIT).add({ ...event, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  db.collection(AUDIT).add(withLegacyTenant({ ...event, createdAt: firebase.firestore.FieldValue.serverTimestamp() }));
 
 export const trainingService = {
   uploadTrainingVideo: async (moduleId: string, file: File) => {
@@ -66,12 +67,12 @@ export const trainingService = {
       archivedAt: module.status === 'ARCHIVED' ? now : module.archivedAt,
     };
     const batch = db.batch();
-    const storedPayload = withoutUndefined(payload);
+    const storedPayload = withLegacyTenant(withoutUndefined(payload));
     batch.set(db.collection(MODULES).doc(moduleId), storedPayload);
     // Immutable snapshot keeps assignment history attached to the exact content.
     batch.set(db.collection(`${MODULES}/${moduleId}/versions`).doc(versionId), storedPayload);
     // Answer keys are deliberately not included in module or version payloads.
-    batch.set(db.collection(KEYS).doc(versionId), { moduleId, versionId, answers: answerKeys, updatedAt: now, updatedBy: actorId });
+    batch.set(db.collection(KEYS).doc(versionId), withLegacyTenant({ moduleId, versionId, answers: answerKeys, updatedAt: now, updatedBy: actorId }));
     await batch.commit();
     await audit({ actorId, actorName, action: previous?.exists ? 'MODULE_VERSION_CREATED' : 'MODULE_CREATED', moduleId, moduleVersionId: versionId, notes: module.changeSummary });
     return payload;
@@ -129,13 +130,13 @@ export const trainingService = {
     let batch = db.batch(); let count = 0;
     newAssignments.forEach(employee => {
       const ref = db.collection(ASSIGNMENTS).doc();
-      batch.set(ref, {
+      batch.set(ref, withLegacyTenant({
         employeeId: employee.id, employeeUid: employee.authUid || employee.id, employeeName: employee.crewName, employeeRole: employee.role,
         outletId: employee.outletId, moduleId: module.id, moduleVersionId: module.versionId, moduleTitle: module.title, track: module.track, trainingFormat: module.trainingFormat || 'PRACTICAL',
         mandatory: options.mandatory ?? module.mandatory, assignmentType: options.assignmentType || 'INITIAL', reason: options.reason || '',
         assignedBy: actorId, assignedByName: actorName, assignedAt: firebase.firestore.FieldValue.serverTimestamp(), dueDate: options.dueDate || '',
         status: 'ASSIGNED', completedLessonIds: [], supervisedAttempts: [], quizResults: [], updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      } as TrainingAssignment);
+      } as TrainingAssignment));
       count++;
       if (count === 400) { batches.push(batch); batch = db.batch(); count = 0; }
     });
@@ -151,11 +152,11 @@ export const trainingService = {
     if (assignment.status === 'CERTIFIED' || assignment.certificationId) throw new Error('Certified training cannot be revoked. Keep its historical record instead.');
     const batch = db.batch();
     batch.delete(db.collection(ASSIGNMENTS).doc(assignment.id));
-    batch.set(db.collection(AUDIT).doc(), {
+    batch.set(db.collection(AUDIT).doc(), withLegacyTenant({
       actorId, actorName, action: 'ASSIGNMENT_REVOKED', employeeId: assignment.employeeId, employeeName: assignment.employeeName,
       moduleId: assignment.moduleId, moduleVersionId: assignment.moduleVersionId, outletId: assignment.outletId,
       previousStatus: assignment.status, notes: reason.trim(), createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
+    }));
     await batch.commit();
   },
 
@@ -177,7 +178,7 @@ export const trainingService = {
     const expiry = module.certificationValidityDays ? new Date(certifiedAt.getTime() + module.certificationValidityDays * 86400000) : null;
     const certification: TrainingCertification = { assignmentId: assignment.id!, employeeId: assignment.employeeId, employeeUid: assignment.employeeUid, employeeName: assignment.employeeName, outletId: assignment.outletId, role: assignment.employeeRole, moduleId: assignment.moduleId, moduleVersionId: assignment.moduleVersionId, moduleTitle: assignment.moduleTitle, moduleVersion: module.version, assessmentResult: 'PASSED', score: assessment?.score, criticalFailures: [], certifyingManagerId: actorId, certifyingManagerName: actorName, certificationDate: firebase.firestore.FieldValue.serverTimestamp(), ...(expiry ? { expiryDate: firebase.firestore.Timestamp.fromDate(expiry) } : {}), ...(notes?.trim() ? { managerNotes: notes.trim() } : {}) };
     const batch = db.batch();
-    batch.set(certificationRef, certification);
+    batch.set(certificationRef, withLegacyTenant(certification));
     batch.update(db.collection(ASSIGNMENTS).doc(assignment.id!), { status: 'CERTIFIED', certifiedAt: firebase.firestore.FieldValue.serverTimestamp(), certificationId: certificationRef.id, managerFeedback: notes || assignment.managerFeedback || '', updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
     await batch.commit();
     await audit({ actorId, actorName, action: 'CERTIFIED', employeeId: assignment.employeeId, employeeName: assignment.employeeName, moduleId: assignment.moduleId, moduleVersionId: assignment.moduleVersionId, outletId: assignment.outletId, previousStatus: assignment.status, newStatus: 'CERTIFIED', notes });

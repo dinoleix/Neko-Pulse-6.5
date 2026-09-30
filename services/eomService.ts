@@ -1,6 +1,7 @@
 
 import { db, firebase } from '../firebaseConfig';
 import { EOMCycle, CrewMember, CrewDirectoryEntry, EOMVote, EOMScore, EOMResult } from '../types';
+import { withLegacyTenant } from './legacyTenantWrite';
 
 export const eomService = {
     // --- CYCLES ---
@@ -30,7 +31,7 @@ export const eomService = {
     },
 
     createCycle: async (cycle: EOMCycle) => {
-        return await db.collection('eom_cycles').doc(cycle.id).set(cycle);
+        return await db.collection('eom_cycles').doc(cycle.id).set(withLegacyTenant(cycle));
     },
 
     updateCycleStatus: async (id: string, status: EOMCycle['status']) => {
@@ -63,12 +64,12 @@ export const eomService = {
     castVote: async (cycleId: string, voterId: string, nomineeId: string) => {
         // Deterministic ID + create-only rules = one vote per person per
         // cycle, enforced server-side. A second cast is permission-denied.
-        return await db.collection('eom_votes').doc(`${cycleId}_${voterId}`).set({
+        return await db.collection('eom_votes').doc(`${cycleId}_${voterId}`).set(withLegacyTenant({
             cycleId,
             voterId,
             nomineeId,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        }));
     },
 
     // altId: legacy votes may be stored under the crew doc ID instead of the
@@ -98,12 +99,12 @@ export const eomService = {
     // --- SCORES ---
     saveMgmtScore: async (cycleId: string, nomineeId: string, score: number) => {
         const docId = `${cycleId}_${nomineeId}`;
-        return await db.collection('eom_scores').doc(docId).set({
+        return await db.collection('eom_scores').doc(docId).set(withLegacyTenant({
             cycleId,
             nomineeId,
             score,
             managerId: 'ADMIN_OVERRIDE' // Simplification for now
-        });
+        }));
     },
 
     getScoresForCycle: async (cycleId: string): Promise<EOMScore[]> => {

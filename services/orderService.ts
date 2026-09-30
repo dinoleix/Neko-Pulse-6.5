@@ -2,6 +2,7 @@
 import { db, storage, firebase } from '../firebaseConfig';
 import { OrderValidation } from '../types';
 import { storeService } from './storeService';
+import { withLegacyTenant } from './legacyTenantWrite';
 
 export const orderService = {
     // --- ADMIN: FETCHING ---
@@ -20,10 +21,10 @@ export const orderService = {
 
     // --- CREW: SUBMISSION ---
     saveValidation: async (data: Omit<OrderValidation, 'id'>) => {
-        return await db.collection('validations').add({
+        return await db.collection('validations').add(withLegacyTenant({
             ...data,
             validatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        }));
     },
 
     uploadProof: async (blob: Blob): Promise<string> => {
