@@ -50,6 +50,14 @@ service cloud.firestore {
 
     match /{document=**} { allow read, write: if false; }
 
+    // Compatibility bridge for the tenant-mode preview. A signed-in person
+    // can resolve only their own pre-migrated membership; all existing module
+    // rules remain unchanged until the separate tenant-rule cutover.
+    match /tenantMemberships/{membershipId} {
+      allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
     match /managers/{managerId} {
       allow read: if (isManager() && request.auth.uid == managerId) || canManagePeople();
       allow create, update, delete: if canManagePeople();
