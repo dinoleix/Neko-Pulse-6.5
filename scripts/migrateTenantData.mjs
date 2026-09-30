@@ -186,6 +186,26 @@ const copyCrewDirectory = async () => {
   report.collectionFamilies.crewDirectory = result;
 };
 
+// Role definitions are operational records at the legacy root but are read
+// from the tenant settings namespace after tenant mode is enabled. Preserve
+// their document IDs so existing role references remain stable.
+const copyTenantRoles = async () => {
+  const source = await db.collection('roles').get();
+  const result = { documentCount: source.size, missingDestination: 0, alreadyPresent: 0, copied: 0 };
+  for (const doc of source.docs) {
+    const destination = db.collection('tenantSettings').doc(tenantId).collection('roles').doc(doc.id);
+    const existing = await destination.get();
+    if (existing.exists) { result.alreadyPresent += 1; continue; }
+    result.missingDestination += 1;
+    if (mode === 'apply') {
+      await destination.set({ ...doc.data(), tenantId, tenantMigratedAt: FieldValue.serverTimestamp() });
+      result.copied += 1;
+      report.writes.created += 1;
+    }
+  }
+  report.collectionFamilies.tenantRoles = result;
+};
+
 const applyMemberships = async () => {
   const tenantRef = db.collection('tenants').doc(tenantId);
   const existingTenant = await tenantRef.get();
@@ -229,6 +249,7 @@ if (requested.includes('trainingModules') || !selectedCollections.length) {
 if (!selectedCollections.length || requested.includes('memberships')) await planMemberships();
 if (!selectedCollections.length || requested.includes('settings')) await copySettings();
 if (!selectedCollections.length || requested.includes('crewDirectory')) await copyCrewDirectory();
+if (!selectedCollections.length || requested.includes('roles')) await copyTenantRoles();
 if (mode === 'apply' && (!selectedCollections.length || requested.includes('memberships'))) await applyMemberships();
 
 writeReport();
