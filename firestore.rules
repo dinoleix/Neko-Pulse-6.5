@@ -3,6 +3,14 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function isAuthenticated() { return request.auth != null; }
+    // Compatibility bridge for the tenant-mode preview. This is limited to an
+    // active membership for the exact tenant being read; it does not grant
+    // access to another tenant or to any write.
+    function hasActiveTenantMembership(tenantId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/tenantMemberships/$(tenantId + '_' + request.auth.uid)) &&
+        get(/databases/$(database)/documents/tenantMemberships/$(tenantId + '_' + request.auth.uid)).data.active == true;
+    }
     function isManager() {
       return isAuthenticated() && exists(/databases/$(database)/documents/managers/$(request.auth.uid));
     }
@@ -55,6 +63,24 @@ service cloud.firestore {
     // rules remain unchanged until the separate tenant-rule cutover.
     match /tenantMemberships/{membershipId} {
       allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    // Tenant-mode reads needed by the preview: role definitions, crew
+    // directory, and the same operational configuration readable by staff in
+    // the legacy rules. HR templates/configuration stay excluded.
+    match /tenantSettings/{tenantId}/roles/{roleId} {
+      allow read: if hasActiveTenantMembership(tenantId);
+      allow write: if false;
+    }
+    match /tenantSettings/{tenantId}/crewDirectory/{crewId} {
+      allow read: if hasActiveTenantMembership(tenantId);
+      allow write: if false;
+    }
+    match /tenantSettings/{tenantId}/config/{configId} {
+      allow read: if hasActiveTenantMembership(tenantId) && configId in [
+        'accessConfig', 'appConfig', 'attendanceConfig', 'taskConfig', 'companyLogo'
+      ];
       allow write: if false;
     }
 
