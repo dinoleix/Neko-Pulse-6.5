@@ -138,7 +138,6 @@ service cloud.firestore {
     match /settings/appConfig { allow read: if isStaff(); allow write: if hasManagerAccess('STORES'); }
     match /settings/attendanceConfig { allow read: if isStaff(); allow write: if hasManagerAccess('ATTENDANCE'); }
     match /settings/taskConfig { allow read: if isCrew() || hasManagerAccess('TASKS'); allow write: if hasManagerAccess('TASKS'); }
-    match /settings/recipeConfig { allow read: if isCrew() || hasManagerAccess('RECIPE'); allow write: if hasManagerAccess('RECIPE'); }
     match /settings/hrTemplates { allow read, write: if hasManagerAccess('HR'); }
     match /settings/hrConfig { allow read, write: if hasManagerAccess('HR'); }
 
@@ -150,10 +149,6 @@ service cloud.firestore {
     }
     match /eom_scores/{docId} { allow read: if isCrew() || hasManagerAccess('EOM'); allow write: if hasManagerAccess('EOM'); }
 
-    match /recipes/{recipeId} {
-      allow read: if hasManagerAccess('RECIPE') || (isCrew() && resource.data.isShared == true);
-      allow write: if hasManagerAccess('RECIPE');
-    }
     match /loginLogs/{logId} {
       allow read: if hasManagerAccess('LOGIN_ACTIVITY');
       allow create: if hasManagerAccess('LOGIN_ACTIVITY') || (isCrew() && isOwner('userId'));

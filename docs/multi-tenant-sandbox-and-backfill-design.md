@@ -18,7 +18,7 @@ Use a separate Firebase project and a Vercel preview deployment. It must not sha
 | Vercel environment | Preview environment with Firebase client settings and server credentials for the sandbox only. |
 | Authentication | Synthetic owner, manager, and crew accounts only. Do not copy production passwords or staff identities. |
 | Data | Seeded fixtures only: Green Neko-like tenant plus a second fictitious tenant. |
-| Storage | Sandbox bucket containing non-sensitive sample proof, HR, recipe, and training-video files. |
+| Storage | Sandbox bucket containing non-sensitive sample proof, HR, and training-video files. |
 | Rules | Candidate tenant-aware Firestore and Storage rules, tested with emulator rules tests before sandbox publication. |
 
 ### Minimum test tenants
@@ -63,7 +63,7 @@ The data must intentionally contain similar names, overlapping crew codes, and s
 
 ### Existing operations
 
-- Tasks, proofs, attendance, leave, shifts, reports, recipes, HR documents, and manager actions retain the active tenant.
+- Tasks, proofs, attendance, leave, shifts, reports, HR documents, and manager actions retain the active tenant. Retired Recipe records remain outside the tenant model solely for export and rollback until the NekoMetrics import is verified.
 - A failed query due to a missing tenant index is recorded and resolved in sandbox before production deployment.
 
 ## Green Neko backfill design
@@ -114,7 +114,6 @@ eom_scores
 eom_votes
 loginActivity
 managerActions
-recipes
 ```
 
 Any discovered live collection not in this list must be added to the ledger before the write phase begins.
@@ -192,4 +191,3 @@ Do not delete added `tenantId` fields as an emergency response. Instead, disable
 - Crew codes are unique within a tenant; kiosks also include a locked tenant and outlet to prevent ambiguity.
 - Existing Green Neko asset paths remain readable only through a temporary, verified compatibility route; new uploads use tenant-prefixed paths.
 - A second business is tested in sandbox and Vercel preview before it is created in production.
-

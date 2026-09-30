@@ -2,13 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { CurrentUser, MODULE_IDS, AccessConfig, CrewMember, ShiftAssignment } from '../types';
 import { db, firebase } from '../firebaseConfig';
-import { ClipboardList, CalendarClock, Shield, ArrowRight, Lock, Calendar, Trophy, Gift, PartyPopper, X, Clock, Plane, ShieldCheck, ChefHat, GraduationCap } from 'lucide-react';
+import { ClipboardList, CalendarClock, Shield, ArrowRight, Lock, Calendar, Trophy, Gift, PartyPopper, X, Clock, Plane, ShieldCheck, GraduationCap } from 'lucide-react';
 import { OrderCrewView } from '../modules/crew/orders/OrderCrewView'; 
 import { TaskCrewView } from '../modules/crew/tasks/TaskCrewView'; 
 import { AttendanceCrewView } from '../modules/crew/attendance/AttendanceCrewView'; 
 import { ShiftCrewView } from '../modules/crew/shifts/ShiftCrewView'; 
 import { EOMCrewView } from '../modules/crew/eom/EOMCrewView'; 
-import { RecipeCrewView } from '../modules/crew/recipes/RecipeCrewView';
 import { TrainingCrewView } from '../modules/crew/training/TrainingCrewView';
 import { shiftService } from '../services/shiftService';
 import { getCachedSettingsDoc } from '../services/configCache';
@@ -41,7 +40,6 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
   const [canViewTasks, setCanViewTasks] = useState(true);
   const [canViewShifts, setCanViewShifts] = useState(true);
   const [canViewEOM, setCanViewEOM] = useState(true);
-  const [canViewRecipe, setCanViewRecipe] = useState(false);
   const [canViewTraining, setCanViewTraining] = useState(true);
   
   // Birthday State
@@ -88,7 +86,6 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
                setCanViewOrders(conf[MODULE_IDS.CREW_ORDERS] ? conf[MODULE_IDS.CREW_ORDERS].includes(role) : true);
                setCanViewTasks(conf[MODULE_IDS.CREW_TASKS] ? conf[MODULE_IDS.CREW_TASKS].includes(role) : true);
                setCanViewEOM(conf[MODULE_IDS.CREW_EOM] ? conf[MODULE_IDS.CREW_EOM].includes(role) : true);
-               setCanViewRecipe(conf[MODULE_IDS.CREW_RECIPE] ? conf[MODULE_IDS.CREW_RECIPE].includes(role) : false);
                setCanViewTraining(conf[MODULE_IDS.CREW_TRAINING] ? conf[MODULE_IDS.CREW_TRAINING].includes(role) : true);
             }
 
@@ -167,7 +164,6 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
            {activeTab === 'orders' && (canViewOrders ? <OrderCrewView currentUser={currentUser} /> : <AccessDenied/>)}
            {activeTab === 'shifts' && (canViewShifts ? <ShiftCrewView currentUser={currentUser} /> : <AccessDenied/>)}
            {activeTab === 'eom' && (canViewEOM ? <EOMCrewView currentUser={currentUser} /> : <AccessDenied/>)}
-           {activeTab === 'recipe' && (canViewRecipe ? <RecipeCrewView currentUser={currentUser} /> : <AccessDenied/>)}
            {activeTab === 'training' && (canViewTraining ? <TrainingCrewView currentUser={currentUser} /> : <AccessDenied/>)}
         </div>
      );
@@ -261,9 +257,6 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
           )}
           {canViewEOM && (
              <NavBtn icon={<Trophy/>} label="Awards" active={activeTab === 'eom'} onClick={() => setActiveTab('eom')} color="amber"/>
-          )}
-          {canViewRecipe && (
-             <NavBtn icon={<ChefHat/>} label="Recipes" active={activeTab === 'recipe'} onClick={() => setActiveTab('recipe')} color="teal"/>
           )}
           {canViewTraining && (
              <NavBtn icon={<GraduationCap/>} label="Training" active={activeTab === 'training'} onClick={() => setActiveTab('training')} color="emerald"/>

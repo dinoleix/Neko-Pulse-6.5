@@ -27,11 +27,11 @@ Phase 1 is planning and inventory only. It makes no Firebase, Vercel, GitHub, or
 | Tasks and daily operations | `tasks`, `taskLogs`, `taskTemplates`, `validations`, `settings/taskConfig` | Add `tenantId`; tenant-scope every task query, task proof, validation, and template. |
 | Training | `trainingModules`, `trainingAssignments`, `trainingAssessmentKeys`, `trainingAudit`, `trainingCertifications` | Add `tenantId`; preserve module, assignment, certification, and audit history IDs and versions. |
 | People operations | `leaveRequests`, `eom_cycles`, `eom_scores`, `eom_votes`, `settings/hrConfig`, `settings/hrTemplates` | Add `tenantId`; scope manager reports and employee records. |
-| Configuration and assets | `settings` documents, `recipeConfig`, `companyLogo` | Move tenant-owned configuration to tenant-specific configuration documents, while retaining a controlled legacy read path during migration. |
+| Configuration and assets | `settings` documents and `companyLogo` | Move tenant-owned configuration to tenant-specific configuration documents, while retaining a controlled legacy read path during migration. Retired Recipe records are excluded from the tenant model and retained only for export and rollback. |
 
 ### Current configuration documents
 
-The existing root `settings` collection includes: `companyLogo`, `accessConfig`, `appConfig`, `attendanceConfig`, `taskConfig`, `recipeConfig`, `hrTemplates`, and `hrConfig`.
+The existing root `settings` collection includes: `companyLogo`, `accessConfig`, `appConfig`, `attendanceConfig`, `taskConfig`, `hrTemplates`, and `hrConfig`.
 
 These documents are global today. Their replacement model should be:
 
@@ -54,7 +54,6 @@ Current global paths include:
 ```
 proofs/{fileName}
 employees/{fileName}
-recipes/{fileName}
 stores/certs/{fileName}
 hr_docs/{crewId}/{fileName}
 training/{moduleId}/{fileName}
@@ -66,7 +65,6 @@ New uploads must be namespaced:
 ```
 tenants/{tenantId}/proofs/{fileName}
 tenants/{tenantId}/employees/{fileName}
-tenants/{tenantId}/recipes/{fileName}
 tenants/{tenantId}/stores/certs/{fileName}
 tenants/{tenantId}/hr_docs/{crewId}/{fileName}
 tenants/{tenantId}/training/{moduleId}/{fileName}
@@ -243,4 +241,3 @@ Before any production cutover, automated rules and application tests must prove:
 2. Identify every repository/service query and mutation in the codebase that needs a tenant context parameter.
 3. Write the sandbox data-seeding and rules-test plan.
 4. Draft the production backfill script design, dry-run report format, rollback conditions, and approval gate.
-

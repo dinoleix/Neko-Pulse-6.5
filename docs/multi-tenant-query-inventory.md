@@ -51,14 +51,13 @@ For every Firestore create, the service must write `tenantId`. For every collect
 | `modules/admin/attendance/AttendanceAdminView.tsx` | `crew` | Scope admin employee updates to the current tenant. |
 | `api/kiosk-attendance.ts` | `stores`, `settings/attendanceConfig`, `settings/appConfig`, `crew`, `attendanceLogs` | The kiosk configuration must contain tenant ID. Server code must scope the outlet, crew code, attendance settings, and write to that tenant. Crew codes must be unique at the policy level within a tenant, or kiosk requests must include a non-ambiguous outlet/tenant combination. |
 
-## Tasks, operational logs, recipes, and orders
+## Tasks, operational logs, and orders
 
 | File / boundary | Collections / Storage | Tenant-aware change |
 | --- | --- | --- |
 | `services/taskService.ts` | `tasks`, `taskTemplates`, `taskLogs`, `settings/taskConfig`, `crew`, `proofs/...` | Tenant-scope every task, template, log, configuration, employee list, and evidence upload. |
 | `services/reportsService.ts` | `crew`, `shiftAssignments`, `attendanceLogs`, `taskLogs`, `tasks`, `cafeHolidays` | Tenant-filter report source queries before applying date and outlet filters. |
 | `services/orderService.ts` | `validations`, root Storage object | Tenant-scope validation reads/writes/deletes and namespace uploaded order evidence. |
-| `services/recipeService.ts` | Recipe collection, `settings/recipeConfig`, `recipes/...` | Add tenant ID to recipes; tenant-filter lists/shares; namespace image uploads and configuration. |
 | `api/parse-order.ts` | No operational collection currently | Keep stateless; if parsing output is later persisted, require tenant ID from server-authenticated context. |
 
 ## Training
@@ -114,7 +113,6 @@ No batch may proceed to the next collection family while it has unexplained fail
 3. Convert read-only store and crew lookups in the sandbox.
 4. Convert attendance/kiosk and task workflows.
 5. Convert training and protected video/quiz routes.
-6. Convert HR, reports, recipes, orders, EOM, and administration tooling.
+6. Convert HR, reports, orders, EOM, and administration tooling. Retired Recipe records are excluded and retained only as a migration/export archive.
 7. Add tenant-aware Firestore indexes and rules tests.
 8. Build the resumable Green Neko backfill tool with a dry-run report.
-

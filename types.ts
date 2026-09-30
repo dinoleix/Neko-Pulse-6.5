@@ -97,7 +97,6 @@ export const MODULE_IDS = {
   HR: 'HR',
   REPORTS: 'REPORTS',
   EOM: 'EOM',
-  RECIPE: 'RECIPE',
   LOGIN_ACTIVITY: 'LOGIN_ACTIVITY',
   TRAINING: 'TRAINING',
   SETTINGS: 'SETTINGS',
@@ -107,7 +106,6 @@ export const MODULE_IDS = {
   CREW_TASKS: 'CREW_TASKS',
   CREW_SHIFTS: 'CREW_SHIFTS',
   CREW_EOM: 'CREW_EOM',
-  CREW_RECIPE: 'CREW_RECIPE',
   CREW_TRAINING: 'CREW_TRAINING'
 } as const;
 
@@ -534,38 +532,4 @@ export interface LoginLog {
   location?: string;     // Approximate IP-based location, e.g. "Imphal, Manipur, IN"
   ip?: string;           // IP address the login came from
   timestamp: any;
-}
-
-// --- MODULE: RECIPE ---
-export interface RecipeIngredient {
-  name: string;
-  amount: string;
-  unit: string;
-}
-
-export interface Recipe {
-  id?: string;
-  name: string;
-  category: string;
-  description?: string;
-  ingredients: RecipeIngredient[];
-  steps: string[];
-  imageUrl?: string;
-  isShared: boolean;
-  // Who a shared recipe reaches in the crew app. Absent (legacy) === 'ALL'.
-  // 'ROLES' -> anyone whose role is in sharedRoles; 'PEOPLE' -> anyone whose
-  // crew doc id is in sharedCrewIds. Filtering is client-side (relevance, not
-  // access-lock): the read rule still allows any staff to read shared recipes.
-  shareScope?: 'ALL' | 'ROLES' | 'PEOPLE';
-  sharedRoles?: string[];   // role names (match CrewMember.role / CurrentUser.accessRole)
-  sharedCrewIds?: string[]; // crew doc ids (match CurrentUser.dbId)
-  prepTime?: number;
-  cookTime?: number;
-  servingSize?: number;
-  createdAt: any;
-  createdBy: string;
-}
-
-export interface RecipeConfig {
-  categories: string[];
 }
