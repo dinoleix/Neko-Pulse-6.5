@@ -70,7 +70,7 @@ service cloud.firestore {
     match /managers/{managerId} {
       allow read: if bootstrapOwner()
         || (signedIn() && resource.data.authUid == request.auth.uid && activeMember(resource.data.tenantId))
-        || managerOrOwner(resource.data.tenantId);
+        || (managerOrOwner(resource.data.tenantId) && hasOutlet(resource.data.tenantId, resource.data.outletId));
       allow create, update: if bootstrapOwner() && tenantRecord(request.resource.data.tenantId);
       allow delete: if false;
     }
@@ -81,7 +81,7 @@ service cloud.firestore {
     }
 
     match /stores/{storeId} {
-      allow read: if activeMember(resource.data.tenantId) || bootstrapOwner();
+      allow read: if hasOutlet(resource.data.tenantId, resource.data.outletId) || bootstrapOwner();
       allow create, update: if bootstrapOwner() && tenantRecord(request.resource.data.tenantId);
       allow delete: if false;
     }

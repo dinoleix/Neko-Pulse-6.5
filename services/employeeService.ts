@@ -2,7 +2,20 @@
 import { db, storage, firebase, firebaseConfig } from '../firebaseConfig';
 import { CrewMember, CrewDirectoryEntry, RoleDef } from '../types';
 import { getSettingsCollectionRef } from './configCache';
-import { currentTenantId, tenantPayload, withTenant } from './tenantScope';
+import { currentTenantContext, currentTenantId, isTenantWideMember, tenantPayload, withTenant } from './tenantScope';
+
+const scopePeopleByOutlet = async (query: firebase.firestore.Query, tenantId?: string) => {
+    const context = await currentTenantContext();
+    let scoped = withTenant(query, tenantId ?? context?.tenantId);
+    if (context && !isTenantWideMember(context)) {
+        const outletIds = context.outletIds || [];
+        if (!outletIds.length) throw new Error('No outlet is assigned to this account.');
+        scoped = outletIds.length === 1
+            ? scoped.where('outletId', '==', outletIds[0])
+            : scoped.where('outletId', 'in', outletIds.slice(0, 10));
+    }
+    return scoped;
+};
 
 // Extract the public-safe fields mirrored into /crewDirectory. Only fields
 // present on the partial are included, so merge-writes never blank a value.
@@ -90,7 +103,7 @@ export const employeeService = {
     // --- CREW CRUD (Staff) ---
     getAllCrew: async (): Promise<CrewMember[]> => {
         const tenantId = await currentTenantId();
-        const snap = await withTenant(db.collection('crew'), tenantId).get();
+        const snap = await (await scopePeopleByOutlet(db.collection('crew'), tenantId)).get();
         const crew = snap.docs.map(d => ({...d.data(), id: d.id} as CrewMember))
             .sort((a, b) => (a.crewName || '').localeCompare(b.crewName || ''));
         healCrewDirectory(crew).catch(() => { /* non-blocking */ });
@@ -129,7 +142,7 @@ export const employeeService = {
     // --- MANAGER CRUD (Admins) ---
     getAllManagers: async (): Promise<CrewMember[]> => {
         const tenantId = await currentTenantId();
-        const snap = await withTenant(db.collection('managers'), tenantId).get();
+        const snap = await (await scopePeopleByOutlet(db.collection('managers'), tenantId)).get();
         return snap.docs.map(d => ({...d.data(), id: d.id} as CrewMember))
             .sort((a, b) => (a.crewName || '').localeCompare(b.crewName || ''));
     },

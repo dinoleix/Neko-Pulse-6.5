@@ -2,7 +2,7 @@
 import { db, firebase, storage } from '../firebaseConfig';
 import { Store, AppConfig } from '../types';
 import { getCachedSettingsDoc, getSettingsDocRef, invalidateSettingsDoc } from './configCache';
-import { currentTenantId, tenantPayload } from './tenantScope';
+import { currentTenantContext, currentTenantId, isTenantWideMember, tenantPayload } from './tenantScope';
 
 export const storeService = {
   // --- STORES ---
@@ -10,9 +10,17 @@ export const storeService = {
     // Callers such as the Store Administration view do not need to know about
     // the active tenant. Resolve it here so an unscoped collection read can
     // never slip into a tenant-enabled build.
-    const resolvedTenantId = tenantId ?? await currentTenantId();
+    const context = await currentTenantContext();
+    const resolvedTenantId = tenantId ?? context?.tenantId;
     let query: firebase.firestore.Query = db.collection('stores');
     if (resolvedTenantId) query = query.where('tenantId', '==', resolvedTenantId);
+    if (context && resolvedTenantId === context.tenantId && !isTenantWideMember(context)) {
+      const outletIds = context.outletIds || [];
+      if (!outletIds.length) throw new Error('No outlet is assigned to this account.');
+      query = outletIds.length === 1
+        ? query.where('outletId', '==', outletIds[0])
+        : query.where('outletId', 'in', outletIds.slice(0, 10));
+    }
     const snap = await query.get();
     return snap.docs.map(d => ({ ...d.data(), id: d.id } as Store));
   },
