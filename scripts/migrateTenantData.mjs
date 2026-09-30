@@ -7,6 +7,7 @@
 //
 // Examples:
 // PULSE_SERVICE_ACCOUNT_PATH=/secure/neko-pulse.json node scripts/migrateTenantData.mjs
+// PULSE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}' node scripts/migrateTenantData.mjs
 // PULSE_SERVICE_ACCOUNT_PATH=/secure/neko-pulse.json node scripts/migrateTenantData.mjs --mode=apply --confirm=green-neko --collections=crew,stores
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -23,9 +24,10 @@ const mode = args.get('mode') || 'dry-run';
 const tenantId = args.get('tenant') || 'green-neko';
 const selectedCollections = (args.get('collections') || '').split(',').map(value => value.trim()).filter(Boolean);
 const credentialPath = process.env.PULSE_SERVICE_ACCOUNT_PATH;
+const credentialJson = process.env.PULSE_SERVICE_ACCOUNT_JSON;
 const outputDir = resolve(process.env.TENANT_MIGRATION_OUTPUT_DIR || `exports/tenant-migration-${new Date().toISOString().replace(/[:.]/g, '-')}`);
 
-if (!credentialPath) throw new Error('Set PULSE_SERVICE_ACCOUNT_PATH to an authorized Firebase service-account JSON file.');
+if (!credentialPath && !credentialJson) throw new Error('Set PULSE_SERVICE_ACCOUNT_PATH or PULSE_SERVICE_ACCOUNT_JSON to an authorized Firebase service account.');
 if (!['dry-run', 'apply', 'verify'].includes(mode)) throw new Error('mode must be dry-run, apply, or verify.');
 if (mode === 'apply') {
   if (args.get('confirm') !== tenantId) throw new Error(`Apply is blocked. Pass --confirm=${tenantId} after approving the exact target.`);
@@ -33,7 +35,10 @@ if (mode === 'apply') {
   if (process.env.MIGRATION_WRITE_APPROVED !== 'YES') throw new Error('Apply is blocked. Set MIGRATION_WRITE_APPROVED=YES only in the approved change window.');
 }
 
-const app = initializeApp({ credential: cert(JSON.parse(readFileSync(credentialPath, 'utf8'))) }, 'tenant-migration');
+const serviceAccount = credentialJson
+  ? JSON.parse(credentialJson)
+  : JSON.parse(readFileSync(credentialPath, 'utf8'));
+const app = initializeApp({ credential: cert(serviceAccount) }, 'tenant-migration');
 const db = getFirestore(app);
 const auth = getAuth(app);
 mkdirSync(outputDir, { recursive: true });
