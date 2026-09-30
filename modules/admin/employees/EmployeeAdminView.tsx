@@ -58,6 +58,8 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    const [managerAllOutlets, setManagerAllOutlets] = useState(false);
    const [isLoadingManagerAccess, setIsLoadingManagerAccess] = useState(false);
    const [isSavingManagerAccess, setIsSavingManagerAccess] = useState(false);
+   const [managerResetPassword, setManagerResetPassword] = useState('');
+   const [isResettingManagerPassword, setIsResettingManagerPassword] = useState(false);
 
    useEffect(() => { load(); }, []);
 
@@ -169,6 +171,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       setEditingId(member.id!);
       setIsCreating(true);
       setManagerAllOutlets(false);
+      setManagerResetPassword('');
       if (activeTab === 'MANAGERS' && canManageManagerOutletAccess && member.authUid) {
          setIsLoadingManagerAccess(true);
          tenantMembershipService.getManagerOutletAccess(member.authUid)
@@ -197,8 +200,32 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       });
       setNewManagerPassword('');
       setManagerAllOutlets(false);
+      setManagerResetPassword('');
       setEditingId(null);
       setIsCreating(false);
+   };
+
+   const resetManagerPassword = async () => {
+      const manager = managers.find(item => item.id === editingId);
+      if (!manager?.authUid) {
+         alert('This manager has no login account yet.');
+         return;
+      }
+      if (managerResetPassword.length < 12) {
+         alert('Use a new password with at least 12 characters.');
+         return;
+      }
+      if (!window.confirm(`Reset the login password for ${manager.crewName}? They will need the new password at their next sign-in.`)) return;
+      setIsResettingManagerPassword(true);
+      try {
+         await tenantMembershipService.resetManagerPassword(manager.authUid, managerResetPassword);
+         setManagerResetPassword('');
+         alert('Manager password reset successfully. Share the new password securely.');
+      } catch (error: any) {
+         alert(`Could not reset password: ${error.message}`);
+      } finally {
+         setIsResettingManagerPassword(false);
+      }
    };
 
    const saveManagerOutletAccess = async () => {
@@ -659,6 +686,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                               <Input type="email" placeholder="Manager Email *" value={newCrew.email} onChange={e => setNewCrew({...newCrew, email: e.target.value})} disabled={!!editingId} />
                               {!editingId && <Input type="text" placeholder="Set Password *" value={newManagerPassword} onChange={e => setNewManagerPassword(e.target.value)} />}
                               {editingId && canManageManagerOutletAccess && (
+                                 <>
                                  <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 space-y-3">
                                     <div className="flex items-start justify-between gap-3">
                                        <div>
@@ -671,6 +699,17 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                                        {isLoadingManagerAccess ? 'Loading access…' : isSavingManagerAccess ? 'Saving access…' : 'Save store access'}
                                     </button>
                                  </div>
+                                 <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4 space-y-3">
+                                    <div>
+                                       <p className="text-xs font-bold text-amber-950">Reset manager password</p>
+                                       <p className="mt-1 text-[10px] leading-relaxed text-amber-700">Set a new password only when the manager cannot sign in. Share it privately after saving.</p>
+                                    </div>
+                                    <Input type="password" placeholder="New password (12+ characters)" value={managerResetPassword} onChange={e => setManagerResetPassword(e.target.value)} disabled={isResettingManagerPassword} />
+                                    <button type="button" onClick={resetManagerPassword} disabled={isResettingManagerPassword || managerResetPassword.length < 12} className="w-full rounded-xl bg-amber-600 px-3 py-2.5 text-xs font-bold text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60">
+                                       {isResettingManagerPassword ? 'Resetting password…' : 'Reset manager password'}
+                                    </button>
+                                 </div>
+                                 </>
                               )}
                            </div>
                         )}

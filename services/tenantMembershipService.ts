@@ -26,6 +26,13 @@ export const tenantMembershipService = {
     authorisedRequest('/api/tenant-membership', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uid, allOutlets }),
+      body: JSON.stringify({ action: 'setAllOutlets', uid, allOutlets }),
     }) as Promise<Pick<ManagerOutletAccess, 'uid' | 'allOutlets'>>,
+
+  resetManagerPassword: (uid: string, password: string) =>
+    authorisedRequest('/api/tenant-membership', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'resetPassword', uid, password }),
+    }) as Promise<{ uid: string; passwordReset: true }>,
 };

@@ -61,7 +61,17 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    if (typeof req.body?.allOutlets !== 'boolean') return send(res, 400, { error: 'allOutlets must be true or false.' });
+    if (req.body?.action === 'resetPassword') {
+      const password = String(req.body?.password || '');
+      if (password.length < 12) return send(res, 400, { error: 'Use a password with at least 12 characters.' });
+      await auth.updateUser(targetUid, { password });
+      await targetRef.update({ updatedAt: FieldValue.serverTimestamp() });
+      return send(res, 200, { uid: targetUid, passwordReset: true });
+    }
+
+    if (req.body?.action !== 'setAllOutlets' || typeof req.body?.allOutlets !== 'boolean') {
+      return send(res, 400, { error: 'Invalid manager access request.' });
+    }
     await targetRef.update({ allOutlets: req.body.allOutlets, updatedAt: FieldValue.serverTimestamp() });
     return send(res, 200, { uid: targetUid, allOutlets: req.body.allOutlets });
   } catch (error: any) {
