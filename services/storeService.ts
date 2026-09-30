@@ -7,8 +7,12 @@ import { currentTenantId, tenantPayload } from './tenantScope';
 export const storeService = {
   // --- STORES ---
   getStores: async (tenantId?: string): Promise<Store[]> => {
+    // Callers such as the Store Administration view do not need to know about
+    // the active tenant. Resolve it here so an unscoped collection read can
+    // never slip into a tenant-enabled build.
+    const resolvedTenantId = tenantId ?? await currentTenantId();
     let query: firebase.firestore.Query = db.collection('stores');
-    if (tenantId) query = query.where('tenantId', '==', tenantId);
+    if (resolvedTenantId) query = query.where('tenantId', '==', resolvedTenantId);
     const snap = await query.get();
     return snap.docs.map(d => ({ ...d.data(), id: d.id } as Store));
   },
