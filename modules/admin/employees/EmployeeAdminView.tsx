@@ -5,6 +5,8 @@ import { employeeService } from '../../../services/employeeService';
 import { storeService } from '../../../services/storeService';
 import { attendanceService } from '../../../services/attendanceService';
 import { compressImage } from '../../../services/imageService';
+import { tenantMembershipService } from '../../../services/tenantMembershipService';
+import { isTenantModeEnabled } from '../../../services/tenantService';
 import { CrewMember, RoleDef, Store, CurrentUser, AttendanceConfig } from '../../../types';
 import { Button, Card, Input, Select, Badge, Checkbox } from '../../../components/SharedComponents';
 // @fix: Added ShieldAlert to imports
@@ -53,6 +55,9 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    const [isSavingRole, setIsSavingRole] = useState(false);
    const [deletingId, setDeletingId] = useState<string | null>(null);
    const [isSavingCrew, setIsSavingCrew] = useState(false);
+   const [managerAllOutlets, setManagerAllOutlets] = useState(false);
+   const [isLoadingManagerAccess, setIsLoadingManagerAccess] = useState(false);
+   const [isSavingManagerAccess, setIsSavingManagerAccess] = useState(false);
 
    useEffect(() => { load(); }, []);
 
@@ -102,6 +107,11 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
        if (!isAccountProtected(member)) return true;
        return member.id === currentUser.dbId || member.authUid === currentUser.uid;
    };
+
+   // All-store access is intentionally owned by an Owner/Administrator, not
+   // by a store manager. The API repeats this authorization check server-side.
+   const canManageManagerOutletAccess = isTenantModeEnabled && !!currentUser.tenantId
+      && ['owner', 'administrator', 'admin', 'super admin'].includes((currentUser.accessRole || '').trim().toLowerCase());
 
    // --- ACTIONS ---
    const addRole = async () => {
@@ -158,6 +168,14 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       setNewManagerPassword(''); 
       setEditingId(member.id!);
       setIsCreating(true);
+      setManagerAllOutlets(false);
+      if (activeTab === 'MANAGERS' && canManageManagerOutletAccess && member.authUid) {
+         setIsLoadingManagerAccess(true);
+         tenantMembershipService.getManagerOutletAccess(member.authUid)
+            .then(access => setManagerAllOutlets(access.allOutlets))
+            .catch(error => console.warn('Manager outlet access could not be loaded:', error))
+            .finally(() => setIsLoadingManagerAccess(false));
+      }
       window.scrollTo({ top: 0, behavior: 'smooth' });
    };
 
@@ -178,8 +196,30 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
          leaveBalanceOverride: undefined
       });
       setNewManagerPassword('');
+      setManagerAllOutlets(false);
       setEditingId(null);
       setIsCreating(false);
+   };
+
+   const saveManagerOutletAccess = async () => {
+      const manager = managers.find(item => item.id === editingId);
+      if (!manager?.authUid) {
+         alert('This manager has no login account yet. Create their login before assigning all-store access.');
+         return;
+      }
+      const message = managerAllOutlets
+         ? `Give ${manager.crewName} access to every current and future store in this business?`
+         : `Restrict ${manager.crewName} to their assigned store only?`;
+      if (!window.confirm(message)) return;
+      setIsSavingManagerAccess(true);
+      try {
+         await tenantMembershipService.setManagerAllOutletAccess(manager.authUid, managerAllOutlets);
+         alert(managerAllOutlets ? 'All-store access enabled for this manager.' : 'This manager is now limited to their assigned store.');
+      } catch (error: any) {
+         alert(`Could not update manager access: ${error.message}`);
+      } finally {
+         setIsSavingManagerAccess(false);
+      }
    };
 
    const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -618,6 +658,20 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                            <div className="space-y-3">
                               <Input type="email" placeholder="Manager Email *" value={newCrew.email} onChange={e => setNewCrew({...newCrew, email: e.target.value})} disabled={!!editingId} />
                               {!editingId && <Input type="text" placeholder="Set Password *" value={newManagerPassword} onChange={e => setNewManagerPassword(e.target.value)} />}
+                              {editingId && canManageManagerOutletAccess && (
+                                 <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 space-y-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                       <div>
+                                          <p className="text-xs font-bold text-indigo-950">All stores in this business</p>
+                                          <p className="mt-1 text-[10px] leading-relaxed text-indigo-700">Turn this on only for a manager who should work across every current and future outlet. It never gives access to another business.</p>
+                                       </div>
+                                       <Checkbox checked={managerAllOutlets} onChange={e => setManagerAllOutlets(e.target.checked)} disabled={isLoadingManagerAccess || isSavingManagerAccess} />
+                                    </div>
+                                    <button type="button" onClick={saveManagerOutletAccess} disabled={isLoadingManagerAccess || isSavingManagerAccess} className="w-full rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-bold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60">
+                                       {isLoadingManagerAccess ? 'Loading access…' : isSavingManagerAccess ? 'Saving access…' : 'Save store access'}
+                                    </button>
+                                 </div>
+                              )}
                            </div>
                         )}
 
