@@ -123,8 +123,10 @@ export default async function handler(req: any, res: any) {
     if (existingIn && existingOut) {
       await db.collection('attendanceLogs').doc(existingOut.id).update({ timestamp: FieldValue.serverTimestamp(), method: 'PIN' });
     } else {
+      const legacyTenantId = String(process.env.LEGACY_TENANT_ID || '').trim();
       await db.collection('attendanceLogs').add({
         crewId: crewDoc.id, crewName: crew.crewName, outletId,
+        ...(legacyTenantId ? { tenantId: legacyTenantId } : {}),
         timestamp: FieldValue.serverTimestamp(), type, method: 'PIN',
       });
     }

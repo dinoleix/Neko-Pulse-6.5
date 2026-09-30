@@ -1,6 +1,7 @@
 
 import { db, firebase } from '../firebaseConfig';
 import { LoginLog } from '../types';
+import { withLegacyTenant } from './legacyTenantWrite';
 
 const COLLECTION = 'loginLogs';
 
@@ -50,7 +51,7 @@ export const loginLogService = {
         const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
         const geo = await fetchLocation();
         const payload: any = {
-            ...entry,
+            ...withLegacyTenant(entry),
             device: describeDevice(ua),
             userAgent: ua,
             ...geo,

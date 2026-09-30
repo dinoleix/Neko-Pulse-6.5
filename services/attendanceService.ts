@@ -3,6 +3,7 @@ import { db, firebase } from '../firebaseConfig';
 import { AttendanceLog, LeaveRequest, AttendanceConfig, CrewMember, ShiftAssignment, AppConfig } from '../types';
 import { getCachedSettingsDoc } from './configCache';
 import { storeService } from './storeService';
+import { withLegacyTenant } from './legacyTenantWrite';
 // @fix: Removed parseISO from date-fns as it's not exported in the available version
 import { differenceInDays } from 'date-fns';
 
@@ -72,7 +73,7 @@ export const attendanceService = {
 
     submitLeave: async (request: Omit<LeaveRequest, 'id' | 'appliedAt'>) => {
         return await db.collection('leaveRequests').add({
-            ...request,
+            ...withLegacyTenant(request),
             appliedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
     },
@@ -205,7 +206,7 @@ export const attendanceService = {
     // --- ATTENDANCE ACTIONS ---
     logAttendance: async (data: any) => {
         return await db.collection('attendanceLogs').add({
-            ...data,
+            ...withLegacyTenant(data),
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
     },

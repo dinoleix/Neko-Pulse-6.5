@@ -2,6 +2,7 @@
 import { db, firebase } from '../firebaseConfig';
 import { Shift, ShiftAssignment, CafeHoliday, CrewMember, Store, LeaveRequest } from '../types';
 import { storeService } from './storeService';
+import { withLegacyTenant } from './legacyTenantWrite';
 
 export const shiftService = {
     // --- DEFINITIONS ---
@@ -12,9 +13,9 @@ export const shiftService = {
 
     saveShift: async (shift: Partial<Shift>, id?: string) => {
         if (id) {
-            return await db.collection('shifts').doc(id).update(shift);
+            return await db.collection('shifts').doc(id).update(withLegacyTenant(shift));
         }
-        return await db.collection('shifts').add(shift);
+        return await db.collection('shifts').add(withLegacyTenant(shift));
     },
 
     deleteShift: async (id: string) => {
@@ -57,7 +58,7 @@ export const shiftService = {
     },
 
     assignShift: async (assignment: ShiftAssignment) => {
-        return await db.collection('shiftAssignments').add(assignment);
+        return await db.collection('shiftAssignments').add(withLegacyTenant(assignment));
     },
 
     deleteAssignment: async (id: string) => {
@@ -69,7 +70,7 @@ export const shiftService = {
         const batch = db.batch();
         assignments.forEach(a => {
             const ref = db.collection('shiftAssignments').doc();
-            batch.set(ref, a);
+            batch.set(ref, withLegacyTenant(a));
         });
         return await batch.commit();
     },
@@ -81,7 +82,7 @@ export const shiftService = {
     },
 
     addHoliday: async (holiday: Partial<CafeHoliday>) => {
-        return await db.collection('cafeHolidays').add(holiday);
+        return await db.collection('cafeHolidays').add(withLegacyTenant(holiday));
     },
 
     deleteHoliday: async (id: string) => {

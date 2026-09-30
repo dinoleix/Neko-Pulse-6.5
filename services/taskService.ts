@@ -2,6 +2,7 @@
 import { db, storage, firebase } from '../firebaseConfig';
 import { Task, TaskTemplate, TaskLog, TaskConfig, Store, CrewMember, TaskProofType } from '../types';
 import { storeService } from './storeService';
+import { withLegacyTenant } from './legacyTenantWrite';
 
 export const taskService = {
     // --- TASKS ---
@@ -34,7 +35,7 @@ export const taskService = {
     },
 
     saveTask: async (task: Partial<Task>, id?: string) => {
-        const payload = { ...task };
+        const payload = withLegacyTenant({ ...task });
         if (!payload.createdAt) payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
         
         if (id) {
@@ -60,9 +61,9 @@ export const taskService = {
 
     saveTemplate: async (template: TaskTemplate, id?: string) => {
         if (id) {
-            return await db.collection('taskTemplates').doc(id).update(template);
+            return await db.collection('taskTemplates').doc(id).update(withLegacyTenant(template));
         }
-        return await db.collection('taskTemplates').add(template);
+        return await db.collection('taskTemplates').add(withLegacyTenant(template));
     },
 
     deleteTemplate: async (id: string) => {
@@ -115,7 +116,7 @@ export const taskService = {
 
     submitLog: async (log: Omit<TaskLog, 'id'>) => {
         return await db.collection('taskLogs').add({
-            ...log,
+            ...withLegacyTenant(log),
             completedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
     },
