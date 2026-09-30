@@ -17,6 +17,37 @@ const scopePeopleByOutlet = async (query: firebase.firestore.Query, tenantId?: s
     return scoped;
 };
 
+// Authentication IDs can change when an Owner repairs a staff login. Keep
+// the tenant membership in lockstep with the profile or the person would be
+// authenticated but unable to resolve their tenant-scoped session.
+const syncTenantMembership = (
+    batch: firebase.firestore.WriteBatch,
+    personType: 'CREW' | 'MANAGER',
+    personId: string,
+    previous: Partial<CrewMember> | undefined,
+    payload: Partial<CrewMember> & { tenantId?: string },
+) => {
+    const tenantId = payload.tenantId;
+    const uid = payload.authUid;
+    if (!tenantId || !uid) return;
+
+    const previousUid = previous?.authUid;
+    if (previousUid && previousUid !== uid) {
+        batch.delete(db.collection('tenantMemberships').doc(`${tenantId}_${previousUid}`));
+    }
+
+    batch.set(db.collection('tenantMemberships').doc(`${tenantId}_${uid}`), {
+        tenantId,
+        uid,
+        personId,
+        personType,
+        role: payload.role || previous?.role || null,
+        outletIds: payload.outletId ? [payload.outletId] : [],
+        active: payload.active ?? previous?.active ?? true,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+};
+
 // Extract the public-safe fields mirrored into /crewDirectory. Only fields
 // present on the partial are included, so merge-writes never blank a value.
 const directoryFields = (data: Partial<CrewMember>): Partial<CrewDirectoryEntry> => {
@@ -121,16 +152,13 @@ export const employeeService = {
 
     saveCrew: async (data: Partial<CrewMember>, id?: string) => {
         const payload = await tenantPayload(data);
-        let docId = id;
-        if (id) {
-            await db.collection('crew').doc(id).set(payload, { merge: true });
-        } else if (payload.authUid) {
-            docId = payload.authUid;
-            await db.collection('crew').doc(payload.authUid).set(payload, { merge: true });
-        } else {
-            const ref = await db.collection('crew').add(payload);
-            docId = ref.id;
-        }
+        const docId = id || payload.authUid || db.collection('crew').doc().id;
+        const ref = db.collection('crew').doc(docId);
+        const previous = (await ref.get()).data() as Partial<CrewMember> | undefined;
+        const batch = db.batch();
+        batch.set(ref, payload, { merge: true });
+        syncTenantMembership(batch, 'CREW', docId, previous, payload);
+        await batch.commit();
         await (await crewDirectoryRef()).doc(docId!).set(directoryFields(payload), { merge: true });
     },
 
@@ -149,15 +177,15 @@ export const employeeService = {
 
     saveManager: async (data: Partial<CrewMember>, id?: string) => {
         const payload = await tenantPayload(data);
-        if (id) {
-            return await db.collection('managers').doc(id).set(payload, { merge: true });
-        } else {
-            // Managers MUST have an authUid (email login)
-            if (payload.authUid) {
-                return await db.collection('managers').doc(payload.authUid).set(payload, { merge: true });
-            }
-            return await db.collection('managers').add(payload);
-        }
+        // Managers MUST have an authUid for email login; preserve the legacy
+        // generated-ID fallback for incomplete drafts.
+        const docId = id || payload.authUid || db.collection('managers').doc().id;
+        const ref = db.collection('managers').doc(docId);
+        const previous = (await ref.get()).data() as Partial<CrewMember> | undefined;
+        const batch = db.batch();
+        batch.set(ref, payload, { merge: true });
+        syncTenantMembership(batch, 'MANAGER', docId, previous, payload);
+        await batch.commit();
     },
 
     deleteManager: async (id: string) => {

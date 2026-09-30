@@ -40,6 +40,14 @@ service cloud.firestore {
             && membership(tenantId).data.allOutlets == true));
     }
 
+    // Only Owners and Administrators manage tenant identities. An all-outlet
+    // Store Manager may work across outlets, but must not gain people-admin
+    // rights simply by receiving allOutlets access.
+    function tenantAdministrator(tenantId) {
+      return activeMember(tenantId)
+        && membership(tenantId).data.personType in ['OWNER', 'ADMINISTRATOR'];
+    }
+
     function hasOutlet(tenantId, outletId) {
       return tenantWide(tenantId) || (activeMember(tenantId)
         && outletId in membership(tenantId).data.outletIds);
@@ -53,8 +61,12 @@ service cloud.firestore {
 
     match /tenantMemberships/{membershipId} {
       allow read: if signedIn() && (resource.data.uid == request.auth.uid || activeMember(resource.data.tenantId) || bootstrapOwner());
-      allow create, update: if bootstrapOwner() && tenantRecord(request.resource.data.tenantId);
-      allow delete: if false;
+      allow create: if (bootstrapOwner() || tenantAdministrator(request.resource.data.tenantId))
+        && tenantRecord(request.resource.data.tenantId);
+      allow update: if (bootstrapOwner() || tenantAdministrator(resource.data.tenantId))
+        && tenantRecord(resource.data.tenantId)
+        && request.resource.data.tenantId == resource.data.tenantId;
+      allow delete: if bootstrapOwner() || tenantAdministrator(resource.data.tenantId);
     }
 
     // The first tenant-aware application slice needs profiles and stores.
@@ -65,7 +77,11 @@ service cloud.firestore {
       allow read: if bootstrapOwner()
         || (signedIn() && resource.data.authUid == request.auth.uid && activeMember(resource.data.tenantId))
         || (managerOrOwner(resource.data.tenantId) && hasOutlet(resource.data.tenantId, resource.data.outletId));
-      allow create, update: if bootstrapOwner() && tenantRecord(request.resource.data.tenantId);
+      allow create: if (bootstrapOwner() || tenantAdministrator(request.resource.data.tenantId))
+        && tenantRecord(request.resource.data.tenantId);
+      allow update: if (bootstrapOwner() || tenantAdministrator(resource.data.tenantId))
+        && tenantRecord(resource.data.tenantId)
+        && request.resource.data.tenantId == resource.data.tenantId;
       allow delete: if false;
     }
 
@@ -73,7 +89,11 @@ service cloud.firestore {
       allow read: if bootstrapOwner()
         || (signedIn() && resource.data.authUid == request.auth.uid && activeMember(resource.data.tenantId))
         || (managerOrOwner(resource.data.tenantId) && hasOutlet(resource.data.tenantId, resource.data.outletId));
-      allow create, update: if bootstrapOwner() && tenantRecord(request.resource.data.tenantId);
+      allow create: if (bootstrapOwner() || tenantAdministrator(request.resource.data.tenantId))
+        && tenantRecord(request.resource.data.tenantId);
+      allow update: if (bootstrapOwner() || tenantAdministrator(resource.data.tenantId))
+        && tenantRecord(resource.data.tenantId)
+        && request.resource.data.tenantId == resource.data.tenantId;
       allow delete: if false;
     }
 
