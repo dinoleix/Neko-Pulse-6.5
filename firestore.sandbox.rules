@@ -35,7 +35,9 @@ service cloud.firestore {
     // remain restricted to the outlet IDs recorded in their membership.
     function tenantWide(tenantId) {
       return activeMember(tenantId)
-        && membership(tenantId).data.personType in ['OWNER', 'ADMINISTRATOR'];
+        && (membership(tenantId).data.personType in ['OWNER', 'ADMINISTRATOR']
+          || (membership(tenantId).data.keys().hasAll(['allOutlets'])
+            && membership(tenantId).data.allOutlets == true));
     }
 
     function hasOutlet(tenantId, outletId) {

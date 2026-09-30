@@ -134,7 +134,10 @@ const planMemberships = async () => {
     }
     const role = data.role || data.accessRole || '';
     const personType = profile.type === 'CREW' ? 'CREW' : managerType(role);
-    const outletIds = personType === 'OWNER' || personType === 'ADMINISTRATOR'
+    // A specifically flagged manager can manage every outlet in their tenant.
+    // Keep this explicit: the ordinary Manager role remains outlet-scoped.
+    const allOutlets = personType === 'OWNER' || personType === 'ADMINISTRATOR' || data.allOutlets === true;
+    const outletIds = allOutlets
       ? activeOutletIds
       : (data.outletId ? [data.outletId] : []);
     if (!outletIds.length) {
@@ -142,7 +145,7 @@ const planMemberships = async () => {
       continue;
     }
     const membershipId = `${tenantId}_${valid[0]}`;
-    report.membershipPlan.push({ membershipId, uid: valid[0], personId: profile.doc.id, personType, role, outletIds, active: true });
+    report.membershipPlan.push({ membershipId, uid: valid[0], personId: profile.doc.id, personType, role, outletIds, allOutlets, active: true });
   }
 };
 

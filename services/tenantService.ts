@@ -30,9 +30,10 @@ const activeMembershipFor = async (uid: string): Promise<TenantContext | null> =
     tenantId: membership.tenantId,
     membershipId: snapshot.docs[0].id,
     personId: membership.personId,
-    personType: membership.personType,
-    role: membership.role,
-    outletIds: membership.outletIds || [],
+      personType: membership.personType,
+      role: membership.role,
+      outletIds: membership.outletIds || [],
+      allOutlets: membership.allOutlets === true,
   };
 };
 

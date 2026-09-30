@@ -19,7 +19,7 @@ export const currentTenantId = async (): Promise<string | undefined> => {
 };
 
 export const isTenantWideMember = (context?: TenantContext) =>
-  context?.personType === 'OWNER' || context?.personType === 'ADMINISTRATOR';
+  context?.personType === 'OWNER' || context?.personType === 'ADMINISTRATOR' || context?.allOutlets === true;
 
 export const withTenant = (query: firebase.firestore.Query, tenantId?: string) =>
   tenantId ? query.where('tenantId', '==', tenantId) : query;

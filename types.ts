@@ -32,6 +32,9 @@ export interface TenantMembership {
   personType: TenantPersonType;
   role?: string;
   outletIds: string[];
+  // A specifically authorised manager can manage every current and future
+  // outlet in this tenant. This is not implied by the Manager role.
+  allOutlets?: boolean;
   active: boolean;
   createdAt?: any;
   updatedAt?: any;
@@ -44,6 +47,7 @@ export interface TenantContext {
   personType: TenantPersonType;
   role?: string;
   outletIds: string[];
+  allOutlets?: boolean;
 }
 
 export interface AppConfig {
