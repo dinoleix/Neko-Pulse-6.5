@@ -31,9 +31,16 @@ service cloud.firestore {
         && membership(tenantId).data.personType != 'CREW';
     }
 
-    function hasOutlet(tenantId, outletId) {
+    // Owners and administrators are tenant-wide. Store managers and trainers
+    // remain restricted to the outlet IDs recorded in their membership.
+    function tenantWide(tenantId) {
       return activeMember(tenantId)
-        && outletId in membership(tenantId).data.outletIds;
+        && membership(tenantId).data.personType in ['OWNER', 'ADMINISTRATOR'];
+    }
+
+    function hasOutlet(tenantId, outletId) {
+      return tenantWide(tenantId) || (activeMember(tenantId)
+        && outletId in membership(tenantId).data.outletIds);
     }
 
     match /tenants/{tenantId} {
