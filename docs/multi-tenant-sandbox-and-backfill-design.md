@@ -192,4 +192,3 @@ Do not delete added `tenantId` fields as an emergency response. Instead, disable
 - Crew codes are unique within a tenant; kiosks also include a locked tenant and outlet to prevent ambiguity.
 - Existing Green Neko asset paths remain readable only through a temporary, verified compatibility route; new uploads use tenant-prefixed paths.
 - A second business is tested in sandbox and Vercel preview before it is created in production.
-

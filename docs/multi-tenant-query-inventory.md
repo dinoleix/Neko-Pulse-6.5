@@ -117,4 +117,3 @@ No batch may proceed to the next collection family while it has unexplained fail
 6. Convert HR, reports, recipes, orders, EOM, and administration tooling.
 7. Add tenant-aware Firestore indexes and rules tests.
 8. Build the resumable Green Neko backfill tool with a dry-run report.
-
