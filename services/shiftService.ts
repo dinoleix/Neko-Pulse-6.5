@@ -2,13 +2,30 @@
 import { db, firebase } from '../firebaseConfig';
 import { Shift, ShiftAssignment, CafeHoliday, CrewMember, Store, LeaveRequest } from '../types';
 import { storeService } from './storeService';
-import { currentTenantId, tenantPayload, withTenant } from './tenantScope';
+import { currentTenantContext, currentTenantId, isTenantWideMember, tenantPayload, withTenant } from './tenantScope';
+
+// Firestore rules evaluate the query, not the client-side filter. A Store
+// Manager therefore needs an outlet-constrained query for every collection
+// that has outlet-scoped read rules. Without this, one failing crew/leaves
+// query prevents Shift Management from loading its store selector at all.
+const scopeByAllowedOutlets = async (query: firebase.firestore.Query, tenantId?: string) => {
+    const context = await currentTenantContext();
+    let scoped = withTenant(query, tenantId ?? context?.tenantId);
+    if (context && !isTenantWideMember(context)) {
+        const outletIds = context.outletIds || [];
+        if (!outletIds.length) throw new Error('No outlet is assigned to this account.');
+        scoped = outletIds.length === 1
+            ? scoped.where('outletId', '==', outletIds[0])
+            : scoped.where('outletId', 'in', outletIds.slice(0, 10));
+    }
+    return scoped;
+};
 
 export const shiftService = {
     // --- DEFINITIONS ---
     getShifts: async (): Promise<Shift[]> => {
         const tenantId = await currentTenantId();
-        const [snap, activeOutletIds] = await Promise.all([withTenant(db.collection('shifts'), tenantId).get(), storeService.getActiveOutletIds(tenantId)]);
+        const [snap, activeOutletIds] = await Promise.all([(await scopeByAllowedOutlets(db.collection('shifts'), tenantId)).get(), storeService.getActiveOutletIds(tenantId)]);
         return snap.docs.map(d => ({...d.data(), id: d.id} as Shift)).filter(shift => activeOutletIds.has(shift.outletId));
     },
 
@@ -32,7 +49,7 @@ export const shiftService = {
     // index — no composite index needed.
     getAllAssignments: async (startDate?: string, endDate?: string): Promise<ShiftAssignment[]> => {
         const tenantId = await currentTenantId();
-        let query: firebase.firestore.Query = withTenant(db.collection('shiftAssignments'), tenantId);
+        let query: firebase.firestore.Query = await scopeByAllowedOutlets(db.collection('shiftAssignments'), tenantId);
         if (startDate) query = query.where('date', '>=', startDate);
         if (endDate) query = query.where('date', '<=', endDate);
         const [snap, activeOutletIds] = await Promise.all([query.get(), storeService.getActiveOutletIds(tenantId)]);
@@ -42,7 +59,7 @@ export const shiftService = {
     getUserAssignments: async (crewId: string): Promise<ShiftAssignment[]> => {
         const tenantId = await currentTenantId();
         const [snap, activeOutletIds] = await Promise.all([
-            withTenant(db.collection('shiftAssignments').where('crewId', '==', crewId), tenantId).get(),
+            (await scopeByAllowedOutlets(db.collection('shiftAssignments').where('crewId', '==', crewId), tenantId)).get(),
             storeService.getActiveOutletIds(tenantId)
         ]);
         return snap.docs.map(d => ({...d.data(), id: d.id} as ShiftAssignment)).filter(assignment => activeOutletIds.has(assignment.outletId));
@@ -100,9 +117,9 @@ export const shiftService = {
     getContextData: async () => {
         const tenantId = await currentTenantId();
         const [cSnap, stores, lSnap] = await Promise.all([
-            withTenant(db.collection('crew').where('active', '==', true), tenantId).get(),
+            (await scopeByAllowedOutlets(db.collection('crew').where('active', '==', true), tenantId)).get(),
             storeService.getActiveStores(tenantId),
-            withTenant(db.collection('leaveRequests').where('status', '==', 'APPROVED'), tenantId).get()
+            (await scopeByAllowedOutlets(db.collection('leaveRequests').where('status', '==', 'APPROVED'), tenantId)).get()
         ]);
 
         return {
