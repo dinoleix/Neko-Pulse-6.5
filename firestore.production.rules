@@ -97,7 +97,7 @@ service cloud.firestore {
 
     match /tenantSettings/{tenantId}/crewDirectory/{crewId} {
       allow read: if activeMember(tenantId) || bootstrapOwner();
-      allow create, update, delete: if managerOrOwner(tenantId);
+      allow create, update, delete: if tenantAdministrator(tenantId);
     }
 
     match /stores/{storeId} {
@@ -332,13 +332,13 @@ service cloud.firestore {
 
     match /tenantSettings/{tenantId}/config/{configId} {
       allow read: if activeMember(tenantId) || bootstrapOwner();
-      allow create, update: if managerOrOwner(tenantId);
+      allow create, update: if tenantAdministrator(tenantId);
       allow delete: if false;
     }
 
     match /tenantSettings/{tenantId}/roles/{roleId} {
       allow read: if activeMember(tenantId) || bootstrapOwner();
-      allow create, update, delete: if managerOrOwner(tenantId);
+      allow create, update, delete: if tenantAdministrator(tenantId);
     }
 
     match /{document=**} {

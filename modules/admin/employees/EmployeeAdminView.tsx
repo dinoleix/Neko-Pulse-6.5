@@ -115,8 +115,18 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    const canManageManagerOutletAccess = isTenantModeEnabled && !!currentUser.tenantId
       && ['owner', 'administrator', 'admin', 'super admin'].includes((currentUser.accessRole || '').trim().toLowerCase());
 
+   // Team visibility is useful to an outlet manager; identity and role
+   // administration is not. This guard is deliberately independent of the
+   // visible controls because the final tenant rules enforce the same boundary.
+   const canManagePeople = ['owner', 'administrator', 'admin', 'super admin', 'system admin']
+      .includes((currentUser.accessRole || '').trim().toLowerCase());
+
    // --- ACTIONS ---
    const addRole = async () => {
+      if (!canManagePeople) {
+         alert('Only an owner or administrator can manage system roles.');
+         return;
+      }
       if(!newRole.trim()) return;
       setIsSavingRole(true);
       try {
@@ -136,6 +146,10 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    };
 
    const deleteRole = async (id: string) => {
+       if (!canManagePeople) {
+           alert('Only an owner or administrator can manage system roles.');
+           return;
+       }
        if(!window.confirm('Delete role?')) return;
        try {
            await employeeService.deleteRole(id);
@@ -146,6 +160,10 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    };
 
    const startEdit = (member: CrewMember) => {
+      if (!canManagePeople) {
+          alert('Only an owner or administrator can edit team accounts.');
+          return;
+      }
       if (!canModifyAccount(member)) {
           alert("Security Alert: You cannot edit another Super Admin or Owner's account.");
           return;
@@ -268,6 +286,10 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    };
 
    const handleSave = async (forceResetAuth = false) => {
+      if (!canManagePeople) {
+         alert('Only an owner or administrator can create or edit team accounts.');
+         return;
+      }
       if(!newCrew.crewName || !newCrew.role || !newCrew.outletId) {
          alert("Name, Role, and Outlet are required.");
          return;
@@ -411,6 +433,10 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       e.stopPropagation(); e.preventDefault();
       const id = member.id;
       if (!id) return;
+      if (!canManagePeople) {
+         alert('Only an owner or administrator can remove team accounts.');
+         return;
+      }
       
       if (!canModifyAccount(member)) {
           alert("Security Violation: You cannot delete another Super Admin or Owner.");
@@ -490,9 +516,11 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                      {showInactive ? <UserCheck className="w-5 h-5"/> : <UserX className="w-5 h-5"/>}
                      {showInactive ? 'Show Active' : `Inactive${inactiveCount > 0 ? ` (${inactiveCount})` : ''}`}
                   </button>
-                  <Button className="!w-auto !rounded-3xl" onClick={() => setIsCreating(true)}>
-                     <UserPlus className="w-5 h-5 mr-2"/> Add New
-                  </Button>
+                  {canManagePeople && (
+                     <Button className="!w-auto !rounded-3xl" onClick={() => setIsCreating(true)}>
+                        <UserPlus className="w-5 h-5 mr-2"/> Add New
+                     </Button>
+                  )}
                </div>
 
                <div className="space-y-3">
@@ -501,7 +529,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                      const accentColor = activeTab === 'CREW' ? 'emerald' : 'indigo';
                      const isSelf = c.id === currentUser.dbId || c.authUid === currentUser.uid;
                      const isProtected = isAccountProtected(c);
-                     const canMod = canModifyAccount(c);
+                     const canMod = canManagePeople && canModifyAccount(c);
                      
                      return (
                         <div key={c.id} className={`bg-white p-4 rounded-3xl border shadow-sm flex items-center gap-4 group transition-all hover:shadow-md ${editingId === c.id ? `border-${accentColor}-500 ring-4 ring-${accentColor}-50` : isProtected ? 'border-amber-100 bg-amber-50/10' : 'border-slate-100'}`}>
@@ -569,7 +597,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
             </div>
 
             {/* FORM SECTION */}
-            <div className={`lg:col-span-5 ${!isCreating ? 'hidden lg:block' : 'block'}`}>
+            <div className={`lg:col-span-5 ${canManagePeople ? (!isCreating ? 'hidden lg:block' : 'block') : 'hidden'}`}>
                <Card 
                   title={editingId ? "Edit Profile" : "Add Profile"} 
                   className={`sticky top-6 border-t-8 shadow-2xl ${activeTab === 'CREW' ? 'border-t-emerald-500' : 'border-t-indigo-500'}`}
@@ -758,7 +786,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                   </div>
                </Card>
 
-               <Card title="Manage System Roles" className="mt-8 border-l-4 border-l-slate-400">
+               {canManagePeople && <Card title="Manage System Roles" className="mt-8 border-l-4 border-l-slate-400">
                   <div className="flex gap-2 mb-4">
                      <Input placeholder="New Role..." value={newRole} onChange={e => setNewRole(e.target.value)} disabled={isSavingRole} className="!py-2.5 !text-sm" />
                      <Button className="!w-auto !py-2 !rounded-xl" onClick={addRole} disabled={isSavingRole} isLoading={isSavingRole}>Add</Button>
@@ -771,7 +799,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                         </div>
                      ))}
                   </div>
-               </Card>
+               </Card>}
             </div>
          </div>
       </div>
