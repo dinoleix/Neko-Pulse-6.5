@@ -50,6 +50,31 @@ export interface TenantContext {
   allOutlets?: boolean;
 }
 
+// A business is created in SETUP first. It cannot be activated until the
+// Phase 2 owner/onboarding flow has created its first owner and outlets.
+// These records are administered only through the trusted platform API.
+export type TenantStatus = 'SETUP' | 'ACTIVE' | 'SUSPENDED';
+
+export interface PlatformTenant {
+  id: string;
+  displayName: string;
+  status: TenantStatus;
+  createdAt?: any;
+  createdByUid?: string;
+  updatedAt?: any;
+  updatedByUid?: string;
+}
+
+export interface PlatformAuditEvent {
+  id?: string;
+  actorUid: string;
+  action: 'TENANT_REGISTERED' | 'TENANT_STATUS_CHANGED';
+  tenantId: string;
+  previousStatus?: TenantStatus;
+  newStatus?: TenantStatus;
+  createdAt?: any;
+}
+
 export interface AppConfig {
   timezone: string;
   currencySymbol?: string;
@@ -105,6 +130,7 @@ export const MODULE_IDS = {
   LOGIN_ACTIVITY: 'LOGIN_ACTIVITY',
   TRAINING: 'TRAINING',
   SETTINGS: 'SETTINGS',
+  PLATFORM: 'PLATFORM',
 
   // Crew App Features
   CREW_ORDERS: 'CREW_ORDERS',

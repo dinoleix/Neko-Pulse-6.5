@@ -20,6 +20,8 @@ import { LoginActivityAdminView } from '../modules/admin/loginactivity/LoginActi
 import { DailyOverviewAdminView } from '../modules/admin/overview/DailyOverviewAdminView';
 import { TrainingAdminView } from '../modules/admin/training/TrainingAdminView';
 import { getCachedSettingsDoc } from '../services/configCache';
+import { PlatformTenantAdminView } from '../modules/admin/platform/PlatformTenantAdminView';
+import { platformTenantService } from '../services/platformTenantService';
 
 interface AdminLayoutProps {
   currentUser: CurrentUser;
@@ -30,6 +32,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
   const [activeModule, setActiveModule] = useState<string | null>(null);
   const [accessConfig, setAccessConfig] = useState<AccessConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
   useEffect(() => {
      // Load Access Matrix
@@ -46,6 +49,17 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
          }
      };
      loadConfig();
+  }, []);
+
+  // This is deliberately independent of an in-tenant role. The trusted API
+  // makes the final platform-admin decision; a tenant Owner does not receive
+  // visibility merely because they own their own business.
+  useEffect(() => {
+    let active = true;
+    platformTenantService.list()
+      .then(() => { if (active) setIsPlatformAdmin(true); })
+      .catch(() => { if (active) setIsPlatformAdmin(false); });
+    return () => { active = false; };
   }, []);
 
   const hasAccess = (moduleId: string): boolean => {
@@ -103,6 +117,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
            {hasAccess(MODULE_IDS.TRAINING) && <ModuleCard title="Training" description="Build skills and certify competence" icon={<GraduationCap/>} color="bg-[#4f6f56]" onClick={() => setActiveModule(MODULE_IDS.TRAINING)}/>}
            {hasAccess(MODULE_IDS.SETTINGS) && <ModuleCard title="System Maint." description="Keep the system in shape" icon={<SettingsIcon/>} color="bg-[#4f5f57]" onClick={() => setActiveModule(MODULE_IDS.SETTINGS)}/>}
            {hasAccess('ACCESS') && <ModuleCard title="Access" description="Set the right permissions" icon={<ShieldCheck/>} color="bg-[#ae5e5c]" onClick={() => setActiveModule('ACCESS')}/>}
+           {isPlatformAdmin && <ModuleCard title="Platform Administration" description="Register and oversee businesses" icon={<ShieldCheck/>} color="bg-[#1f4d3a]" onClick={() => setActiveModule(MODULE_IDS.PLATFORM)}/>}
         </div>
       </div>
     );
@@ -110,7 +125,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
 
   // No exemption for the ACCESS module — the matrix editor is super-role-only
   // (it never appears as a matrix row, so hasAccess only passes via SUPER_ROLES).
-  if (activeModule !== 'DAILY_OVERVIEW' && !hasAccess(activeModule)) {
+  if (activeModule !== 'DAILY_OVERVIEW' && activeModule !== MODULE_IDS.PLATFORM && !hasAccess(activeModule)) {
       return (
           <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
               <Lock className="w-16 h-16 text-slate-300 mb-4"/>
@@ -126,7 +141,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
        <nav className="bg-[#fffdf9]/95 border-b border-[#e7e2d9] sticky top-0 z-20 px-4 md:px-6 py-4 flex justify-between items-center backdrop-blur">
           <div className="flex items-center gap-4">
              <button onClick={() => setActiveModule(null)} className="p-2 hover:bg-slate-100 rounded-xl"><ArrowLeft/></button>
-             <h1 className="font-bold text-xl">{activeModule === 'DAILY_OVERVIEW' ? 'Today’s Overview' : activeModule === MODULE_IDS.EOM ? 'Employee of the Month' : activeModule === MODULE_IDS.RECIPE ? 'Kitchen Recipes' : activeModule === MODULE_IDS.LOGIN_ACTIVITY ? 'Login Activity' : activeModule === MODULE_IDS.TRAINING ? 'Training' : activeModule}</h1>
+             <h1 className="font-bold text-xl">{activeModule === 'DAILY_OVERVIEW' ? 'Today’s Overview' : activeModule === MODULE_IDS.EOM ? 'Employee of the Month' : activeModule === MODULE_IDS.RECIPE ? 'Kitchen Recipes' : activeModule === MODULE_IDS.LOGIN_ACTIVITY ? 'Login Activity' : activeModule === MODULE_IDS.TRAINING ? 'Training' : activeModule === MODULE_IDS.PLATFORM ? 'Platform Administration' : activeModule}</h1>
           </div>
           <Button variant="secondary" className="!w-auto !text-xs" onClick={onLogout}>Logout</Button>
        </nav>
@@ -144,6 +159,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
           {activeModule === MODULE_IDS.EOM && <EOMAdminView />}
           {activeModule === MODULE_IDS.STORES && <StoreAdminView />}
           {activeModule === MODULE_IDS.SETTINGS && <SettingsAdminView />}
+          {activeModule === MODULE_IDS.PLATFORM && isPlatformAdmin && <PlatformTenantAdminView />}
           {activeModule === 'ACCESS' && <AccessAdminView />}
           {activeModule === MODULE_IDS.ATTENDANCE && <AttendanceAdminView launchKiosk={() => {
             const tenant = currentUser.tenantId ? `&tenant=${encodeURIComponent(currentUser.tenantId)}` : '';

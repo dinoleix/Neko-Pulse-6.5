@@ -16,7 +16,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
-    "test:training": "node --test tests/trainingPolicy.test.mjs"
+    "test:training": "node --test tests/trainingPolicy.test.mjs",
+    "test:platform": "node --test tests/platformTenantPolicy.test.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",
