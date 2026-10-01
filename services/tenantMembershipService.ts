@@ -22,12 +22,12 @@ export const tenantMembershipService = {
   getManagerOutletAccess: (uid: string) =>
     authorisedRequest(`/api/tenant-membership?uid=${encodeURIComponent(uid)}`) as Promise<ManagerOutletAccess>,
 
-  setManagerAllOutletAccess: (uid: string, allOutlets: boolean) =>
+  setManagerOutletAccess: (uid: string, allOutlets: boolean, outletIds: string[]) =>
     authorisedRequest('/api/tenant-membership', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'setAllOutlets', uid, allOutlets }),
-    }) as Promise<Pick<ManagerOutletAccess, 'uid' | 'allOutlets'>>,
+      body: JSON.stringify({ action: 'setOutletAccess', uid, allOutlets, outletIds }),
+    }) as Promise<ManagerOutletAccess>,
 
   resetManagerPassword: (uid: string, password: string) =>
     authorisedRequest('/api/tenant-membership', {

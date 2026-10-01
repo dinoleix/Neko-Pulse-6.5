@@ -16,10 +16,9 @@ const isTenantMode = () => process.env.TENANT_MODE === 'sandbox' || process.env.
 const isTenantAdministrator = (membership: any) =>
   membership?.active === true && ['OWNER', 'ADMINISTRATOR'].includes(membership?.personType);
 
-// This endpoint deliberately manages one narrowly scoped permission only:
-// whether an existing manager can access every outlet in their own tenant.
-// It never creates memberships, changes a tenant, or lets a manager alter
-// their own access.
+// This endpoint manages manager outlet access only. It never creates
+// memberships, changes tenant ownership, or lets a manager alter their own
+// access. An Owner/Administrator can grant selected outlets or every outlet.
 export default async function handler(req: any, res: any) {
   if (!['GET', 'PATCH'].includes(req.method)) return send(res, 405, { error: 'Method not allowed.' });
   if (!isTenantMode()) return send(res, 404, { error: 'Tenant access management is not enabled.' });
@@ -69,11 +68,28 @@ export default async function handler(req: any, res: any) {
       return send(res, 200, { uid: targetUid, passwordReset: true });
     }
 
-    if (req.body?.action !== 'setAllOutlets' || typeof req.body?.allOutlets !== 'boolean') {
+    if (req.body?.action !== 'setOutletAccess' || typeof req.body?.allOutlets !== 'boolean'
+      || !Array.isArray(req.body?.outletIds) || !req.body.outletIds.every((id: unknown) => typeof id === 'string')) {
       return send(res, 400, { error: 'Invalid manager access request.' });
     }
-    await targetRef.update({ allOutlets: req.body.allOutlets, updatedAt: FieldValue.serverTimestamp() });
-    return send(res, 200, { uid: targetUid, allOutlets: req.body.allOutlets });
+    const [stores, managerProfile] = await Promise.all([
+      db.collection('stores').where('tenantId', '==', tenantId).get(),
+      db.collection('managers').doc(target.personId).get(),
+    ]);
+    const activeOutletIds = new Set(stores.docs
+      .map(doc => doc.data())
+      .filter(store => store.isActive !== false && typeof store.outletId === 'string')
+      .map(store => store.outletId));
+    const homeOutletId = String(managerProfile.data()?.outletId || '').trim();
+    const selectedOutletIds = [...new Set([...req.body.outletIds.map((id: string) => id.trim()).filter(Boolean), ...(homeOutletId ? [homeOutletId] : [])])];
+    if (!selectedOutletIds.every(id => activeOutletIds.has(id))) {
+      return send(res, 400, { error: 'Select only active outlets in this business.' });
+    }
+    if (!req.body.allOutlets && selectedOutletIds.length === 0) {
+      return send(res, 400, { error: 'Select at least one outlet or enable all-store access.' });
+    }
+    await targetRef.update({ allOutlets: req.body.allOutlets, outletIds: selectedOutletIds, updatedAt: FieldValue.serverTimestamp() });
+    return send(res, 200, { uid: targetUid, allOutlets: req.body.allOutlets, outletIds: selectedOutletIds });
   } catch (error: any) {
     console.error('Tenant membership endpoint failed:', error?.message || error);
     return send(res, 503, { error: 'Manager access could not be updated. Please try again.' });

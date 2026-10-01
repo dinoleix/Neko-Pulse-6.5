@@ -20,7 +20,7 @@ const scopePeopleByOutlet = async (query: firebase.firestore.Query, tenantId?: s
 // Authentication IDs can change when an Owner repairs a staff login. Keep
 // the tenant membership in lockstep with the profile or the person would be
 // authenticated but unable to resolve their tenant-scoped session.
-const syncTenantMembership = (
+const syncTenantMembership = async (
     batch: firebase.firestore.WriteBatch,
     personType: 'CREW' | 'MANAGER',
     personId: string,
@@ -32,17 +32,26 @@ const syncTenantMembership = (
     if (!tenantId || !uid) return;
 
     const previousUid = previous?.authUid;
+    const membershipRef = db.collection('tenantMemberships').doc(`${tenantId}_${uid}`);
+    const existingMembership = (await membershipRef.get()).data() as { outletIds?: string[] } | undefined;
     if (previousUid && previousUid !== uid) {
         batch.delete(db.collection('tenantMemberships').doc(`${tenantId}_${previousUid}`));
     }
 
-    batch.set(db.collection('tenantMemberships').doc(`${tenantId}_${uid}`), {
+    // Editing a manager profile must not silently collapse their selected
+    // multi-outlet access back to their home outlet. Keep the managed list,
+    // while ensuring a newly selected home outlet is always included.
+    const outletIds = personType === 'MANAGER' && previousUid === uid
+        ? [...new Set([...(existingMembership?.outletIds || []), ...(payload.outletId ? [payload.outletId] : [])])]
+        : (payload.outletId ? [payload.outletId] : []);
+
+    batch.set(membershipRef, {
         tenantId,
         uid,
         personId,
         personType,
         role: payload.role || previous?.role || null,
-        outletIds: payload.outletId ? [payload.outletId] : [],
+        outletIds,
         active: payload.active ?? previous?.active ?? true,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -157,7 +166,7 @@ export const employeeService = {
         const previous = (await ref.get()).data() as Partial<CrewMember> | undefined;
         const batch = db.batch();
         batch.set(ref, payload, { merge: true });
-        syncTenantMembership(batch, 'CREW', docId, previous, payload);
+        await syncTenantMembership(batch, 'CREW', docId, previous, payload);
         await batch.commit();
         await (await crewDirectoryRef()).doc(docId!).set(directoryFields(payload), { merge: true });
     },
@@ -184,7 +193,7 @@ export const employeeService = {
         const previous = (await ref.get()).data() as Partial<CrewMember> | undefined;
         const batch = db.batch();
         batch.set(ref, payload, { merge: true });
-        syncTenantMembership(batch, 'MANAGER', docId, previous, payload);
+        await syncTenantMembership(batch, 'MANAGER', docId, previous, payload);
         await batch.commit();
     },
 

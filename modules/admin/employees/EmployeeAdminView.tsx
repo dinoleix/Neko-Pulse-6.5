@@ -56,6 +56,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    const [deletingId, setDeletingId] = useState<string | null>(null);
    const [isSavingCrew, setIsSavingCrew] = useState(false);
    const [managerAllOutlets, setManagerAllOutlets] = useState(false);
+   const [managerOutletIds, setManagerOutletIds] = useState<string[]>([]);
    const [isLoadingManagerAccess, setIsLoadingManagerAccess] = useState(false);
    const [isSavingManagerAccess, setIsSavingManagerAccess] = useState(false);
    const [managerResetPassword, setManagerResetPassword] = useState('');
@@ -189,11 +190,15 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       setEditingId(member.id!);
       setIsCreating(true);
       setManagerAllOutlets(false);
+      setManagerOutletIds([]);
       setManagerResetPassword('');
       if (activeTab === 'MANAGERS' && canManageManagerOutletAccess && member.authUid) {
          setIsLoadingManagerAccess(true);
          tenantMembershipService.getManagerOutletAccess(member.authUid)
-            .then(access => setManagerAllOutlets(access.allOutlets))
+            .then(access => {
+               setManagerAllOutlets(access.allOutlets);
+               setManagerOutletIds(access.outletIds.length ? access.outletIds : (member.outletId ? [member.outletId] : []));
+            })
             .catch(error => console.warn('Manager outlet access could not be loaded:', error))
             .finally(() => setIsLoadingManagerAccess(false));
       }
@@ -218,6 +223,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       });
       setNewManagerPassword('');
       setManagerAllOutlets(false);
+      setManagerOutletIds([]);
       setManagerResetPassword('');
       setEditingId(null);
       setIsCreating(false);
@@ -252,19 +258,34 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
          alert('This manager has no login account yet. Create their login before assigning all-store access.');
          return;
       }
+      if (!managerAllOutlets && managerOutletIds.length === 0) {
+         alert('Select at least one store for this manager.');
+         return;
+      }
+      const selectedNames = stores.filter(store => managerOutletIds.includes(store.outletId)).map(store => store.name).join(', ');
       const message = managerAllOutlets
          ? `Give ${manager.crewName} access to every current and future store in this business?`
-         : `Restrict ${manager.crewName} to their assigned store only?`;
+         : `Give ${manager.crewName} access to: ${selectedNames}?`;
       if (!window.confirm(message)) return;
       setIsSavingManagerAccess(true);
       try {
-         await tenantMembershipService.setManagerAllOutletAccess(manager.authUid, managerAllOutlets);
-         alert(managerAllOutlets ? 'All-store access enabled for this manager.' : 'This manager is now limited to their assigned store.');
+         const access = await tenantMembershipService.setManagerOutletAccess(manager.authUid, managerAllOutlets, managerOutletIds);
+         setManagerAllOutlets(access.allOutlets);
+         setManagerOutletIds(access.outletIds);
+         alert(managerAllOutlets ? 'All-store access enabled for this manager.' : 'Selected store access saved for this manager.');
       } catch (error: any) {
          alert(`Could not update manager access: ${error.message}`);
       } finally {
          setIsSavingManagerAccess(false);
       }
+   };
+
+   const toggleManagerOutlet = (outletId: string) => {
+      setManagerOutletIds(current => {
+         if (outletId === newCrew.outletId) return current.includes(outletId) ? current : [...current, outletId];
+         if (current.includes(outletId)) return current.length === 1 ? current : current.filter(id => id !== outletId);
+         return [...current, outletId];
+      });
    };
 
    const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -715,11 +736,24 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                               {!editingId && <Input type="text" placeholder="Set Password *" value={newManagerPassword} onChange={e => setNewManagerPassword(e.target.value)} />}
                               {editingId && canManageManagerOutletAccess && (
                                  <>
-                                 <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 space-y-3">
+                                 <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 space-y-4">
                                     <div className="flex items-start justify-between gap-3">
                                        <div>
-                                          <p className="text-xs font-bold text-indigo-950">All stores in this business</p>
-                                          <p className="mt-1 text-[10px] leading-relaxed text-indigo-700">Turn this on only for a manager who should work across every current and future outlet. It never gives access to another business.</p>
+                                          <p className="text-xs font-bold text-indigo-950">Stores this manager can manage</p>
+                                          <p className="mt-1 text-[10px] leading-relaxed text-indigo-700">Select the specific outlets they manage. These permissions apply to shifts, people, reports, and other outlet-scoped work.</p>
+                                       </div>
+                                    </div>
+                                    <div className="space-y-2 rounded-xl border border-indigo-100 bg-white/70 p-3">
+                                       {stores.map(store => <label key={store.id} className="flex items-center gap-3 text-xs font-semibold text-slate-700 cursor-pointer">
+                                          <Checkbox checked={managerAllOutlets || managerOutletIds.includes(store.outletId) || store.outletId === newCrew.outletId} onChange={() => toggleManagerOutlet(store.outletId)} disabled={managerAllOutlets || isLoadingManagerAccess || isSavingManagerAccess} />
+                                          <span>{store.name}</span>
+                                          {store.outletId === newCrew.outletId && <span className="ml-auto text-[9px] uppercase tracking-wide text-indigo-500">Home store</span>}
+                                       </label>)}
+                                    </div>
+                                    <div className="flex items-start justify-between gap-3 rounded-xl border border-indigo-100 bg-white/70 p-3">
+                                       <div>
+                                          <p className="text-xs font-bold text-indigo-950">Every current and future store</p>
+                                          <p className="mt-1 text-[10px] leading-relaxed text-indigo-700">Use only for operations-level managers. It never gives access to another business.</p>
                                        </div>
                                        <Checkbox checked={managerAllOutlets} onChange={e => setManagerAllOutlets(e.target.checked)} disabled={isLoadingManagerAccess || isSavingManagerAccess} />
                                     </div>
