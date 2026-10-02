@@ -45,15 +45,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
       // land in the full admin hub, and the session then died on refresh
       // (the restore path never checked managers for synthetic accounts).
       // Admins sign in with their email on the Manager Login tab.
-      let docSnap = await db.collection('crew').doc(uid).get();
-
-      // Fallback: Check via authUid field if Doc ID doesn't match
-      if (!docSnap.exists) {
-          const querySnap = await db.collection('crew').where('authUid', '==', uid).limit(1).get();
-          if (!querySnap.empty) {
-              docSnap = querySnap.docs[0];
-          }
-      }
+      // Look up the authUid mapping first. A legacy document ID may not be
+      // readable at /crew/{uid}, so querying its self-only mapping must happen
+      // before the direct-ID compatibility lookup.
+      const mappedSnap = await db.collection('crew').where('authUid', '==', uid).limit(1).get();
+      let docSnap = mappedSnap.docs[0];
+      if (!docSnap) docSnap = await db.collection('crew').doc(uid).get();
 
       if (docSnap.exists) {
           userProfile = docSnap.data() as CrewMember;
@@ -155,15 +152,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         }
         
         // STRICT CHECK: MANAGERS COLLECTION ONLY
-        let managerDoc = await db.collection('managers').doc(uid).get();
-        
-        // Fallback for migrated managers
-        if (!managerDoc.exists) {
-             const querySnap = await db.collection('managers').where('authUid', '==', uid).limit(1).get();
-             if (!querySnap.empty) {
-                 managerDoc = querySnap.docs[0];
-             }
-        }
+        // Resolve a legacy manager mapping before the direct document lookup.
+        // This avoids a denied read of /managers/{uid} when the old profile
+        // still has a generated document ID.
+        const mappedSnap = await db.collection('managers').where('authUid', '==', uid).limit(1).get();
+        let managerDoc = mappedSnap.docs[0];
+        if (!managerDoc) managerDoc = await db.collection('managers').doc(uid).get();
         
         if (!managerDoc.exists) {
             // Safety Check: Did a crew member try to login here?

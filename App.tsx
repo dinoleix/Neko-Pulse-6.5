@@ -94,22 +94,20 @@ function App() {
             let docId: string | undefined;
 
             if (isSynthetic) {
-                // 1. CREW LOGIN: Check 'crew' collection
-                const docSnap = await db.collection('crew').doc(user.uid).get();
+                // Query the self-only authUid mapping first. Some legacy crew
+                // records still use a generated document ID, and reading the
+                // guessed /crew/{uid} path would be denied before fallback.
+                const linkedSnap = await db.collection('crew').where('authUid', '==', user.uid).limit(1).get();
+                const docSnap = linkedSnap.docs[0] || await db.collection('crew').doc(user.uid).get();
                 if (docSnap.exists) {
                     userProfile = docSnap.data() as CrewMember;
                     docId = docSnap.id;
-                } else {
-                    // Legacy migration support
-                    const linkedSnap = await db.collection('crew').where('authUid', '==', user.uid).limit(1).get();
-                    if (!linkedSnap.empty) {
-                        userProfile = linkedSnap.docs[0].data() as CrewMember;
-                        docId = linkedSnap.docs[0].id;
-                    }
                 }
             } else {
-                // 2. ADMIN LOGIN: Check 'managers' collection
-                const managerSnap = await db.collection('managers').doc(user.uid).get();
+                // The same mapping-first sequence is required for legacy
+                // manager accounts during session restore.
+                const linkedSnap = await db.collection('managers').where('authUid', '==', user.uid).limit(1).get();
+                const managerSnap = linkedSnap.docs[0] || await db.collection('managers').doc(user.uid).get();
                 if (managerSnap.exists) {
                     userProfile = managerSnap.data() as CrewMember;
                     docId = managerSnap.id;
