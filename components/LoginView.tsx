@@ -20,6 +20,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   const [crewCode, setCrewCode] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isRecoveringLegacyAccess, setIsRecoveringLegacyAccess] = useState(false);
+  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
 
   const handleStaffLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -202,6 +204,35 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
     }
   };
 
+  // Explicit, owner-triggered recovery for a legacy manager record whose
+  // Firestore document ID does not yet match its Firebase Auth ID. The server
+  // verifies the signed-in account is an Owner/Super Admin before writing.
+  const recoverLegacyOwnerAccess = async () => {
+    if (!email.trim() || !password) {
+      setError('Enter the owner email and password first.');
+      return;
+    }
+    setIsRecoveringLegacyAccess(true);
+    setError(null);
+    setRecoveryMessage(null);
+    try {
+      const credential = await auth.signInWithEmailAndPassword(email.trim(), password);
+      if (!credential.user) throw new Error('Authentication failed.');
+      const response = await fetch('/api/repair-auth-uids', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${await credential.user.getIdToken()}` },
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Profile repair could not be completed.');
+      await auth.signOut();
+      setRecoveryMessage(`${body.repaired || 0} legacy profile${body.repaired === 1 ? '' : 's'} repaired. You can now sign in normally.`);
+    } catch (err: any) {
+      setError(err?.message || 'Profile repair could not be completed.');
+    } finally {
+      setIsRecoveringLegacyAccess(false);
+    }
+  };
+
   return (
     <div className="min-h-screen neko-shell flex items-center justify-center p-6 relative overflow-hidden">
       <div className="absolute top-0 right-0 w-80 h-80 bg-[#efb5aa] rounded-full blur-3xl opacity-20 -translate-y-1/2 translate-x-1/3"></div>
@@ -250,10 +281,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
               </div>
 
               {error && <p className="text-red-500 text-sm text-center bg-red-50 p-3 rounded-xl font-medium border border-red-100">{error}</p>}
+              {recoveryMessage && <p className="text-emerald-700 text-sm text-center bg-emerald-50 p-3 rounded-xl font-medium border border-emerald-100">{recoveryMessage}</p>}
               
               <Button type="submit" isLoading={isLoading} className="shadow-emerald-300/50 mt-4">
                 Login to Dashboard
               </Button>
+              <button type="button" onClick={recoverLegacyOwnerAccess} disabled={isLoading || isRecoveringLegacyAccess} className="w-full text-xs font-bold text-amber-700 hover:text-amber-900 disabled:opacity-50 transition-colors">
+                {isRecoveringLegacyAccess ? 'Repairing legacy owner access…' : 'Recover legacy owner access'}
+              </button>
               <button type="button" onClick={() => { setMode('staff'); setError(null); }} className="w-full text-xs font-bold text-slate-400 hover:text-[#0b6b4d] transition-colors">
                 ← Back to staff access
               </button>
