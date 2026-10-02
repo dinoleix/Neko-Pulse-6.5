@@ -66,6 +66,14 @@ service cloud.firestore {
         (hasManagerAccess('HR') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documents'])) ||
         (hasManagerAccess('ATTENDANCE') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['leaveBalanceOverride', 'leaveBalanceOverrideDate']));
     }
+    // Tenant mode resolves the signed-in person's business membership before
+    // loading their manager or crew profile. This must be self-only: a query
+    // constrained to the caller's Auth UID is permitted, but memberships are
+    // never listable or writable from the browser.
+    match /tenantMemberships/{membershipId} {
+      allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow create, update, delete: if false;
+    }
     match /crewDirectory/{crewId} {
       allow read: if isStaff();
       allow write: if canManagePeople();
