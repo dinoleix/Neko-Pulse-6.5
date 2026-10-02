@@ -30,6 +30,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
   const [activeModule, setActiveModule] = useState<string | null>(null);
   const [accessConfig, setAccessConfig] = useState<AccessConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRepairingLegacyLogins, setIsRepairingLegacyLogins] = useState(false);
+  const [legacyRepairMessage, setLegacyRepairMessage] = useState<string | null>(null);
 
   useEffect(() => {
      // Load Access Matrix
@@ -69,6 +71,26 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
   const isSecurityAdmin = ['owner', 'super admin', 'admin', 'system admin']
     .includes(currentUser.accessRole?.trim().toLowerCase() || '');
 
+  const repairLegacyLogins = async () => {
+    setIsRepairingLegacyLogins(true);
+    setLegacyRepairMessage(null);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Please sign in again before repairing staff logins.');
+      const response = await fetch('/api/repair-auth-uids', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'The repair could not be completed.');
+      setLegacyRepairMessage(`${body.repaired || 0} legacy login profile${body.repaired === 1 ? '' : 's'} repaired.`);
+    } catch (error: any) {
+      setLegacyRepairMessage(error?.message || 'The repair could not be completed.');
+    } finally {
+      setIsRepairingLegacyLogins(false);
+    }
+  };
+
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-emerald-600 font-bold">Loading Admin Hub...</div>;
 
   if (!activeModule) {
@@ -104,6 +126,16 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
            {hasAccess(MODULE_IDS.SETTINGS) && <ModuleCard title="System Maint." description="Keep the system in shape" icon={<SettingsIcon/>} color="bg-[#4f5f57]" onClick={() => setActiveModule(MODULE_IDS.SETTINGS)}/>}
            {hasAccess('ACCESS') && <ModuleCard title="Access" description="Set the right permissions" icon={<ShieldCheck/>} color="bg-[#ae5e5c]" onClick={() => setActiveModule('ACCESS')}/>}
         </div>
+        {isSecurityAdmin && (
+          <div className="max-w-6xl mx-auto mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex-1">
+              <p className="font-bold text-amber-950">Legacy staff login repair</p>
+              <p className="text-sm text-amber-800">Restores access for older staff accounts whose login ID differs from their profile ID.</p>
+              {legacyRepairMessage && <p className="text-sm font-bold text-amber-900 mt-1">{legacyRepairMessage}</p>}
+            </div>
+            <Button onClick={repairLegacyLogins} isLoading={isRepairingLegacyLogins} className="!w-auto !bg-amber-700 hover:!bg-amber-800">Repair staff logins</Button>
+          </div>
+        )}
       </div>
     );
   }
