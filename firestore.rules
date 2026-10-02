@@ -51,11 +51,16 @@ service cloud.firestore {
     match /{document=**} { allow read, write: if false; }
 
     match /managers/{managerId} {
-      allow read: if (isManager() && request.auth.uid == managerId) || canManagePeople();
+      // Legacy profiles may still use a generated document ID even though the
+      // corresponding Firebase Auth ID is stored in authUid. Let an
+      // authenticated manager read only their own matching profile so they
+      // can complete the one-time ID repair; no other profile becomes visible.
+      allow read: if (isAuthenticated() && (request.auth.uid == managerId || resource.data.authUid == request.auth.uid)) || canManagePeople();
       allow create, update, delete: if canManagePeople();
     }
     match /crew/{crewId} {
-      allow read: if (isCrew() && request.auth.uid == crewId) || canReadCrew() || canTrainAtOutlet(resource.data.outletId);
+      // The same narrowly scoped legacy-login bridge as /managers above.
+      allow read: if (isAuthenticated() && (request.auth.uid == crewId || resource.data.authUid == request.auth.uid)) || canReadCrew() || canTrainAtOutlet(resource.data.outletId);
       allow create, delete: if canManagePeople();
       allow update: if canManagePeople() ||
         (hasManagerAccess('HR') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documents'])) ||
