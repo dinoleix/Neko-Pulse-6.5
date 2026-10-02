@@ -10,6 +10,17 @@ service cloud.firestore {
       return isAuthenticated() && exists(/databases/$(database)/documents/crew/$(request.auth.uid));
     }
     function isStaff() { return isCrew() || isManager(); }
+    // Tenant-enabled clients resolve access through this membership record.
+    // The ID is deterministic, so rules never need a broad membership query.
+    function hasTenantMembership(tenantId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/tenantMemberships/$(tenantId + '_' + request.auth.uid)) &&
+        get(/databases/$(database)/documents/tenantMemberships/$(tenantId + '_' + request.auth.uid)).data.active == true;
+    }
+    function isTenantAdministrator(tenantId) {
+      return hasTenantMembership(tenantId) &&
+        get(/databases/$(database)/documents/tenantMemberships/$(tenantId + '_' + request.auth.uid)).data.personType in ['OWNER', 'ADMINISTRATOR'];
+    }
     function isOwner(userIdField) {
       return isAuthenticated() && request.resource.data[userIdField] == request.auth.uid;
     }
@@ -55,12 +66,12 @@ service cloud.firestore {
       // corresponding Firebase Auth ID is stored in authUid. Let an
       // authenticated manager read only their own matching profile so they
       // can complete the one-time ID repair; no other profile becomes visible.
-      allow read: if (isAuthenticated() && (request.auth.uid == managerId || resource.data.authUid == request.auth.uid)) || canManagePeople();
+      allow read: if (isAuthenticated() && (request.auth.uid == managerId || resource.data.authUid == request.auth.uid)) || canManagePeople() || isTenantAdministrator(resource.data.tenantId);
       allow create, update, delete: if canManagePeople();
     }
     match /crew/{crewId} {
       // The same narrowly scoped legacy-login bridge as /managers above.
-      allow read: if (isAuthenticated() && (request.auth.uid == crewId || resource.data.authUid == request.auth.uid)) || canReadCrew() || canTrainAtOutlet(resource.data.outletId);
+      allow read: if (isAuthenticated() && (request.auth.uid == crewId || resource.data.authUid == request.auth.uid)) || canReadCrew() || canTrainAtOutlet(resource.data.outletId) || isTenantAdministrator(resource.data.tenantId);
       allow create, delete: if canManagePeople();
       allow update: if canManagePeople() ||
         (hasManagerAccess('HR') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documents'])) ||
@@ -74,6 +85,18 @@ service cloud.firestore {
       allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
       allow create, update, delete: if false;
     }
+    match /tenantSettings/{tenantId}/config/{settingId} {
+      allow read: if hasTenantMembership(tenantId);
+      allow write: if isTenantAdministrator(tenantId);
+    }
+    match /tenantSettings/{tenantId}/roles/{roleId} {
+      allow read: if hasTenantMembership(tenantId);
+      allow write: if isTenantAdministrator(tenantId);
+    }
+    match /tenantSettings/{tenantId}/crewDirectory/{crewId} {
+      allow read: if hasTenantMembership(tenantId);
+      allow write: if isTenantAdministrator(tenantId);
+    }
     match /crewDirectory/{crewId} {
       allow read: if isStaff();
       allow write: if canManagePeople();
@@ -83,7 +106,7 @@ service cloud.firestore {
       allow write: if canManagePeople();
     }
     match /stores/{storeId} {
-      allow read: if isStaff();
+      allow read: if isStaff() || isTenantAdministrator(resource.data.tenantId);
       allow write: if hasManagerAccess('STORES');
     }
 
@@ -93,16 +116,16 @@ service cloud.firestore {
       allow update, delete: if hasManagerAccess('ACCURACY') || hasManagerAccess('SETTINGS');
     }
     match /tasks/{taskId} {
-      allow read: if isCrew() || hasManagerAccess('TASKS') || canReadReportsData() || hasManagerAccess('SETTINGS');
+      allow read: if isCrew() || hasManagerAccess('TASKS') || canReadReportsData() || hasManagerAccess('SETTINGS') || isTenantAdministrator(resource.data.tenantId);
       allow create, update: if hasManagerAccess('TASKS');
       allow delete: if hasManagerAccess('TASKS') || hasManagerAccess('SETTINGS');
     }
     match /taskTemplates/{templateId} {
-      allow read: if isCrew() || hasManagerAccess('TASKS');
+      allow read: if isCrew() || hasManagerAccess('TASKS') || isTenantAdministrator(resource.data.tenantId);
       allow write: if hasManagerAccess('TASKS');
     }
     match /taskLogs/{logId} {
-      allow read: if isCrew() || hasManagerAccess('TASKS') || canReadReportsData() || hasManagerAccess('SETTINGS');
+      allow read: if isCrew() || hasManagerAccess('TASKS') || canReadReportsData() || hasManagerAccess('SETTINGS') || isTenantAdministrator(resource.data.tenantId);
       allow create: if hasManagerAccess('TASKS') || (isCrew() && isOwner('crewId'));
       allow update: if hasManagerAccess('TASKS') || (isCrew() && resource.data.crewId == request.auth.uid);
       allow delete: if hasManagerAccess('TASKS') || hasManagerAccess('SETTINGS');
