@@ -40,7 +40,7 @@ const endOfMonth = (date: Date) => {
 };
 
 export const ShiftCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUser }) => {
-    const isCounterRole = currentUser.accessRole === 'Counter';
+    const isCounterRole = currentUser.accessRole?.trim().toLowerCase() === 'counter';
     const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
     const [holidays, setHolidays] = useState<CafeHoliday[]>([]);
     const [viewMode, setViewMode] = useState<'WEEK' | 'MONTH'>('WEEK');

@@ -39,6 +39,7 @@ export const TaskCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUs
     const [proofPhotos, setProofPhotos] = useState<Blob[]>([]);
     const [proofPhotoPreviews, setProofPhotoPreviews] = useState<string[]>([]);
     const [proofAudio, setProofAudio] = useState<Blob | null>(null);
+    const isCounterRole = currentUser.accessRole?.trim().toLowerCase() === 'counter';
 
     useEffect(() => {
         // Load timezone and alert config
@@ -129,10 +130,15 @@ export const TaskCrewView: React.FC<{ currentUser: CurrentUser }> = ({ currentUs
             const todayDayName = format(nowTz, 'EEEE');
             const todayDate = getDate(nowTz);
 
-            // Filter tasks relevant to current user/outlet AND scheduled for today
+            // Counter staff coordinate the task list for their assigned outlet.
+            // Other crew members remain limited to their own assignments. Older
+            // task records use the crew profile document ID, while newer login
+            // sessions use the Firebase Auth ID, so support both identities.
             const relevantTasks = allTasks.filter(t => {
                 const matchesOutlet = t.outletId === currentUser.outletId;
-                const matchesAssignee = t.assignedCrewIds?.length ? t.assignedCrewIds.includes(currentUser.uid) : true;
+                const matchesAssignee = isCounterRole || !t.assignedCrewIds?.length
+                    || t.assignedCrewIds.includes(currentUser.uid)
+                    || (!!currentUser.dbId && t.assignedCrewIds.includes(currentUser.dbId));
                 
                 if (!matchesOutlet || !matchesAssignee) return false;
 

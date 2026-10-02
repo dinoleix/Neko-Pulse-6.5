@@ -30,7 +30,11 @@ interface CrewLayoutProps {
 }
 
 export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout }) => {
-  const isCounterRole = currentUser.accessRole === 'Counter';
+  // Role labels entered in the employee directory predate the access matrix
+  // and are not consistently cased (for example, Counter / COUNTER). Treat
+  // the label case-insensitively so the intended Counter experience is used.
+  const normalizedRole = currentUser.accessRole?.trim().toLowerCase();
+  const isCounterRole = normalizedRole === 'counter';
   const [activeTab, setActiveTab] = useState<string>(isCounterRole ? 'tasks' : 'attendance');
 
   const [allowedAdmin, setAllowedAdmin] = useState<string[]>([]);
@@ -71,6 +75,9 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
         setIsLoading(true);
         try {
             const role = currentUser.accessRole;
+            const roleMatches = (roles?: string[]) => Boolean(
+                role && roles?.some(candidate => candidate.trim().toLowerCase() === role.trim().toLowerCase())
+            );
             
             const conf = (await getCachedSettingsDoc('accessConfig')) as AccessConfig | null;
             if(conf && role) {
@@ -81,15 +88,15 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
                // role silently gave every staff member with that role name the
                // admin pages too.
                const allowed = Object.entries(conf)
-                    .filter(([key, roles]) => key.startsWith('CREWADMIN_') && Array.isArray(roles) && roles.includes(role))
+                    .filter(([key, roles]) => key.startsWith('CREWADMIN_') && Array.isArray(roles) && roleMatches(roles))
                     .map(([k]) => k.replace('CREWADMIN_', ''));
                setAllowedAdmin(allowed);
 
-               setCanViewOrders(conf[MODULE_IDS.CREW_ORDERS] ? conf[MODULE_IDS.CREW_ORDERS].includes(role) : true);
-               setCanViewTasks(conf[MODULE_IDS.CREW_TASKS] ? conf[MODULE_IDS.CREW_TASKS].includes(role) : true);
-               setCanViewEOM(conf[MODULE_IDS.CREW_EOM] ? conf[MODULE_IDS.CREW_EOM].includes(role) : true);
-               setCanViewRecipe(conf[MODULE_IDS.CREW_RECIPE] ? conf[MODULE_IDS.CREW_RECIPE].includes(role) : false);
-               setCanViewTraining(conf[MODULE_IDS.CREW_TRAINING] ? conf[MODULE_IDS.CREW_TRAINING].includes(role) : true);
+               setCanViewOrders(conf[MODULE_IDS.CREW_ORDERS] ? roleMatches(conf[MODULE_IDS.CREW_ORDERS]) : true);
+               setCanViewTasks(conf[MODULE_IDS.CREW_TASKS] ? roleMatches(conf[MODULE_IDS.CREW_TASKS]) : true);
+               setCanViewEOM(conf[MODULE_IDS.CREW_EOM] ? roleMatches(conf[MODULE_IDS.CREW_EOM]) : true);
+               setCanViewRecipe(conf[MODULE_IDS.CREW_RECIPE] ? roleMatches(conf[MODULE_IDS.CREW_RECIPE]) : false);
+               setCanViewTraining(conf[MODULE_IDS.CREW_TRAINING] ? roleMatches(conf[MODULE_IDS.CREW_TRAINING]) : true);
             }
 
             // Cheap birthday lookup (~0-2 reads) against /crewDirectory — the
