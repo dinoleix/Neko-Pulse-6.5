@@ -94,20 +94,27 @@ function App() {
             let docId: string | undefined;
 
             if (isSynthetic) {
-                // Query the self-only authUid mapping first. Some legacy crew
-                // records still use a generated document ID, and reading the
-                // guessed /crew/{uid} path would be denied before fallback.
-                const linkedSnap = await db.collection('crew').where('authUid', '==', user.uid).limit(1).get();
-                const docSnap = linkedSnap.docs[0] || await db.collection('crew').doc(user.uid).get();
+                // Prefer the Auth-ID document created by the legacy repair.
+                // Firestore can authorize this exact path without evaluating a
+                // collection query. The authUid lookup remains a fallback for
+                // profiles that have not been repaired yet.
+                let docSnap = await db.collection('crew').doc(user.uid).get();
+                if (!docSnap.exists) {
+                    const linkedSnap = await db.collection('crew').where('authUid', '==', user.uid).limit(1).get();
+                    docSnap = linkedSnap.docs[0] || docSnap;
+                }
                 if (docSnap.exists) {
                     userProfile = docSnap.data() as CrewMember;
                     docId = docSnap.id;
                 }
             } else {
-                // The same mapping-first sequence is required for legacy
-                // manager accounts during session restore.
-                const linkedSnap = await db.collection('managers').where('authUid', '==', user.uid).limit(1).get();
-                const managerSnap = linkedSnap.docs[0] || await db.collection('managers').doc(user.uid).get();
+                // Use the repaired Auth-ID document first, then fall back to
+                // an unrepaired legacy profile when needed.
+                let managerSnap = await db.collection('managers').doc(user.uid).get();
+                if (!managerSnap.exists) {
+                    const linkedSnap = await db.collection('managers').where('authUid', '==', user.uid).limit(1).get();
+                    managerSnap = linkedSnap.docs[0] || managerSnap;
+                }
                 if (managerSnap.exists) {
                     userProfile = managerSnap.data() as CrewMember;
                     docId = managerSnap.id;

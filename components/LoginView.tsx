@@ -47,12 +47,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
       // land in the full admin hub, and the session then died on refresh
       // (the restore path never checked managers for synthetic accounts).
       // Admins sign in with their email on the Manager Login tab.
-      // Look up the authUid mapping first. A legacy document ID may not be
-      // readable at /crew/{uid}, so querying its self-only mapping must happen
-      // before the direct-ID compatibility lookup.
-      const mappedSnap = await db.collection('crew').where('authUid', '==', uid).limit(1).get();
-      let docSnap = mappedSnap.docs[0];
-      if (!docSnap) docSnap = await db.collection('crew').doc(uid).get();
+      // Prefer the Auth-ID profile produced by legacy repair. A legacy
+      // authUid query is only needed when a profile has not yet been repaired.
+      let docSnap = await db.collection('crew').doc(uid).get();
+      if (!docSnap.exists) {
+          const mappedSnap = await db.collection('crew').where('authUid', '==', uid).limit(1).get();
+          docSnap = mappedSnap.docs[0] || docSnap;
+      }
 
       if (docSnap.exists) {
           userProfile = docSnap.data() as CrewMember;
@@ -154,12 +155,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         }
         
         // STRICT CHECK: MANAGERS COLLECTION ONLY
-        // Resolve a legacy manager mapping before the direct document lookup.
-        // This avoids a denied read of /managers/{uid} when the old profile
-        // still has a generated document ID.
-        const mappedSnap = await db.collection('managers').where('authUid', '==', uid).limit(1).get();
-        let managerDoc = mappedSnap.docs[0];
-        if (!managerDoc) managerDoc = await db.collection('managers').doc(uid).get();
+        // Prefer the Auth-ID profile produced by legacy repair, keeping the
+        // legacy mapping only as a fallback for un-repaired profiles.
+        let managerDoc = await db.collection('managers').doc(uid).get();
+        if (!managerDoc.exists) {
+             const mappedSnap = await db.collection('managers').where('authUid', '==', uid).limit(1).get();
+             managerDoc = mappedSnap.docs[0] || managerDoc;
+        }
         
         if (!managerDoc.exists) {
             // Safety Check: Did a crew member try to login here?
