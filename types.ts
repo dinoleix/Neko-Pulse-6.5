@@ -50,6 +50,20 @@ export interface TenantContext {
   allOutlets?: boolean;
 }
 
+// Platform records are deliberately separate from a business owner's role.
+// A tenant owner governs one business; a platform administrator can onboard
+// businesses and never gains their operational data through this type alone.
+export interface PlatformTenant {
+  id: string;
+  name: string;
+  slug: string;
+  status: 'ACTIVE' | 'SUSPENDED';
+  timezone: string;
+  outletCount?: number;
+  ownerEmail?: string;
+  createdAt?: any;
+}
+
 export interface AppConfig {
   timezone: string;
   currencySymbol?: string;

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '../firebaseConfig';
 import { Button } from './SharedComponents';
-import { LogOut, ArrowLeft, CheckCircle, ClipboardList, Users, Store as StoreIcon, ShieldCheck, CalendarClock, Calendar, Briefcase, Lock, FileBarChart, Trophy, Settings as SettingsIcon, ChefHat, LogIn, LayoutDashboard, GraduationCap } from 'lucide-react';
+import { LogOut, ArrowLeft, CheckCircle, ClipboardList, Users, Store as StoreIcon, ShieldCheck, CalendarClock, Calendar, Briefcase, Lock, FileBarChart, Trophy, Settings as SettingsIcon, ChefHat, LogIn, LayoutDashboard, GraduationCap, Building2 } from 'lucide-react';
 import { MODULE_IDS, CurrentUser, AccessConfig } from '../types';
 import { OrderAdminView } from '../modules/admin/orders/OrderAdminView'; 
 import { TaskAdminView } from '../modules/admin/tasks/TaskAdminView'; 
@@ -20,6 +20,8 @@ import { LoginActivityAdminView } from '../modules/admin/loginactivity/LoginActi
 import { DailyOverviewAdminView } from '../modules/admin/overview/DailyOverviewAdminView';
 import { TrainingAdminView } from '../modules/admin/training/TrainingAdminView';
 import { getCachedSettingsDoc } from '../services/configCache';
+import { platformTenantService } from '../services/platformTenantService';
+import { PlatformAdminView } from '../modules/admin/platform/PlatformAdminView';
 
 interface AdminLayoutProps {
   currentUser: CurrentUser;
@@ -32,6 +34,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
   const [isLoading, setIsLoading] = useState(true);
   const [isRepairingLegacyLogins, setIsRepairingLegacyLogins] = useState(false);
   const [legacyRepairMessage, setLegacyRepairMessage] = useState<string | null>(null);
+  const [isPlatformAdministrator, setIsPlatformAdministrator] = useState(false);
 
   useEffect(() => {
      // Load Access Matrix
@@ -48,6 +51,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
          }
      };
      loadConfig();
+     platformTenantService.capability().then(setIsPlatformAdministrator).catch(() => setIsPlatformAdministrator(false));
   }, []);
 
   const hasAccess = (moduleId: string): boolean => {
@@ -125,6 +129,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
            {hasAccess(MODULE_IDS.TRAINING) && <ModuleCard title="Training" description="Build skills and certify competence" icon={<GraduationCap/>} color="bg-[#4f6f56]" onClick={() => setActiveModule(MODULE_IDS.TRAINING)}/>}
            {hasAccess(MODULE_IDS.SETTINGS) && <ModuleCard title="System Maint." description="Keep the system in shape" icon={<SettingsIcon/>} color="bg-[#4f5f57]" onClick={() => setActiveModule(MODULE_IDS.SETTINGS)}/>}
            {hasAccess('ACCESS') && <ModuleCard title="Access" description="Set the right permissions" icon={<ShieldCheck/>} color="bg-[#ae5e5c]" onClick={() => setActiveModule('ACCESS')}/>}
+           {isPlatformAdministrator && <ModuleCard title="Platform Administration" description="Onboard and manage businesses" icon={<Building2/>} color="bg-[#473b68]" onClick={() => setActiveModule('PLATFORM_ADMIN')}/>}
         </div>
         {isSecurityAdmin && (
           <div className="max-w-6xl mx-auto mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -142,7 +147,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
 
   // No exemption for the ACCESS module — the matrix editor is super-role-only
   // (it never appears as a matrix row, so hasAccess only passes via SUPER_ROLES).
-  if (activeModule !== 'DAILY_OVERVIEW' && !hasAccess(activeModule)) {
+  if (activeModule !== 'DAILY_OVERVIEW' && activeModule !== 'PLATFORM_ADMIN' && !hasAccess(activeModule)) {
       return (
           <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
               <Lock className="w-16 h-16 text-slate-300 mb-4"/>
@@ -158,7 +163,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
        <nav className="bg-[#fffdf9]/95 border-b border-[#e7e2d9] sticky top-0 z-20 px-4 md:px-6 py-4 flex justify-between items-center backdrop-blur">
           <div className="flex items-center gap-4">
              <button onClick={() => setActiveModule(null)} className="p-2 hover:bg-slate-100 rounded-xl"><ArrowLeft/></button>
-             <h1 className="font-bold text-xl">{activeModule === 'DAILY_OVERVIEW' ? 'Today’s Overview' : activeModule === MODULE_IDS.EOM ? 'Employee of the Month' : activeModule === MODULE_IDS.RECIPE ? 'Kitchen Recipes' : activeModule === MODULE_IDS.LOGIN_ACTIVITY ? 'Login Activity' : activeModule === MODULE_IDS.TRAINING ? 'Training' : activeModule}</h1>
+             <h1 className="font-bold text-xl">{activeModule === 'DAILY_OVERVIEW' ? 'Today’s Overview' : activeModule === 'PLATFORM_ADMIN' ? 'Platform Administration' : activeModule === MODULE_IDS.EOM ? 'Employee of the Month' : activeModule === MODULE_IDS.RECIPE ? 'Kitchen Recipes' : activeModule === MODULE_IDS.LOGIN_ACTIVITY ? 'Login Activity' : activeModule === MODULE_IDS.TRAINING ? 'Training' : activeModule}</h1>
           </div>
           <Button variant="secondary" className="!w-auto !text-xs" onClick={onLogout}>Logout</Button>
        </nav>
@@ -177,6 +182,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
           {activeModule === MODULE_IDS.STORES && <StoreAdminView />}
           {activeModule === MODULE_IDS.SETTINGS && <SettingsAdminView />}
           {activeModule === 'ACCESS' && <AccessAdminView />}
+          {activeModule === 'PLATFORM_ADMIN' && isPlatformAdministrator && <PlatformAdminView />}
           {activeModule === MODULE_IDS.ATTENDANCE && <AttendanceAdminView launchKiosk={() => {
             const tenant = currentUser.tenantId ? `&tenant=${encodeURIComponent(currentUser.tenantId)}` : '';
             window.open(`${window.location.origin}?mode=kiosk${tenant}`, '_blank');
