@@ -55,9 +55,7 @@ const settingsToCopy = ['accessConfig', 'appConfig', 'attendanceConfig', 'taskCo
 const excludedCollections = {
   recipes: 'Retired Recipe module; retained until the NekoMetrics import is verified.',
   bluebook_items: 'Retired Blue Book module.',
-  conversationStatus: 'Retired Counter Conversations module.',
   managerRecurringAgenda: 'Retired Manager Meetings module.',
-  tableMonitoring: 'No active application reader; keep unchanged pending a separately scoped retention decision.',
 };
 const requested = selectedCollections.length ? selectedCollections : operationalCollections;
 const unknownRequested = requested.filter(collection => !operationalCollections.includes(collection) && !['settings', 'crewDirectory', 'memberships'].includes(collection));

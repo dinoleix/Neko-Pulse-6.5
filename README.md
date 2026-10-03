@@ -20,7 +20,6 @@
 
 ### 📋 Attendance & Clock-In
 Smart, multi-modal attendance tracking designed for the floor:
-- **Face Recognition** — camera-based biometric clock-in powered by `face-api.js`, no pin required
 - **QR Code Scanning** — scan-to-clock using `jsqr` for fast badge-based entry
 - **Shift Validation** — attendance is cross-referenced against live shift schedules
 - Real-time Firestore sync; admins see who's in and who's out live
@@ -79,7 +78,6 @@ Neko Pulse ships as a **Progressive Web App**:
 | **Build** | Vite 6 | Blazing-fast dev server and production build |
 | **Backend / DB** | Firebase 12 (Firestore + Auth) | Real-time database and authentication |
 | **AI** | @google/genai (Gemini) | Natural language queries and summaries |
-| **Biometrics** | face-api.js | Camera-based facial recognition for attendance |
 | **QR Scanning** | jsqr | QR code decode for badge clock-in |
 | **Charts** | Recharts | Attendance and operations dashboards |
 | **Date Utils** | date-fns | Shift and attendance date calculations |
@@ -108,7 +106,6 @@ Neko-Pulse-6.5/
 │   └── crew/                  # Crew-facing views
 ├── services/                  # Firebase & API abstraction layer
 │   ├── attendanceService.ts   # Clock-in logic
-│   ├── faceService.ts         # face-api.js wrapper
 │   ├── geminiService.ts       # Gemini AI integration
 │   ├── shiftService.ts        # Shift CRUD
 │   ├── employeeService.ts     # Employee CRUD
@@ -194,6 +191,6 @@ Neko Pulse uses a clean, **emerald-green** palette (`#10b981`) optimised for rea
 
 **Built for the crew. Powered by AI. Always on.**
 
-*🐾 Neko Pulse — React · Firebase · Gemini · face-api.js · PWA*
+*🐾 Neko Pulse — React · Firebase · Gemini · PWA*
 
 </div>

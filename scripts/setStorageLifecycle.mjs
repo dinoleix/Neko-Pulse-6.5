@@ -6,9 +6,7 @@ import { homedir } from 'node:os';
 
 const BUCKET = 'order-accuracy-ce844.firebasestorage.app';
 const RETENTION_DAYS = 30;
-// Keep the retired conversations/ prefix here until all legacy recordings
-// have aged out; removing its lifecycle rule would preserve old audio.
-const PREFIXES = ['proofs/', 'conversations/'];
+const PREFIXES = ['proofs/'];
 
 const store = JSON.parse(readFileSync(`${homedir()}/.config/configstore/firebase-tools.json`, 'utf8'));
 const refreshToken = store?.tokens?.refresh_token || store?.user?.tokens?.refresh_token;

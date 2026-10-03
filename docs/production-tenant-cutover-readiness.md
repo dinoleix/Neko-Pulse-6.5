@@ -59,10 +59,11 @@ write is considered, the report must show all of the following:
 - retired collections are explicitly retained as archive, rather than silently
   included or deleted.
 
-The current tool treats `recipes`, `bluebook_items`, `conversationStatus`,
-`managerRecurringAgenda`, and `tableMonitoring` as retained, unchanged
-archives. Recipes are outside this cutover unless a separately approved
-retention decision changes that scope.
+The current tool treats `recipes`, `bluebook_items`, and
+`managerRecurringAgenda` as retained, unchanged archives. Recipes are outside
+this cutover unless a separately approved retention decision changes that
+scope. `conversationStatus` and `tableMonitoring` were removed from production
+on 3 October 2026 and must not be reintroduced into migration scope.
 
 ## Fresh production inventory — 30 September 2026
 
@@ -77,8 +78,10 @@ The following results were produced by read-only runs against
 - 19 operational collection families, training-module versions, and all
   existing stores, people, task definitions, training records, and settings
   scanned without a conflicting tenant ID.
-- The archived Recipe, Blue Book, Counter Conversations, Manager Meetings, and
-  table-monitoring collections remain excluded and unchanged.
+- At the time of this inventory, the Recipe, Blue Book, Counter Conversations,
+  Manager Meetings, and table-monitoring collections were excluded and
+  unchanged. Counter Conversations and tableMonitoring were subsequently
+  removed from production on 3 October 2026.
 
 ### Blocking discrepancy
 
