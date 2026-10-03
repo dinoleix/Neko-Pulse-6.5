@@ -5,6 +5,7 @@ import { Button, Input, Card } from './SharedComponents';
 import { CurrentUser, UserRole, CrewMember } from '../types';
 import { loginLogService } from '../services/loginLogService';
 import { isTenantModeEnabled, tenantService } from '../services/tenantService';
+import { platformTenantService } from '../services/platformTenantService';
 import { Coffee, Lock, User } from 'lucide-react';
 
 interface LoginViewProps {
@@ -136,6 +137,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         if (isTenantModeEnabled) {
           const tenantUser = await tenantService.resolveCurrentUser(uid, userCredential.user.email || undefined);
           if (!tenantUser) {
+            // A platform administrator has no business membership by design.
+            // Its capability is checked server-side, then it enters a shell
+            // containing only the platform-administration workspace.
+            if (await platformTenantService.capability()) {
+              onLogin({ role: UserRole.ADMIN, uid, name: userCredential.user.email || 'Platform administrator', accessRole: 'Platform Administrator', platformAdmin: true });
+              return;
+            }
             await auth.signOut();
             throw new Error('No active business membership was found for this account.');
           }

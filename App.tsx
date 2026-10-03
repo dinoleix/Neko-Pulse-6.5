@@ -9,6 +9,7 @@ import { DynamicBranding } from './components/DynamicBranding';
 import { CurrentUser, UserRole, CrewMember } from './types';
 import { storeService } from './services/storeService';
 import { isTenantModeEnabled, tenantService } from './services/tenantService';
+import { platformTenantService } from './services/platformTenantService';
 
 // Auto-logout after inactivity. Most roles get 5 minutes; the "Counter" role
 // runs unattended on a shared device, so it gets 14 hours.
@@ -63,6 +64,14 @@ function App() {
             if (isTenantModeEnabled) {
                 const tenantUser = await tenantService.resolveCurrentUser(user.uid, user.email || undefined);
                 if (!tenantUser) {
+                    // Platform administrators are intentionally outside every
+                    // business. The trusted API verifies the allow-list; this
+                    // fallback creates a platform-only shell with no tenantId.
+                    if (await platformTenantService.capability()) {
+                        setCurrentUser({ role: UserRole.ADMIN, uid: user.uid, name: user.email || 'Platform administrator', accessRole: 'Platform Administrator', platformAdmin: true });
+                        setInit(false);
+                        return;
+                    }
                     throw new Error('No active tenant membership found for this account.');
                 }
 

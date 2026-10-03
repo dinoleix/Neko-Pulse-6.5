@@ -14,6 +14,9 @@ export interface CurrentUser {
   // additive migration.
   tenantId?: string;
   membershipId?: string;
+  // Set only after the trusted platform API verifies the account. This grants
+  // access to the platform workspace, never to a tenant's operational data.
+  platformAdmin?: boolean;
   name?: string;
   outletId?: string;
   // Specific role from the Crew table (e.g. "Manager", "HR") used for Admin Matrix checks
