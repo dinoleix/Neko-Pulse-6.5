@@ -7,6 +7,7 @@ import { CrewLayout } from './components/CrewLayout';
 import { KioskView } from './components/KioskView';
 import { DynamicBranding } from './components/DynamicBranding';
 import { TrialSignupView } from './components/TrialSignupView';
+import { NekoPulseMarketingView } from './components/NekoPulseMarketingView';
 import { CurrentUser, UserRole, CrewMember } from './types';
 import { storeService } from './services/storeService';
 import { isTenantModeEnabled, tenantService } from './services/tenantService';
@@ -41,6 +42,7 @@ function App() {
 
   const [init, setInit] = useState(true);
   const isTrialSignup = new URLSearchParams(window.location.search).get('trial') === '1';
+  const isMarketingSite = new URLSearchParams(window.location.search).get('marketing') === '1';
 
   useEffect(() => {
     // Only the very first auth callback represents a session restored from
@@ -53,7 +55,7 @@ function App() {
       // The self-service flow creates an Auth account before it creates a
       // tenant membership. Do not let the normal membership guard sign that
       // account out midway through email verification and trial activation.
-      if (isTrialSignup) {
+      if (isTrialSignup || isMarketingSite) {
         setInit(false);
         return;
       }
@@ -211,7 +213,7 @@ function App() {
       setInit(false);
     });
     return () => unsubscribe();
-  }, [isTrialSignup]);
+  }, [isTrialSignup, isMarketingSite]);
 
   // Idle-logout timer: while logged in, sign out after the role's idle window
   // with no interaction. Activity also stamps localStorage so a page reload
@@ -262,6 +264,7 @@ function App() {
   }
 
   if (isTrialSignup) return <TrialSignupView />;
+  if (isMarketingSite) return <NekoPulseMarketingView />;
 
   if (init) return <div className="h-screen flex items-center justify-center text-[#0b6b4d] font-bold animate-pulse">Loading Neko Pulse...</div>;
 
