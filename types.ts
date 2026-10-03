@@ -67,6 +67,8 @@ export interface PlatformTenant {
   createdAt?: any;
 }
 
+export type TenantSubscriptionStatus = 'TRIAL_ACTIVE' | 'PAYMENT_PENDING' | 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'SUSPENDED' | 'CANCELLED';
+
 export interface AppConfig {
   timezone: string;
   currencySymbol?: string;
