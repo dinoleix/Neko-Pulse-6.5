@@ -37,7 +37,6 @@ const defaultAccessConfig = {
 
 export default async function handler(req: any, res: any) {
   if (!['GET', 'POST'].includes(req.method)) return send(res, 405, { error: 'Method not allowed.' });
-  if (!tenantModeEnabled()) return send(res, 404, { error: 'Tenant mode is not enabled.' });
 
   try {
     const rawToken = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '');
@@ -46,8 +45,12 @@ export default async function handler(req: any, res: any) {
     const actor = await auth.verifyIdToken(rawToken);
     const authorised = isPlatformAdmin(actor);
 
+    // Login needs this lightweight answer before a platform administrator has
+    // any tenant membership. Do not couple it to TENANT_MODE: deployments
+    // have the client tenant flag and server flag configured separately.
     if (req.method === 'GET' && req.query?.action === 'capability') return send(res, 200, { authorised });
     if (!authorised) return send(res, 403, { error: 'Platform administrator access is required.' });
+    if (!tenantModeEnabled()) return send(res, 404, { error: 'Tenant mode is not enabled.' });
 
     if (req.method === 'GET') {
       const tenants = await db.collection('tenants').orderBy('createdAt', 'desc').limit(200).get();
