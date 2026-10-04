@@ -59,6 +59,22 @@ service cloud.firestore {
         get(/databases/$(database)/documents/managers/$(request.auth.uid)).data.outletId == outletId);
     }
 
+    function hasDevelopmentAccess() {
+      return isManager() && (isSecurityAdmin() || hasManagerAccess('DEVELOPMENT') ||
+        get(/databases/$(database)/documents/managers/$(request.auth.uid)).data.role in
+          ['Store Manager', 'Store manager', 'store Manager', 'store manager', 'STORE MANAGER']);
+    }
+    function sameDevelopmentTenant(data) {
+      return data.keys().hasAll(['tenantId']) && hasTenantMembership(data.tenantId);
+    }
+    function canManageDevelopmentAtOutlet(outletId, data) {
+      let member = get(/databases/$(database)/documents/tenantMemberships/$(data.tenantId + '_' + request.auth.uid)).data;
+      return hasDevelopmentAccess() && sameDevelopmentTenant(data) && member.personType in ['MANAGER', 'OWNER', 'ADMINISTRATOR'] && (
+        member.personType in ['OWNER', 'ADMINISTRATOR'] ||
+        (member.keys().hasAny(['allOutlets']) && member.allOutlets == true) ||
+        member.outletIds.hasAny([outletId]));
+    }
+
     match /{document=**} { allow read, write: if false; }
 
     match /managers/{managerId} {
@@ -66,12 +82,12 @@ service cloud.firestore {
       // corresponding Firebase Auth ID is stored in authUid. Let an
       // authenticated manager read only their own matching profile so they
       // can complete the one-time ID repair; no other profile becomes visible.
-      allow read: if (isAuthenticated() && (request.auth.uid == managerId || resource.data.authUid == request.auth.uid)) || canManagePeople() || isTenantAdministrator(resource.data.tenantId);
+      allow read: if ((isAuthenticated() && (request.auth.uid == managerId || resource.data.authUid == request.auth.uid)) || canManagePeople() || isTenantAdministrator(resource.data.tenantId)) || canManageDevelopmentAtOutlet(resource.data.outletId, resource.data);
       allow create, update, delete: if canManagePeople();
     }
     match /crew/{crewId} {
       // The same narrowly scoped legacy-login bridge as /managers above.
-      allow read: if (isAuthenticated() && (request.auth.uid == crewId || resource.data.authUid == request.auth.uid)) || canReadCrew() || canTrainAtOutlet(resource.data.outletId) || isTenantAdministrator(resource.data.tenantId);
+      allow read: if ((isAuthenticated() && (request.auth.uid == crewId || resource.data.authUid == request.auth.uid)) || canReadCrew() || canTrainAtOutlet(resource.data.outletId) || isTenantAdministrator(resource.data.tenantId)) || canManageDevelopmentAtOutlet(resource.data.outletId, resource.data);
       allow create, delete: if canManagePeople();
       allow update: if canManagePeople() ||
         (hasManagerAccess('HR') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documents'])) ||
@@ -116,7 +132,7 @@ service cloud.firestore {
       allow update, delete: if hasManagerAccess('ACCURACY') || hasManagerAccess('SETTINGS');
     }
     match /tasks/{taskId} {
-      allow read: if isCrew() || hasManagerAccess('TASKS') || canReadReportsData() || hasManagerAccess('SETTINGS') || isTenantAdministrator(resource.data.tenantId);
+      allow read: if (isCrew() || hasManagerAccess('TASKS') || canReadReportsData() || hasManagerAccess('SETTINGS') || isTenantAdministrator(resource.data.tenantId)) || canManageDevelopmentAtOutlet(resource.data.outletId, resource.data);
       allow create, update: if hasManagerAccess('TASKS');
       allow delete: if hasManagerAccess('TASKS') || hasManagerAccess('SETTINGS');
     }
@@ -125,7 +141,7 @@ service cloud.firestore {
       allow write: if hasManagerAccess('TASKS');
     }
     match /taskLogs/{logId} {
-      allow read: if isCrew() || hasManagerAccess('TASKS') || canReadReportsData() || hasManagerAccess('SETTINGS') || isTenantAdministrator(resource.data.tenantId);
+      allow read: if (isCrew() || hasManagerAccess('TASKS') || canReadReportsData() || hasManagerAccess('SETTINGS') || isTenantAdministrator(resource.data.tenantId)) || canManageDevelopmentAtOutlet(resource.data.outletId, resource.data);
       allow create: if hasManagerAccess('TASKS') || (isCrew() && isOwner('crewId'));
       allow update: if hasManagerAccess('TASKS') || (isCrew() && resource.data.crewId == request.auth.uid);
       allow delete: if hasManagerAccess('TASKS') || hasManagerAccess('SETTINGS');
@@ -137,7 +153,7 @@ service cloud.firestore {
     }
 
     match /attendanceLogs/{logId} {
-      allow read: if isCrew() || hasManagerAccess('ATTENDANCE') || canReadReportsData() || hasManagerAccess('SETTINGS');
+      allow read: if (isCrew() || hasManagerAccess('ATTENDANCE') || canReadReportsData() || hasManagerAccess('SETTINGS')) || canManageDevelopmentAtOutlet(resource.data.outletId, resource.data);
       allow create: if hasManagerAccess('ATTENDANCE') ||
         (isCrew() && isOwner('crewId') && request.resource.data.timestamp == request.time);
       allow update: if hasManagerAccess('ATTENDANCE') || (
@@ -154,12 +170,12 @@ service cloud.firestore {
       allow update, delete: if hasManagerAccess('ATTENDANCE');
     }
     match /shifts/{shiftId} {
-      allow read: if isCrew() || hasManagerAccess('SHIFTS') || canReadReportsData() || hasManagerAccess('SETTINGS');
+      allow read: if (isCrew() || hasManagerAccess('SHIFTS') || canReadReportsData() || hasManagerAccess('SETTINGS')) || canManageDevelopmentAtOutlet(resource.data.outletId, resource.data);
       allow create, update: if hasManagerAccess('SHIFTS');
       allow delete: if hasManagerAccess('SHIFTS') || hasManagerAccess('SETTINGS');
     }
     match /shiftAssignments/{assignId} {
-      allow read: if isCrew() || hasManagerAccess('SHIFTS') || canReadReportsData() || hasManagerAccess('SETTINGS');
+      allow read: if (isCrew() || hasManagerAccess('SHIFTS') || canReadReportsData() || hasManagerAccess('SETTINGS')) || canManageDevelopmentAtOutlet(resource.data.outletId, resource.data);
       allow create, update: if hasManagerAccess('SHIFTS');
       allow delete: if hasManagerAccess('SHIFTS') || hasManagerAccess('SETTINGS');
     }
@@ -200,7 +216,7 @@ service cloud.firestore {
     // Training content, progress, and certification are deliberately split.
     // Learners can never write a pass, practical result, or certification.
     match /trainingModules/{moduleId} {
-      allow read: if isManager() && hasTrainingAccess() ||
+      allow read: if (isManager() && hasTrainingAccess()) || (hasDevelopmentAccess() && sameDevelopmentTenant(resource.data)) ||
         (isCrew() && resource.data.status == 'PUBLISHED' &&
           resource.data.applicableOutletIds.hasAny([get(/databases/$(database)/documents/crew/$(request.auth.uid)).data.outletId]) &&
           (resource.data.applicableRoles.size() == 0 || resource.data.applicableRoles.hasAny([get(/databases/$(database)/documents/crew/$(request.auth.uid)).data.role])));
@@ -216,8 +232,8 @@ service cloud.firestore {
     // Answer keys are never readable by employees; trusted server code grades quizzes.
     match /trainingAssessmentKeys/{keyId} { allow read, write: if hasTrainingAccess(); }
     match /trainingAssignments/{assignmentId} {
-      allow read: if isAuthenticated() && resource.data.employeeUid == request.auth.uid || canTrainAtOutlet(resource.data.outletId);
-      allow create: if canTrainAtOutlet(request.resource.data.outletId);
+      allow read: if (isAuthenticated() && resource.data.employeeUid == request.auth.uid || canTrainAtOutlet(resource.data.outletId)) || canManageDevelopmentAtOutlet(resource.data.outletId, resource.data);
+      allow create: if canTrainAtOutlet(request.resource.data.outletId) || canManageDevelopmentAtOutlet(request.resource.data.outletId, request.resource.data);
       allow update: if (canTrainAtOutlet(resource.data.outletId) &&
           (request.resource.data.status != 'PASSED' ||
             (request.resource.data.practicalAssessment.result == 'PASSED' && request.resource.data.practicalAssessment.criticalFailure == false))) ||
@@ -228,7 +244,7 @@ service cloud.firestore {
       allow delete: if isSecurityAdmin();
     }
     match /trainingCertifications/{certificationId} {
-      allow read: if isAuthenticated() && resource.data.employeeUid == request.auth.uid || canTrainAtOutlet(resource.data.outletId);
+      allow read: if (isAuthenticated() && resource.data.employeeUid == request.auth.uid || canTrainAtOutlet(resource.data.outletId)) || canManageDevelopmentAtOutlet(resource.data.outletId, resource.data);
       allow create: if canTrainAtOutlet(request.resource.data.outletId) &&
         request.resource.data.employeeUid != request.auth.uid &&
         get(/databases/$(database)/documents/trainingAssignments/$(request.resource.data.assignmentId)).data.status == 'PASSED' &&
@@ -237,9 +253,38 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     match /trainingAudit/{eventId} {
-      allow read: if isManager() && hasTrainingAccess();
-      allow create: if isManager() && hasTrainingAccess();
+      allow read: if (isManager() && hasTrainingAccess()) || canManageDevelopmentAtOutlet(resource.data.outletId, resource.data);
+      allow create: if (isManager() && hasTrainingAccess()) || canManageDevelopmentAtOutlet(request.resource.data.outletId, request.resource.data);
       allow update, delete: if false;
+    }
+    match /developmentSkills/{skillId} {
+      allow read: if (hasDevelopmentAccess() && sameDevelopmentTenant(resource.data)) || (isCrew() && resource.data.active == true && sameDevelopmentTenant(resource.data));
+      allow create: if hasDevelopmentAccess() && sameDevelopmentTenant(request.resource.data);
+      allow update: if hasDevelopmentAccess() && sameDevelopmentTenant(resource.data) && request.resource.data.tenantId == resource.data.tenantId;
+      allow delete: if hasDevelopmentAccess() && sameDevelopmentTenant(resource.data);
+    }
+    match /developmentObservations/{observationId} {
+      allow read: if canManageDevelopmentAtOutlet(resource.data.outletId, resource.data);
+      allow create: if canManageDevelopmentAtOutlet(request.resource.data.outletId, request.resource.data) &&
+        request.resource.data.createdBy == request.auth.uid && request.resource.data.comment is string && request.resource.data.comment.size() <= 500;
+      allow update, delete: if false;
+    }
+    match /developmentActions/{actionId} {
+      allow read: if (isAuthenticated() && resource.data.employeeUid == request.auth.uid && sameDevelopmentTenant(resource.data)) || canManageDevelopmentAtOutlet(resource.data.outletId, resource.data);
+      allow create: if canManageDevelopmentAtOutlet(request.resource.data.outletId, request.resource.data) && request.resource.data.createdBy == request.auth.uid;
+      allow update: if canManageDevelopmentAtOutlet(resource.data.outletId, resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requirements', 'status', 'targetDate', 'updatedAt']);
+      allow delete: if false;
+    }
+    match /developmentRecognitions/{recognitionId} {
+      allow read: if (isAuthenticated() && resource.data.employeeUid == request.auth.uid && sameDevelopmentTenant(resource.data)) || canManageDevelopmentAtOutlet(resource.data.outletId, resource.data);
+      allow create: if canManageDevelopmentAtOutlet(request.resource.data.outletId, request.resource.data) && request.resource.data.awardedBy == request.auth.uid && request.resource.data.approved == true;
+      allow update, delete: if false;
+    }
+    match /developmentCareerPaths/{pathId} {
+      allow read: if hasDevelopmentAccess() && sameDevelopmentTenant(resource.data);
+      allow create: if isSecurityAdmin() && sameDevelopmentTenant(request.resource.data);
+      allow update: if isSecurityAdmin() && sameDevelopmentTenant(resource.data) && request.resource.data.tenantId == resource.data.tenantId;
+      allow delete: if isSecurityAdmin() && sameDevelopmentTenant(resource.data);
     }
   }
 }

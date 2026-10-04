@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { CurrentUser, MODULE_IDS, AccessConfig, CrewMember, ShiftAssignment } from '../types';
 import { db, firebase } from '../firebaseConfig';
-import { ClipboardList, CalendarClock, Shield, ArrowRight, Lock, Calendar, Trophy, Gift, PartyPopper, X, Clock, Plane, ShieldCheck, ChefHat, GraduationCap } from 'lucide-react';
+import { ClipboardList, CalendarClock, Shield, ArrowRight, Lock, Calendar, Trophy, Gift, PartyPopper, X, Clock, Plane, ShieldCheck, ChefHat, GraduationCap, Sparkles } from 'lucide-react';
 import { OrderCrewView } from '../modules/crew/orders/OrderCrewView'; 
+import { DevelopmentCrewView } from '../modules/crew/DevelopmentCrewView';
 import { TaskCrewView } from '../modules/crew/tasks/TaskCrewView'; 
 import { AttendanceCrewView } from '../modules/crew/attendance/AttendanceCrewView'; 
 import { ShiftCrewView } from '../modules/crew/shifts/ShiftCrewView'; 
@@ -48,6 +49,7 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
   const [canViewEOM, setCanViewEOM] = useState(true);
   const [canViewRecipe, setCanViewRecipe] = useState(false);
   const [canViewTraining, setCanViewTraining] = useState(true);
+  const [canViewDevelopment, setCanViewDevelopment] = useState(true);
   
   // Birthday State
   const [birthdays, setBirthdays] = useState<CrewMember[]>([]);
@@ -98,6 +100,7 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
                setCanViewEOM(conf[MODULE_IDS.CREW_EOM] ? roleMatches(conf[MODULE_IDS.CREW_EOM]) : true);
                setCanViewRecipe(conf[MODULE_IDS.CREW_RECIPE] ? roleMatches(conf[MODULE_IDS.CREW_RECIPE]) : false);
                setCanViewTraining(conf[MODULE_IDS.CREW_TRAINING] ? roleMatches(conf[MODULE_IDS.CREW_TRAINING]) : true);
+               setCanViewDevelopment(conf[MODULE_IDS.CREW_DEVELOPMENT] ? roleMatches(conf[MODULE_IDS.CREW_DEVELOPMENT]) : true);
             }
 
             // Cheap birthday lookup (~0-2 reads) against /crewDirectory — the
@@ -177,6 +180,7 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
            {activeTab === 'eom' && (canViewEOM ? <EOMCrewView currentUser={currentUser} /> : <AccessDenied/>)}
            {activeTab === 'recipe' && (canViewRecipe ? <RecipeCrewView currentUser={currentUser} /> : <AccessDenied/>)}
            {activeTab === 'training' && (canViewTraining ? <TrainingCrewView currentUser={currentUser} /> : <AccessDenied/>)}
+           {activeTab === 'development' && (canViewDevelopment ? <DevelopmentCrewView currentUser={currentUser} /> : <AccessDenied/>)}
         </div>
      );
   };
@@ -275,6 +279,9 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
           )}
           {canViewTraining && (
              <NavBtn icon={<GraduationCap/>} label="Training" active={activeTab === 'training'} onClick={() => setActiveTab('training')} color="emerald"/>
+          )}
+          {canViewDevelopment && !isCounterRole && (
+             <NavBtn icon={<Sparkles/>} label="Growth" active={activeTab === 'development'} onClick={() => setActiveTab('development')} color="teal"/>
           )}
           {allowedAdmin.length > 0 && (
              <NavBtn icon={<Shield/>} label="Admin" active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} color="rose"/>

@@ -123,6 +123,7 @@ export const MODULE_IDS = {
   RECIPE: 'RECIPE',
   LOGIN_ACTIVITY: 'LOGIN_ACTIVITY',
   TRAINING: 'TRAINING',
+  DEVELOPMENT: 'DEVELOPMENT',
   SETTINGS: 'SETTINGS',
 
   // Crew App Features
@@ -131,7 +132,8 @@ export const MODULE_IDS = {
   CREW_SHIFTS: 'CREW_SHIFTS',
   CREW_EOM: 'CREW_EOM',
   CREW_RECIPE: 'CREW_RECIPE',
-  CREW_TRAINING: 'CREW_TRAINING'
+  CREW_TRAINING: 'CREW_TRAINING',
+  CREW_DEVELOPMENT: 'CREW_DEVELOPMENT'
 } as const;
 
 export type ModuleId = keyof typeof MODULE_IDS;
@@ -200,6 +202,7 @@ export interface TrainingModule {
   media?: TrainingEvidence[];
   safetyWarnings?: string[];
   relatedRecipeIds?: string[];
+  relatedSkillIds?: string[];
   relatedEquipment?: string[];
   relatedTaskIds?: string[];
   lessons: TrainingLesson[];
@@ -421,6 +424,8 @@ export interface TaskTemplate {
   proofType: TaskProofType;
   proofTypes?: TaskProofType[];
   proofPhotoCount?: number; // How many photos are required when PHOTO proof is selected (default 1)
+  requiredSkillId?: string;
+  certificationRequired?: boolean;
   tenantId?: string;
 }
 
@@ -439,6 +444,8 @@ export interface Task {
   proofType: TaskProofType;
   proofTypes?: TaskProofType[];
   proofPhotoCount?: number; // How many photos are required when PHOTO proof is selected (default 1)
+  requiredSkillId?: string;
+  certificationRequired?: boolean;
   isActive: boolean;
   createdAt?: any;
   tenantId?: string;
@@ -458,6 +465,91 @@ export interface TaskLog {
   proofData?: { type: TaskProofType; value: string | string[] }[];
   status: 'completed' | 'late';
   tenantId?: string;
+}
+
+// Employee Development is a connective layer over attendance, tasks, training
+// and certifications. These records contain manager-authored development data;
+// they do not replace the source systems above.
+export type DevelopmentSkillStatus = 'CERTIFIED' | 'IN_PROGRESS' | 'NOT_TRAINED' | 'NOT_APPLICABLE' | 'EXPIRED';
+export interface DevelopmentSkill {
+  id?: string;
+  tenantId?: string;
+  name: string;
+  category: string;
+  description?: string;
+  applicableRoles: string[];
+  applicableOutletIds: string[];
+  relatedSopIds?: string[];
+  relatedTrainingModuleIds?: string[];
+  relatedTaskIds?: string[];
+  certificationModuleIds?: string[];
+  certificationValidityDays?: number;
+  ownerId?: string;
+  ownerName?: string;
+  active: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+}
+export type DevelopmentObservationKind = 'RECOGNITION' | 'COACHING' | 'PERFORMANCE_ISSUE' | 'INCIDENT';
+export interface DevelopmentObservation {
+  id?: string;
+  tenantId?: string;
+  employeeId: string;
+  employeeUid?: string;
+  employeeName: string;
+  outletId: string;
+  type: DevelopmentObservationKind;
+  category: string;
+  skillId?: string;
+  comment: string;
+  relatedTaskId?: string;
+  relatedSopId?: string;
+  evidencePath?: string;
+  createdBy: string;
+  createdByName: string;
+  createdAt?: any;
+}
+export type DevelopmentActionKind = 'ASSIGN_TRAINING' | 'REFRESHER' | 'CERTIFICATION' | 'COACHING' | 'REASSESSMENT' | 'GOAL';
+export interface DevelopmentAction {
+  id?: string;
+  tenantId?: string;
+  employeeId: string;
+  employeeUid?: string;
+  employeeName: string;
+  outletId: string;
+  skillId?: string;
+  trainingModuleId?: string;
+  title: string;
+  kind: DevelopmentActionKind;
+  targetDate?: string;
+  requirements: Array<{ label: string; completed: boolean }>;
+  status: 'OPEN' | 'COMPLETED';
+  createdBy: string;
+  createdByName: string;
+  createdAt?: any;
+  updatedAt?: any;
+}
+export interface DevelopmentRecognition {
+  id?: string;
+  tenantId?: string;
+  employeeId: string;
+  employeeUid?: string;
+  employeeName: string;
+  outletId: string;
+  title: string;
+  reason: string;
+  approved: boolean;
+  awardedBy: string;
+  awardedByName: string;
+  awardedAt?: any;
+}
+export interface DevelopmentCareerPath {
+  id?: string;
+  tenantId?: string;
+  title: string;
+  level: number;
+  requirements: Array<{ label: string; skillId?: string; minimumAttendanceReliability?: number; mandatoryTraining?: boolean }>;
+  active: boolean;
 }
 
 export interface TaskConfig {

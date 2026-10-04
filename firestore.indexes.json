@@ -1,5 +1,10 @@
 {
   "indexes": [
+    {"collectionGroup":"attendanceLogs","queryScope":"COLLECTION","fields":[{"fieldPath":"outletId","order":"ASCENDING"},{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"timestamp","order":"ASCENDING"}]},
+    {"collectionGroup":"shiftAssignments","queryScope":"COLLECTION","fields":[{"fieldPath":"outletId","order":"ASCENDING"},{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"date","order":"ASCENDING"}]},
+    {"collectionGroup":"developmentObservations","queryScope":"COLLECTION","fields":[{"fieldPath":"outletId","order":"ASCENDING"},{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"ASCENDING"}]},
+    {"collectionGroup":"developmentRecognitions","queryScope":"COLLECTION","fields":[{"fieldPath":"outletId","order":"ASCENDING"},{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"awardedAt","order":"ASCENDING"}]},
+    {"collectionGroup":"taskLogs","queryScope":"COLLECTION","fields":[{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"outletId","order":"ASCENDING"},{"fieldPath":"completedAt","order":"ASCENDING"}]},
     {
       "collectionGroup": "attendanceLogs",
       "queryScope": "COLLECTION",

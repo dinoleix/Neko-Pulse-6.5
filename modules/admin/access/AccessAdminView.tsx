@@ -66,7 +66,8 @@ export const AccessAdminView: React.FC = () => {
       MODULE_IDS.ATTENDANCE,
       MODULE_IDS.STORES,
       MODULE_IDS.SETTINGS,
-      MODULE_IDS.TRAINING
+      MODULE_IDS.TRAINING,
+      MODULE_IDS.DEVELOPMENT
    ];
 
    const crewFeatures = [
@@ -75,7 +76,8 @@ export const AccessAdminView: React.FC = () => {
       MODULE_IDS.CREW_RECIPE, // Recipe viewer tab in the crew app
       MODULE_IDS.CREW_SHIFTS,
       MODULE_IDS.CREW_EOM,
-      MODULE_IDS.CREW_TRAINING
+      MODULE_IDS.CREW_TRAINING,
+      MODULE_IDS.CREW_DEVELOPMENT
    ];
 
    // Admin tools exposed inside the CREW app (stored as CREWADMIN_<module>).

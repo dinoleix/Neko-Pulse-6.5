@@ -18,6 +18,7 @@ import { SettingsAdminView } from '../modules/admin/settings/SettingsAdminView';
 import { RecipeAdminView } from '../modules/admin/recipes/RecipeAdminView';
 import { LoginActivityAdminView } from '../modules/admin/loginactivity/LoginActivityAdminView';
 import { DailyOverviewAdminView } from '../modules/admin/overview/DailyOverviewAdminView';
+import { EmployeeDevelopmentModule } from '../modules/admin/EmployeeDevelopmentModule';
 import { TrainingAdminView } from '../modules/admin/training/TrainingAdminView';
 import { getCachedSettingsDoc } from '../services/configCache';
 import { platformTenantService } from '../services/platformTenantService';
@@ -67,6 +68,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
       // workspace remains available even if an older access-matrix document
       // does not yet include the Store Manager role.
       if (moduleId === MODULE_IDS.TRAINING && role === 'store manager') return true;
+      if (moduleId === MODULE_IDS.DEVELOPMENT && role === 'store manager') return true;
       if (!accessConfig) return false;
       const allowedRoles = accessConfig[moduleId];
       if (allowedRoles === undefined) return false;
@@ -128,6 +130,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
            {hasAccess(MODULE_IDS.STORES) && <ModuleCard title="Stores" description="Keep every outlet aligned" icon={<StoreIcon/>} color="bg-[#665b8c]" onClick={() => setActiveModule(MODULE_IDS.STORES)}/>}
            {hasAccess(MODULE_IDS.LOGIN_ACTIVITY) && <ModuleCard title="Login Activity" description="A record of daily access" icon={<LogIn/>} color="bg-[#477b8d]" onClick={() => setActiveModule(MODULE_IDS.LOGIN_ACTIVITY)}/>}
            {hasAccess(MODULE_IDS.TRAINING) && <ModuleCard title="Training" description="Build skills and certify competence" icon={<GraduationCap/>} color="bg-[#4f6f56]" onClick={() => setActiveModule(MODULE_IDS.TRAINING)}/>}
+           {hasAccess(MODULE_IDS.DEVELOPMENT) && <ModuleCard title="Employee Development" description="See team skills, readiness, coaching, and growth" icon={<Users/>} color="bg-[#0b6b4d]" onClick={() => setActiveModule(MODULE_IDS.DEVELOPMENT)}/>}
            {hasAccess(MODULE_IDS.SETTINGS) && <ModuleCard title="System Maint." description="Keep the system in shape" icon={<SettingsIcon/>} color="bg-[#4f5f57]" onClick={() => setActiveModule(MODULE_IDS.SETTINGS)}/>}
            {hasAccess('ACCESS') && <ModuleCard title="Access" description="Set the right permissions" icon={<ShieldCheck/>} color="bg-[#ae5e5c]" onClick={() => setActiveModule('ACCESS')}/>}
            {isPlatformAdministrator && <ModuleCard title="Platform Administration" description="Onboard and manage businesses" icon={<Building2/>} color="bg-[#473b68]" onClick={() => setActiveModule('PLATFORM_ADMIN')}/>}
@@ -165,7 +168,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
           <div className="flex items-center gap-4">
              <button onClick={() => setActiveModule(null)} className="p-2 hover:bg-slate-100 rounded-xl"><ArrowLeft/></button>
              <BrandMark className="w-9 h-9"/>
-             <h1 className="font-bold text-xl">{activeModule === 'DAILY_OVERVIEW' ? 'Today’s Overview' : activeModule === 'PLATFORM_ADMIN' ? 'Platform Administration' : activeModule === MODULE_IDS.EOM ? 'Employee of the Month' : activeModule === MODULE_IDS.RECIPE ? 'Kitchen Recipes' : activeModule === MODULE_IDS.LOGIN_ACTIVITY ? 'Login Activity' : activeModule === MODULE_IDS.TRAINING ? 'Training' : activeModule}</h1>
+             <h1 className="font-bold text-xl">{activeModule === 'DAILY_OVERVIEW' ? 'Today’s Overview' : activeModule === 'PLATFORM_ADMIN' ? 'Platform Administration' : activeModule === MODULE_IDS.EOM ? 'Employee of the Month' : activeModule === MODULE_IDS.RECIPE ? 'Kitchen Recipes' : activeModule === MODULE_IDS.LOGIN_ACTIVITY ? 'Login Activity' : activeModule === MODULE_IDS.TRAINING ? 'Training' : activeModule === MODULE_IDS.DEVELOPMENT ? 'Employee Development' : activeModule}</h1>
           </div>
           <Button variant="secondary" className="!w-auto !text-xs" onClick={onLogout}>Logout</Button>
        </nav>
@@ -177,6 +180,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
           {activeModule === MODULE_IDS.RECIPE && <RecipeAdminView />}
           {activeModule === MODULE_IDS.LOGIN_ACTIVITY && <LoginActivityAdminView canClearLogs={isSecurityAdmin} />}
           {activeModule === MODULE_IDS.TRAINING && <TrainingAdminView currentUser={currentUser} canManageContent={hasAccess(MODULE_IDS.TRAINING)} />}
+          {activeModule === MODULE_IDS.DEVELOPMENT && <EmployeeDevelopmentModule currentUser={currentUser} />}
           {activeModule === MODULE_IDS.HR && <HRAdminView />}
           {activeModule === MODULE_IDS.REPORTS && <ReportsAdminView />}
           {activeModule === 'DAILY_OVERVIEW' && <DailyOverviewAdminView currentUser={currentUser} onOpenTasks={() => setActiveModule(MODULE_IDS.TASKS)} onOpenAttendance={() => setActiveModule(MODULE_IDS.ATTENDANCE)} />}

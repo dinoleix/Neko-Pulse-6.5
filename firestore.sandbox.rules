@@ -130,6 +130,34 @@ service cloud.firestore {
         && hasOutlet(resource.data.tenantId, resource.data.outletId);
     }
 
+    match /developmentSkills/{skillId} {
+      allow read: if activeMember(resource.data.tenantId) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId) && tenantRecord(request.resource.data.tenantId);
+      allow update: if managerOrOwner(resource.data.tenantId) && tenantRecord(request.resource.data.tenantId) && request.resource.data.tenantId == resource.data.tenantId;
+      allow delete: if managerOrOwner(resource.data.tenantId);
+    }
+    match /developmentObservations/{observationId} {
+      allow read: if (activeMember(resource.data.tenantId) && hasOutlet(resource.data.tenantId, resource.data.outletId) && managerOrOwner(resource.data.tenantId)) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId) && tenantRecord(request.resource.data.tenantId) && hasOutlet(request.resource.data.tenantId, request.resource.data.outletId) && request.resource.data.createdBy == request.auth.uid && request.resource.data.comment is string && request.resource.data.comment.size() <= 500;
+      allow update, delete: if false;
+    }
+    match /developmentActions/{actionId} {
+      allow read: if (activeMember(resource.data.tenantId) && resource.data.employeeUid == request.auth.uid) || (managerOrOwner(resource.data.tenantId) && hasOutlet(resource.data.tenantId, resource.data.outletId)) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId) && tenantRecord(request.resource.data.tenantId) && hasOutlet(request.resource.data.tenantId, request.resource.data.outletId) && request.resource.data.createdBy == request.auth.uid;
+      allow update: if managerOrOwner(resource.data.tenantId) && hasOutlet(resource.data.tenantId, resource.data.outletId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requirements', 'status', 'targetDate', 'updatedAt']);
+      allow delete: if false;
+    }
+    match /developmentRecognitions/{recognitionId} {
+      allow read: if (activeMember(resource.data.tenantId) && resource.data.employeeUid == request.auth.uid) || (managerOrOwner(resource.data.tenantId) && hasOutlet(resource.data.tenantId, resource.data.outletId)) || bootstrapOwner();
+      allow create: if managerOrOwner(request.resource.data.tenantId) && tenantRecord(request.resource.data.tenantId) && hasOutlet(request.resource.data.tenantId, request.resource.data.outletId) && request.resource.data.awardedBy == request.auth.uid && request.resource.data.approved == true;
+      allow update, delete: if false;
+    }
+    match /developmentCareerPaths/{pathId} {
+      allow read: if activeMember(resource.data.tenantId) || bootstrapOwner();
+      allow create, update: if tenantAdministrator(request.resource.data.tenantId) && tenantRecord(request.resource.data.tenantId);
+      allow delete: if tenantAdministrator(resource.data.tenantId);
+    }
+
     match /taskLogs/{logId} {
       allow read: if (activeMember(resource.data.tenantId)
         && (resource.data.crewId == request.auth.uid
