@@ -39,3 +39,10 @@ h1, h2, h3, .neko-display { font-family: 'Fraunces', Georgia, serif; }
   letter-spacing: .18em;
   text-transform: uppercase;
 }
+
+.nekotech-mark {
+  object-fit: contain;
+  background-color: #063b2c;
+  border-radius: .5rem;
+  clip-path: inset(21% 22% 13% 22%);
+}

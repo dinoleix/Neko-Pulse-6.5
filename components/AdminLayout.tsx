@@ -22,6 +22,7 @@ import { TrainingAdminView } from '../modules/admin/training/TrainingAdminView';
 import { getCachedSettingsDoc } from '../services/configCache';
 import { platformTenantService } from '../services/platformTenantService';
 import { PlatformAdminView } from '../modules/admin/platform/PlatformAdminView';
+import { BrandMark } from './BrandMark';
 
 interface AdminLayoutProps {
   currentUser: CurrentUser;
@@ -102,7 +103,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
       <div className="min-h-screen neko-shell p-4 md:p-8">
         <header className="max-w-6xl mx-auto flex justify-between items-center mb-8 md:mb-12 py-4 border-b border-[#ded9ce]">
           <div>
-             <p className="neko-eyebrow mb-2">Neko Pulse · Operations</p>
+             <div className="flex items-center gap-1.5 mb-2"><BrandMark className="w-10 h-8"/><p className="neko-eyebrow mb-0">Neko Pulse · Operations</p></div>
              <h1 className="text-3xl md:text-4xl font-semibold text-[#123229]">Good to see you, {currentUser.name?.split(' ')[0] || 'there'}.</h1>
              <p className="text-slate-500 mt-2">
                 Your café operations, in one considered place.
@@ -163,6 +164,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
        <nav className="bg-[#fffdf9]/95 border-b border-[#e7e2d9] sticky top-0 z-20 px-4 md:px-6 py-4 flex justify-between items-center backdrop-blur">
           <div className="flex items-center gap-4">
              <button onClick={() => setActiveModule(null)} className="p-2 hover:bg-slate-100 rounded-xl"><ArrowLeft/></button>
+             <BrandMark className="w-9 h-9"/>
              <h1 className="font-bold text-xl">{activeModule === 'DAILY_OVERVIEW' ? 'Today’s Overview' : activeModule === 'PLATFORM_ADMIN' ? 'Platform Administration' : activeModule === MODULE_IDS.EOM ? 'Employee of the Month' : activeModule === MODULE_IDS.RECIPE ? 'Kitchen Recipes' : activeModule === MODULE_IDS.LOGIN_ACTIVITY ? 'Login Activity' : activeModule === MODULE_IDS.TRAINING ? 'Training' : activeModule}</h1>
           </div>
           <Button variant="secondary" className="!w-auto !text-xs" onClick={onLogout}>Logout</Button>

@@ -6,7 +6,8 @@ import { CurrentUser, UserRole, CrewMember } from '../types';
 import { loginLogService } from '../services/loginLogService';
 import { isTenantModeEnabled, tenantService } from '../services/tenantService';
 import { platformTenantService } from '../services/platformTenantService';
-import { Coffee, Lock, User } from 'lucide-react';
+import { Lock, User } from 'lucide-react';
+import { BrandMark } from './BrandMark';
 
 interface LoginViewProps {
   onLogin: (user: CurrentUser) => void;
@@ -222,11 +223,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
           <button
             type="button"
             onClick={() => { setMode('admin'); setError(null); }}
-            className="inline-flex items-center justify-center w-20 h-20 rounded-[2rem] bg-[#063b2c] text-white mb-6 shadow-2xl shadow-emerald-950/20 transition-transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-emerald-900/15"
+            className="inline-flex items-center justify-center w-20 h-20 rounded-[2rem] bg-[#063b2c] border border-[#063b2c] text-white mb-6 shadow-2xl shadow-emerald-950/20 transition-transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-emerald-900/15"
             aria-label="Manager sign in"
             title="Manager sign in"
           >
-            <Coffee className="w-10 h-10 drop-shadow-md" />
+            <BrandMark className="w-16 h-16"/>
           </button>
           <p className="neko-eyebrow mb-2">Café operations</p>
           <h1 className="text-4xl font-semibold text-[#123229] tracking-tight">Neko Pulse</h1>

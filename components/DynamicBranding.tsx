@@ -1,75 +1,23 @@
 
 import React, { useEffect } from 'react';
-import { db } from '../firebaseConfig';
-import { isTenantModeEnabled } from '../services/tenantService';
 
+/**
+ * Keep the app and installed PWA branded as NekoTech/Neko Pulse.
+ * Tenant company logos remain available for HR letterheads, but must not
+ * replace the product's browser or home-screen icon.
+ */
 export const DynamicBranding: React.FC = () => {
   useEffect(() => {
-    const updateIcons = async () => {
-      // Tenant branding belongs to a tenant setting, not the legacy global
-      // document. Until a user has selected a tenant, keep the static app
-      // icons instead of issuing a pre-login global settings read.
-      if (isTenantModeEnabled) return;
+    const productLogo = '/nekotech-logo.png';
+    const productFavicon = '/nekotech-favicon.svg';
+    const appleIcon = document.getElementById('apple-icon') as HTMLLinkElement | null;
+    const favicon = document.getElementById('favicon') as HTMLLinkElement | null;
+    const manifest = document.getElementById('app-manifest') as HTMLLinkElement | null;
 
-      try {
-        // 1. Fetch the logo from settings
-        const doc = await db.collection('settings').doc('companyLogo').get();
-        const logoUrl = doc.exists ? doc.data()?.url : null;
-
-        if (logoUrl) {
-          // 2. Update Apple Touch Icon (iOS)
-          const appleIcon = document.getElementById('apple-icon') as HTMLLinkElement;
-          if (appleIcon) {
-            appleIcon.href = logoUrl;
-          }
-
-          // 3. Update Favicon (Browser Tab)
-          const favicon = document.getElementById('favicon') as HTMLLinkElement;
-          if (favicon) {
-            favicon.href = logoUrl;
-          }
-
-          // 4. Update Manifest (Android/PWA)
-          const manifestLink = document.getElementById('app-manifest') as HTMLLinkElement;
-          if (manifestLink) {
-            // We fetch the original manifest structure
-            const response = await fetch('/manifest.json');
-            const originalManifest = await response.json();
-
-            // We create a new manifest object replacing the icons
-            const newManifest = {
-              ...originalManifest,
-              icons: [
-                  {
-                    src: logoUrl,
-                    sizes: "192x192",
-                    type: "image/png",
-                    purpose: "any maskable"
-                  },
-                  {
-                    src: logoUrl,
-                    sizes: "512x512",
-                    type: "image/png",
-                    purpose: "any maskable"
-                  }
-              ]
-            };
-
-            // Convert to Blob and set as the new href
-            const stringManifest = JSON.stringify(newManifest);
-            const blob = new Blob([stringManifest], { type: 'application/json' });
-            const manifestURL = URL.createObjectURL(blob);
-            
-            manifestLink.href = manifestURL;
-          }
-        }
-      } catch (error) {
-        console.error("Failed to load dynamic branding:", error);
-      }
-    };
-
-    updateIcons();
+    if (appleIcon) appleIcon.href = productLogo;
+    if (favicon) favicon.href = productFavicon;
+    if (manifest) manifest.href = '/manifest.json';
   }, []);
 
-  return null; // This component doesn't render anything visible
+  return null;
 };

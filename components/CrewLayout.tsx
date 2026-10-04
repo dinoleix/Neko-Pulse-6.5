@@ -14,6 +14,7 @@ import { shiftService } from '../services/shiftService';
 import { getCachedSettingsDoc } from '../services/configCache';
 import { getCurrentTimeInTimeZone, DEFAULT_TIMEZONE } from '../utils/dateFormatter';
 import { format } from 'date-fns';
+import { BrandMark } from './BrandMark';
 
 // For Admin modules accessed by Managers via Crew App
 import { OrderAdminView } from '../modules/admin/orders/OrderAdminView'; 
@@ -208,7 +209,7 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
 
        <div className="flex justify-between items-center py-5 border-b border-[#ded9ce] mb-2">
           <div>
-             <p className="neko-eyebrow mb-1">Neko Pulse · {currentUser.outletId}</p>
+             <div className="flex items-center gap-1.5 mb-1"><BrandMark className="w-10 h-8"/><p className="neko-eyebrow mb-0">Neko Pulse · {currentUser.outletId}</p></div>
              <h3 className="text-2xl font-semibold text-[#123229]">Hello, {currentUser.name?.split(' ')[0]}</h3>
           </div>
           <button onClick={onLogout} className="text-xs font-bold text-[#063b2c] border border-[#d9d5cb] bg-[#fffdf9] px-3 py-2 rounded-xl hover:bg-[#e6f0e9]">Exit</button>
