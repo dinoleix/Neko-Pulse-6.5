@@ -7,6 +7,7 @@ import { CrewLayout } from './components/CrewLayout';
 import { KioskView } from './components/KioskView';
 import { DynamicBranding } from './components/DynamicBranding';
 import { TrialSignupView } from './components/TrialSignupView';
+import { WorkspaceWelcome } from './components/WorkspaceWelcome';
 import { NekoPulseMarketingView } from './components/NekoPulseMarketingView';
 import { CurrentUser, UserRole, CrewMember } from './types';
 import { storeService } from './services/storeService';
@@ -43,6 +44,8 @@ function App() {
   const [init, setInit] = useState(true);
   const isTrialSignup = new URLSearchParams(window.location.search).get('trial') === '1';
   const isMarketingSite = new URLSearchParams(window.location.search).get('marketing') === '1';
+  const isOnboardingPreview = import.meta.env.DEV && new URLSearchParams(window.location.search).get('onboarding-preview') === '1';
+  const isGuidePreview = import.meta.env.DEV && import.meta.env.VITE_GUIDE_SCREENSHOTS === 'true' && new URLSearchParams(window.location.search).get('guide-preview') === '1';
 
   useEffect(() => {
     // Only the very first auth callback represents a session restored from
@@ -55,7 +58,7 @@ function App() {
       // The self-service flow creates an Auth account before it creates a
       // tenant membership. Do not let the normal membership guard sign that
       // account out midway through email verification and trial activation.
-      if (isTrialSignup || isMarketingSite) {
+      if (isTrialSignup || isMarketingSite || isOnboardingPreview || isGuidePreview) {
         setInit(false);
         return;
       }
@@ -213,7 +216,7 @@ function App() {
       setInit(false);
     });
     return () => unsubscribe();
-  }, [isTrialSignup, isMarketingSite]);
+  }, [isTrialSignup, isMarketingSite, isOnboardingPreview, isGuidePreview]);
 
   // Idle-logout timer: while logged in, sign out after the role's idle window
   // with no interaction. Activity also stamps localStorage so a page reload
@@ -263,6 +266,8 @@ function App() {
       );
   }
 
+  if (isOnboardingPreview) return <main className="neko-shell min-h-screen p-5"><div className="max-w-xl mx-auto"><p className="neko-eyebrow">Local preview · no account created</p><h1 className="text-3xl font-semibold text-[#123229]">Welcome to your workspace</h1><WorkspaceWelcome storageKey="neko_setup:local-preview" /></div></main>;
+  if (isGuidePreview) return <><div className="bg-amber-50 text-amber-900 text-center p-2 text-sm">USER GUIDE DEMO · Fictional data · Read-only</div><AdminLayout currentUser={{ uid: 'guide-owner', tenantId: 'guide-demo', role: UserRole.ADMIN, accessRole: 'Owner', name: 'Demo Owner' }} onLogout={() => {}} /></>;
   if (isTrialSignup) return <TrialSignupView />;
   if (isMarketingSite) return <NekoPulseMarketingView />;
 

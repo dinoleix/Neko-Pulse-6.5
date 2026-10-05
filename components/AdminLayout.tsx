@@ -23,6 +23,7 @@ import { TrainingAdminView } from '../modules/admin/training/TrainingAdminView';
 import { getCachedSettingsDoc } from '../services/configCache';
 import { platformTenantService } from '../services/platformTenantService';
 import { PlatformAdminView } from '../modules/admin/platform/PlatformAdminView';
+import { WorkspaceWelcome } from './WorkspaceWelcome';
 import { BrandMark } from './BrandMark';
 
 interface AdminLayoutProps {
@@ -116,6 +117,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
              <LogOut className="w-4 h-4 mr-2"/> Logout
           </Button>
         </header>
+        {currentUser.accessRole === 'Owner' && <details className="max-w-6xl mx-auto mb-6"><summary className="cursor-pointer min-h-11 py-3 font-semibold text-[#123229]">Getting started · Setup checklist & phone installation</summary><WorkspaceWelcome key={`${currentUser.tenantId}:${currentUser.uid}`} storageKey={`neko_setup:${currentUser.tenantId}:${currentUser.uid}`} onOpenModule={module => { if (hasAccess(module)) setActiveModule(module); }} /></details>}
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
            {hasAccess(MODULE_IDS.REPORTS) && <ModuleCard featured title="Today’s Overview" description="Start here: see what needs attention across both stores" icon={<LayoutDashboard/>} color="bg-[#0b6b4d]" onClick={() => setActiveModule('DAILY_OVERVIEW')}/>}
            {hasAccess(MODULE_IDS.ACCURACY) && <ModuleCard title="Order Accuracy" description="Get every handoff right" icon={<CheckCircle/>} color="bg-[#0b6b4d]" onClick={() => setActiveModule(MODULE_IDS.ACCURACY)}/>}

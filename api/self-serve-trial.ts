@@ -1,6 +1,7 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { sendTrialWelcome } from '../server/trialWelcome';
 
 const admin = () => {
   if (!getApps().length) {
@@ -36,6 +37,13 @@ export default async function handler(req: any, res: any) {
     if (req.body?.action !== 'activate') return send(res, 400, { error: 'Invalid trial request.' });
     if (!user.email_verified) return send(res, 403, { error: 'Verify your email address before starting the trial.' });
     const request = (await requestRef.get()).data();
+    // A retry after successful provisioning must not recreate the tenant or
+    // send a second welcome message. Only return the authenticated owner's request.
+    if (request?.uid === user.uid && request.status === 'ACTIVATED') {
+      const subscription = (await db.collection('tenantSubscriptions').doc(request.tenantId).get()).data();
+      if (!subscription?.trialEndsAt) return send(res, 503, { error: 'Your workspace is active, but its trial details could not be loaded. Sign in normally or contact support.' });
+      return send(res, 200, { tenantId: request.tenantId, trialEndsAt: subscription.trialEndsAt.toDate().toISOString(), welcomeEmailStatus: request.welcomeEmailStatus || 'NOT_CONFIGURED' });
+    }
     if (!request || request.uid !== user.uid || request.status !== 'EMAIL_VERIFICATION_PENDING') return send(res, 404, { error: 'No pending trial signup was found.' });
     const existing = await db.collection('tenantMemberships').where('uid', '==', user.uid).where('active', '==', true).limit(1).get();
     if (!existing.empty) return send(res, 409, { error: 'This account already belongs to a business.' });
@@ -52,6 +60,10 @@ export default async function handler(req: any, res: any) {
     const config = db.collection('tenantSettings').doc(request.slug).collection('config'); batch.create(config.doc('appConfig'), { timezone: request.timezone, currencySymbol: '₹' }); batch.create(config.doc('attendanceConfig'), { enableQrScan: true, enablePinCode: true, permittedPinCrewIds: [] }); batch.create(config.doc('accessConfig'), accessConfig);
     ['Owner', 'Store Manager', 'Crew'].forEach(role => batch.create(db.collection('tenantSettings').doc(request.slug).collection('roles').doc(slugify(role)), { name: role }));
     batch.set(requestRef, { status: 'ACTIVATED', tenantId: request.slug, activatedAt: now, updatedAt: now }, { merge: true }); await batch.commit();
-    return send(res, 201, { tenantId: request.slug, trialEndsAt: trialEndsAt.toDate().toISOString() });
+    const expiry = trialEndsAt.toDate().toISOString();
+    const welcomeEmailStatus = await sendTrialWelcome({ uid: user.uid, tenantId: request.slug, email: user.email!, name: request.ownerName, business: request.name, trialEndsAt: expiry });
+    // ACCEPTED means accepted by the provider, not confirmed inbox delivery.
+    await requestRef.set({ welcomeEmailStatus, welcomeEmailUpdatedAt: FieldValue.serverTimestamp() }, { merge: true }).catch(() => console.error('Could not record welcome email status.'));
+    return send(res, 201, { tenantId: request.slug, trialEndsAt: expiry, welcomeEmailStatus });
   } catch (error: any) { console.error('Self-service trial failed:', error?.message || error); return send(res, 503, { error: error?.message || 'Trial setup could not be completed.' }); }
 }
