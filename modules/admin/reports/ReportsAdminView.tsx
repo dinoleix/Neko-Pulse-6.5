@@ -74,6 +74,7 @@ interface TaskRanking {
 export const ReportsAdminView: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'ATTENDANCE' | 'TASKS' | 'PUNCTUALITY'>('ATTENDANCE');
     const [isLoading, setIsLoading] = useState(true);
+    const [reportError, setReportError] = useState('');
     
     // Filters
     const [dateRange, setDateRange] = useState({
@@ -117,6 +118,7 @@ export const ReportsAdminView: React.FC = () => {
                 if (appConfig) setTimezone(appConfig.timezone || DEFAULT_TIMEZONE);
             } catch (e) {
                 console.error("Init Error", e);
+                setReportError(e instanceof Error ? e.message : 'Unable to load report settings. Please retry.');
             }
         };
         loadInit();
@@ -128,6 +130,7 @@ export const ReportsAdminView: React.FC = () => {
 
     const generateReport = async () => {
         setIsLoading(true);
+        setReportError('');
         const start = startOfDay(parseISO(dateRange.start));
         const end = endOfDay(parseISO(dateRange.end));
 
@@ -364,6 +367,10 @@ export const ReportsAdminView: React.FC = () => {
 
         } catch (e) {
             console.error(e);
+            setReportError(e instanceof Error ? e.message : 'Unable to load report data. Please retry.');
+            setAttendanceData([]);
+            setLatenessStats([]);
+            setPunctualityScores([]);
         } finally {
             setIsLoading(false);
         }
@@ -388,6 +395,7 @@ export const ReportsAdminView: React.FC = () => {
             </div>
 
             <Card>
+                {reportError && <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"><p className="font-semibold">Report could not be loaded</p><p className="mt-1 break-words">{reportError}</p><p className="mt-1">Use Run Report to retry. This does not mean attendance records are missing.</p></div>}
                 <div className="flex flex-col md:flex-row gap-6 items-end">
                     <div className="flex-1">
                         <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Date Range</label>

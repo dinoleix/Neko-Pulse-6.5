@@ -1,5 +1,21 @@
 {
   "indexes": [
+    {
+      "collectionGroup": "attendanceLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenantId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shiftAssignments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenantId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
     {"collectionGroup":"attendanceLogs","queryScope":"COLLECTION","fields":[{"fieldPath":"outletId","order":"ASCENDING"},{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"timestamp","order":"ASCENDING"}]},
     {"collectionGroup":"shiftAssignments","queryScope":"COLLECTION","fields":[{"fieldPath":"outletId","order":"ASCENDING"},{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"date","order":"ASCENDING"}]},
     {"collectionGroup":"developmentObservations","queryScope":"COLLECTION","fields":[{"fieldPath":"outletId","order":"ASCENDING"},{"fieldPath":"tenantId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"ASCENDING"}]},
