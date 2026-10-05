@@ -1,7 +1,7 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { sendTrialWelcome } from '../server/trialWelcome';
+import { sendTrialWelcome } from '../server/trialWelcome.js';
 
 const admin = () => {
   if (!getApps().length) {
