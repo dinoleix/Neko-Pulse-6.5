@@ -106,7 +106,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
       <div className="min-h-screen neko-shell p-4 md:p-8">
         <header className="max-w-6xl mx-auto flex justify-between items-center mb-8 md:mb-12 py-4 border-b border-[#ded9ce]">
           <div>
-             <div className="flex items-center gap-1.5 mb-2"><BrandMark className="w-10 h-8"/><p className="neko-eyebrow mb-0">Neko Pulse · Operations</p></div>
+             <div className="flex items-center gap-1.5 mb-2"><BrandMark variant="black" className="w-10 h-8"/><p className="neko-eyebrow mb-0">Neko Pulse · Operations</p></div>
              <h1 className="text-3xl md:text-4xl font-semibold text-[#123229]">Good to see you, {currentUser.name?.split(' ')[0] || 'there'}.</h1>
              <p className="text-slate-500 mt-2">
                 Your café operations, in one considered place.

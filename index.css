@@ -46,3 +46,8 @@ h1, h2, h3, .neko-display { font-family: 'Fraunces', Georgia, serif; }
   border-radius: .5rem;
   clip-path: inset(21% 22% 13% 22%);
 }
+
+.nekotech-mark-black {
+  background-color: transparent;
+  border-radius: 0;
+}
