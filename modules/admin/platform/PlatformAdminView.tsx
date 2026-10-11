@@ -16,6 +16,21 @@ export const PlatformAdminView: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [details, setDetails] = useState<any>(null);
+  const [supportLoading, setSupportLoading] = useState(false);
+  const openDetails = async (tenantId: string) => {
+    setDetails(null); setError(''); setSupportLoading(true);
+    try { setDetails(await platformTenantService.details(tenantId)); }
+    catch (reason: any) { setError(reason.message || 'Could not load business details.'); }
+    finally { setSupportLoading(false); }
+  };
+  const resetOwner = async () => {
+    if (!details || !window.confirm(`Send a password-reset email to ${details.owner.email}? This does not change the password until the owner completes the reset.`)) return;
+    setSupportLoading(true); setError(''); setMessage('');
+    try { const result = await platformTenantService.resetOwnerPassword(details.id); setMessage(result.message); }
+    catch (reason: any) { setError(reason.message || 'Reset request failed.'); }
+    finally { setSupportLoading(false); }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -57,6 +72,21 @@ export const PlatformAdminView: React.FC = () => {
 
     {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800 flex gap-3"><CheckCircle2 className="w-5 h-5 shrink-0" />{message}</div>}
     {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">{error}</div>}
+    <Card title="Business support">
+      <p className="text-sm text-slate-500 mb-3">Inspect owner access without entering the business or impersonating its staff.</p>
+      <label className="block text-sm font-semibold">Select business<select className="block w-full border rounded-xl p-3 mt-2" defaultValue="" disabled={supportLoading || loading} onChange={e => { if (e.target.value) openDetails(e.target.value); else setDetails(null); }}><option value="">Choose a business</option>{tenants.map(tenant => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}</select></label>
+      {supportLoading && <p role="status" className="mt-3">Loading support request…</p>}
+      {details && <div className="mt-4 space-y-3">
+        <h3 className="font-bold">{details.name} · {details.status}</h3>
+        <p>Owner: {details.owner.name} · {details.owner.email}</p>
+        <p className="text-sm">Login: {details.owner.disabled ? 'Disabled' : 'Enabled'} · Email: {details.owner.emailVerified ? 'Verified' : 'Not verified'}</p>
+        <ul className="text-sm space-y-1">{Object.entries(details.diagnostics).map(([key, value]) => <li key={key}>{({ membershipActive: 'Active membership', ownerRole: 'Owner membership role', profileLinked: 'Active profile linked to business', emailMatches: 'Business email matches login' } as Record<string, string>)[key]}: {value ? 'OK' : 'Needs attention'}</li>)}</ul>
+        <p className="text-sm">Subscription: {details.subscription.status}{details.subscription.trialEndsAt ? ` · Trial ends ${new Date(details.subscription.trialEndsAt).toLocaleDateString()}` : ''}</p>
+        <p className="text-sm">Outlets: {details.outlets.map((outlet: any) => `${outlet.name} (${outlet.active ? 'Active' : 'Closed'})`).join(', ') || 'None'}</p>
+        <Button className="!w-auto" variant="secondary" disabled={supportLoading || details.owner.disabled || !details.diagnostics.membershipActive || !details.diagnostics.ownerRole || !details.diagnostics.profileLinked} onClick={resetOwner}>Send owner password-reset email</Button>
+        <p className="text-xs text-slate-500">The owner chooses their own password. Requests are recorded and limited to one per minute. No passwords or reset links are displayed here.</p>
+      </div>}
+    </Card>
 
     <div className="grid lg:grid-cols-[1.15fr_.85fr] gap-6 items-start">
       <Card title="Create a new business">

@@ -25,6 +25,8 @@ const request = async (path = '', init?: RequestInit) => {
 };
 
 export const platformTenantService = {
+  details: async (tenantId: string) => (await request(`?action=details&tenantId=${encodeURIComponent(tenantId)}`)).details,
+  resetOwnerPassword: async (tenantId: string) => request('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'resetOwnerPassword', tenantId }) }),
   capability: async (): Promise<boolean> => (await request('?action=capability')).authorised === true,
   list: async (): Promise<PlatformTenant[]> => (await request()).tenants || [],
   create: async (draft: PlatformTenantDraft): Promise<{ tenant: PlatformTenant; ownerAccountCreated: boolean }> =>
