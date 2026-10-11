@@ -13,8 +13,16 @@ export const TrialSignupView: React.FC = () => {
   const start = async (event: React.FormEvent) => {
     event.preventDefault(); setError(''); setLoading(true);
     try {
-      const credential = await auth.createUserWithEmailAndPassword(form.email.trim(), form.password);
-      await credential.user?.updateProfile({ displayName: form.ownerName.trim() });
+      let credential;
+      try {
+        credential = await auth.createUserWithEmailAndPassword(form.email.trim(), form.password);
+        await credential.user?.updateProfile({ displayName: form.ownerName.trim() });
+      } catch (reason: any) {
+        if (reason.code !== 'auth/email-already-in-use') throw reason;
+        // Recover using the customer's existing password, never reset or delete
+        // their account. The server rejects accounts with an active workspace.
+        credential = await auth.signInWithEmailAndPassword(form.email.trim(), form.password);
+      }
       await trialSignupService.reserve({ name: form.name, slug: form.slug, timezone: form.timezone, outlets: form.outlets.split('\n').map(line => line.trim()).filter(Boolean).map(line => { const [name, address] = line.split('|').map(value => value.trim()); return { name, address }; }) });
       await credential.user?.sendEmailVerification({ url: `${window.location.origin}/?trial=1&activate=1` }); await auth.signOut(); setStage('VERIFY');
     } catch (reason: any) { setError(reason.message || 'Could not start your trial.'); } finally { setLoading(false); }

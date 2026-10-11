@@ -2,6 +2,7 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { sendTrialWelcome } from '../server/trialWelcome.js';
+import { validateTrialReservation, reservationConflict } from '../server/trialReservation.js';
 
 const admin = () => {
   if (!getApps().length) {
@@ -27,11 +28,19 @@ export default async function handler(req: any, res: any) {
     const user = await auth.verifyIdToken(bearer);
     const requestRef = db.collection('trialOnboarding').doc(user.uid);
     if (req.body?.action === 'reserve') {
-      const name = String(req.body?.name || '').trim(); const slug = slugify(String(req.body?.slug || name));
-      const timezone = String(req.body?.timezone || 'Asia/Kolkata').trim(); const outlets = Array.isArray(req.body?.outlets) ? req.body.outlets : [];
-      if (!name || !/^[a-z0-9][a-z0-9-]{1,62}$/.test(slug) || !outlets.length || outlets.length > 20) return send(res, 400, { error: 'Add a business name, valid tenant identifier, and at least one outlet.' });
-      if ((await db.collection('tenants').doc(slug).get()).exists) return send(res, 409, { error: 'That tenant identifier is already in use.' });
-      await requestRef.set({ uid: user.uid, ownerEmail: user.email || '', ownerName: user.name || user.email || 'Owner', name, slug, timezone, outlets: outlets.map((item: any) => ({ name: String(item?.name || '').trim(), address: String(item?.address || '').trim() })), status: 'EMAIL_VERIFICATION_PENDING', createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }, { merge: false });
+      let details;
+      try { details = validateTrialReservation(req.body); } catch (error: any) { return send(res, 400, { error: error.message }); }
+      const conflict = await db.runTransaction(async transaction => {
+        const previous = await transaction.get(requestRef);
+        const members = await transaction.get(db.collection('tenantMemberships').where('uid', '==', user.uid).where('active', '==', true).limit(1));
+        const tenant = await transaction.get(db.collection('tenants').doc(details.slug));
+        const reason = reservationConflict(previous.data(), !members.empty, details);
+        if (reason) return reason;
+        if (tenant.exists) return 'That tenant identifier is already in use.';
+        if (!previous.exists) transaction.create(requestRef, { uid: user.uid, ownerEmail: user.email || '', ownerName: user.name || user.email || 'Owner', ...details, status: 'EMAIL_VERIFICATION_PENDING', createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+        return null;
+      });
+      if (conflict) return send(res, 409, { error: conflict });
       return send(res, 201, { reserved: true });
     }
     if (req.body?.action !== 'activate') return send(res, 400, { error: 'Invalid trial request.' });
@@ -65,5 +74,5 @@ export default async function handler(req: any, res: any) {
     // ACCEPTED means accepted by the provider, not confirmed inbox delivery.
     await requestRef.set({ welcomeEmailStatus, welcomeEmailUpdatedAt: FieldValue.serverTimestamp() }, { merge: true }).catch(() => console.error('Could not record welcome email status.'));
     return send(res, 201, { tenantId: request.slug, trialEndsAt: expiry, welcomeEmailStatus });
-  } catch (error: any) { console.error('Self-service trial failed:', error?.message || error); return send(res, 503, { error: error?.message || 'Trial setup could not be completed.' }); }
+  } catch (error: any) { console.error('Self-service trial failed:', error?.code || 'unknown'); return send(res, 503, { error: 'Trial setup could not be completed. Please retry or contact support.' }); }
 }
