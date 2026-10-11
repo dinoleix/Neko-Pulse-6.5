@@ -1,7 +1,7 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
-import { ownerResetEligible } from '../server/platformSupportPolicy.js';
+import { ownerResetEligible, passwordChangeError } from '../server/platformSupportPolicy.js';
 
 const getAdmin = () => {
   if (!getApps().length) {
@@ -53,7 +53,7 @@ export default async function handler(req: any, res: any) {
     if (!authorised) return send(res, 403, { error: 'Platform administrator access is required.' });
     if (!tenantModeEnabled()) return send(res, 404, { error: 'Tenant mode is not enabled.' });
 
-    if (req.query?.action === 'details' || req.body?.action === 'resetOwnerPassword') {
+    if (req.query?.action === 'details' || ['resetOwnerPassword', 'setOwnerPassword'].includes(req.body?.action)) {
       const tenantId = String(req.query?.tenantId || req.body?.tenantId || '');
       if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(tenantId)) return send(res, 400, { error: 'Invalid business identifier.' });
       const tenant = (await db.collection('tenants').doc(tenantId).get()).data();
@@ -69,14 +69,32 @@ export default async function handler(req: any, res: any) {
         const subscription = (await db.collection('tenantSubscriptions').doc(tenantId).get()).data();
         return send(res, 200, { details: {
           id: tenantId, name: tenant.name, status: tenant.status,
-          owner: { name: owner.displayName || (profile?.tenantId === tenantId ? profile.crewName : '') || 'Name unavailable', email: owner.email || '', disabled: owner.disabled, emailVerified: owner.emailVerified },
+          owner: { uid: ownerUid, name: owner.displayName || (profile?.tenantId === tenantId ? profile.crewName : '') || 'Name unavailable', email: owner.email || '', disabled: owner.disabled, emailVerified: owner.emailVerified },
           diagnostics: { membershipActive: membership?.active === true, ownerRole: membership?.personType === 'OWNER', profileLinked: profile?.tenantId === tenantId && profile?.active !== false, emailMatches: tenant.ownerEmail === owner.email },
           outlets: stores.docs.map(doc => ({ id: doc.id, name: doc.data().name, active: doc.data().isActive !== false })),
           subscription: { status: subscription?.status || tenant.subscriptionStatus || 'Not configured', trialEndsAt: subscription?.trialEndsAt?.toDate?.().toISOString() || null },
         } });
       }
-      if (req.method !== 'POST' || req.body?.action !== 'resetOwnerPassword') return send(res, 405, { error: 'Method not allowed.' });
+      if (req.method !== 'POST' || !['resetOwnerPassword', 'setOwnerPassword'].includes(req.body?.action)) return send(res, 405, { error: 'Method not allowed.' });
       if (!ownerResetEligible(owner, membership, profile, tenantId)) return send(res, 409, { error: 'Resolve the owner account diagnostics before sending a reset.' });
+      if (req.body.action === 'setOwnerPassword') {
+        const validation = passwordChangeError(req.body.password, req.body.confirmation, actor.auth_time);
+        if (validation) return send(res, 400, { error: validation });
+        if (req.body.confirmOwnerUid !== ownerUid || req.body.confirmed !== true) return send(res, 409, { error: 'Reload owner details and confirm the password change.' });
+        const audit = db.collection('platformSupportAudit').doc();
+        await audit.create({ tenantId, actorUid: actor.uid, targetUid: ownerUid, action: 'OWNER_PASSWORD_CHANGE', result: 'PENDING', createdAt: FieldValue.serverTimestamp() });
+        let changed = false;
+        try {
+          await auth.updateUser(ownerUid, { password: req.body.password });
+          changed = true;
+          await auth.revokeRefreshTokens(ownerUid);
+          await audit.update({ result: 'COMPLETED', completedAt: FieldValue.serverTimestamp() });
+          return send(res, 200, { message: 'Owner password changed and refresh sessions revoked. Existing ID tokens may remain valid until expiry unless the endpoint checks revocation.' });
+        } catch {
+          await audit.update({ result: changed ? 'PASSWORD_CHANGED_FOLLOWUP_FAILED' : 'FAILED', completedAt: FieldValue.serverTimestamp() }).catch(() => undefined);
+          return send(res, 503, { error: changed ? 'Password changed, but session revocation or audit completion failed. Do not repeat the change; contact support.' : 'Password could not be changed. Please try later.' });
+        }
+      }
       const key = process.env.VITE_FIREBASE_API_KEY;
       if (!key) return send(res, 503, { error: 'Firebase password-reset email is not configured.' });
       const throttle = db.collection('platformSupportResetLimits').doc(ownerUid);

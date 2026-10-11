@@ -18,7 +18,22 @@ export const PlatformAdminView: React.FC = () => {
   const [error, setError] = useState('');
   const [details, setDetails] = useState<any>(null);
   const [supportLoading, setSupportLoading] = useState(false);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const clearPasswords = () => { setNewPassword(''); setConfirmPassword(''); setShowPasswordForm(false); };
+  useEffect(() => { clearPasswords(); }, [details?.id]);
+  const changeOwnerPassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!details || newPassword !== confirmPassword) { setError('Passwords do not match.'); return; }
+    if (!window.confirm(`Change the password for ${details.owner.email} in ${details.name}? Existing refresh sessions will be revoked. Share the new password securely with the owner.`)) return;
+    setSupportLoading(true); setError(''); setMessage('');
+    try { const result = await platformTenantService.setOwnerPassword(details.id, details.owner.uid, newPassword, confirmPassword); setMessage(result.message); }
+    catch (reason: any) { setError(reason.message || 'Password change failed.'); }
+    finally { clearPasswords(); setSupportLoading(false); }
+  };
   const openDetails = async (tenantId: string) => {
+    clearPasswords();
     setDetails(null); setError(''); setSupportLoading(true);
     try { setDetails(await platformTenantService.details(tenantId)); }
     catch (reason: any) { setError(reason.message || 'Could not load business details.'); }
@@ -84,6 +99,14 @@ export const PlatformAdminView: React.FC = () => {
         <p className="text-sm">Subscription: {details.subscription.status}{details.subscription.trialEndsAt ? ` · Trial ends ${new Date(details.subscription.trialEndsAt).toLocaleDateString()}` : ''}</p>
         <p className="text-sm">Outlets: {details.outlets.map((outlet: any) => `${outlet.name} (${outlet.active ? 'Active' : 'Closed'})`).join(', ') || 'None'}</p>
         <Button className="!w-auto" variant="secondary" disabled={supportLoading || details.owner.disabled || !details.diagnostics.membershipActive || !details.diagnostics.ownerRole || !details.diagnostics.profileLinked} onClick={resetOwner}>Send owner password-reset email</Button>
+        <Button className="!w-auto" variant="secondary" disabled={supportLoading || details.owner.disabled || !details.diagnostics.membershipActive || !details.diagnostics.ownerRole || !details.diagnostics.profileLinked} onClick={() => setShowPasswordForm(true)}>Set owner password</Button>
+        {showPasswordForm && <form className="border rounded-xl p-4 space-y-3" onSubmit={changeOwnerPassword}>
+          <p className="text-sm">Sign out and sign in again first; administrator sign-in must be within five minutes. This changes the owner's actual login password.</p>
+          <Field label="New owner password"><Input type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={newPassword} onChange={e => setNewPassword(e.target.value)} /></Field>
+          <Field label="Confirm new password"><Input type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></Field>
+          <Button disabled={supportLoading || newPassword !== confirmPassword} isLoading={supportLoading}>Confirm password change</Button>
+          <button type="button" disabled={supportLoading} onClick={clearPasswords} className="underline text-sm">Cancel</button>
+        </form>}
         <p className="text-xs text-slate-500">The owner chooses their own password. Requests are recorded and limited to one per minute. No passwords or reset links are displayed here.</p>
       </div>}
     </Card>

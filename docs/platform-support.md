@@ -2,8 +2,19 @@
 
 Platform administrators can select a business, inspect owner login/membership
 diagnostics and outlet/subscription metadata, and explicitly request a Firebase
-password-reset email to the linked owner. No workspace impersonation or direct
-password changes are implemented. Operational/HR records are not returned.
+password-reset email to the linked owner. A separate Set owner password action
+requires sign-in within five minutes, matching 12–128-character entries, and
+explicit confirmation. It verifies revoked administrator tokens, resolves the
+owner server-side, and rejects a stale owner UID supplied by the UI. Passwords
+are sent only to Firebase Authentication, never included in audit documents,
+logs or browser storage, and the form clears on submission/cancel/business change.
+No workspace impersonation is implemented. Operational/HR records are not returned.
+
+Direct changes write a PENDING audit before mutation, update Firebase Auth, revoke
+refresh tokens, then mark completion. Partial failures distinguish a changed
+password from a failed change. Revocation is NOT immediate termination of every
+existing ID token: clients/endpoints without revocation checks can retain access
+until token expiry. Real-account password changes were not exercised locally.
 
 The existing server platform-admin gate protects both new actions. Reset
 recipients are resolved from Firebase Auth using tenants.ownerUid, never a
