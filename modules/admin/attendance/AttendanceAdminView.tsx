@@ -9,6 +9,8 @@ import { format, endOfDay, differenceInMinutes, isSameDay, differenceInDays } fr
 import { formatInTimeZone, getShiftedDate, DEFAULT_TIMEZONE } from '../../../utils/dateFormatter';
 import { db, firebase } from '../../../firebaseConfig';
 import { notScannedAttendance } from '../../../utils/notScannedAttendance';
+import { AttendanceEmailSettings } from '../../../components/AttendanceEmailSettings';
+import type { CurrentUser } from '../../../types';
 
 // --- HELPERS ---
 // @fix: Implemented local parseISO helper to handle YYYY-MM-DD strings
@@ -62,7 +64,7 @@ interface ProcessedShift {
    isLate?: boolean;
 }
 
-export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ launchKiosk }) => {
+export const AttendanceAdminView: React.FC<{ launchKiosk: () => void; currentUser?: CurrentUser }> = ({ launchKiosk, currentUser }) => {
    const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'REPORT' | 'LEAVE_BALANCE' | 'SETTINGS'>('DASHBOARD');
    const [logs, setLogs] = useState<AttendanceLog[]>([]);
    const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
@@ -559,6 +561,7 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
 
          {activeTab === 'REPORT' && (
             <div className="space-y-6 animate-in fade-in">
+               {['Owner', 'Administrator', 'Admin'].includes(currentUser?.accessRole || '') && <details><summary className="cursor-pointer font-semibold py-3">Daily Attendance Email · Settings &amp; preview</summary><AttendanceEmailSettings /></details>}
                <Card>
                   <div className="flex flex-col md:flex-row gap-4 items-end">
                      <div className="flex-1">

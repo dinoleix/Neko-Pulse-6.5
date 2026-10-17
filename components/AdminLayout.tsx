@@ -188,7 +188,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
           {activeModule === MODULE_IDS.SETTINGS && <SettingsAdminView />}
           {activeModule === 'ACCESS' && <AccessAdminView />}
           {activeModule === 'PLATFORM_ADMIN' && isPlatformAdministrator && <PlatformAdminView />}
-          {activeModule === MODULE_IDS.ATTENDANCE && <AttendanceAdminView launchKiosk={() => {
+          {activeModule === MODULE_IDS.ATTENDANCE && <AttendanceAdminView currentUser={currentUser} launchKiosk={() => {
             const tenant = currentUser.tenantId ? `&tenant=${encodeURIComponent(currentUser.tenantId)}` : '';
             window.open(`${window.location.origin}?mode=kiosk${tenant}`, '_blank');
           }} />}
