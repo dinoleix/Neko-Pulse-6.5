@@ -29,7 +29,6 @@ const TARGETS = [
     { id: 'taskLogs', name: 'Task Completion Logs', dateField: 'completedAt', type: 'TIMESTAMP', risk: 'LOW' },
     { id: 'shiftAssignments', name: 'Shift Roster History', dateField: 'date', type: 'STRING', risk: 'LOW' },
     { id: 'attendanceLogs', name: 'Attendance Logs (Clock In/Out)', dateField: 'timestamp', type: 'TIMESTAMP', risk: 'HIGH' },
-    { id: 'eom_votes', name: 'Employee of Month Votes', dateField: 'timestamp', type: 'TIMESTAMP', risk: 'LOW' },
 ];
 
 export const SettingsAdminView: React.FC = () => {

@@ -14,7 +14,7 @@ const admin = () => {
 };
 const send = (res: any, code: number, body: Record<string, unknown>) => res.status(code).json(body);
 const slugify = (text: string) => text.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-const accessConfig = { TASKS: ['Owner', 'Store Manager'], EMPLOYEE: ['Owner'], STORES: ['Owner'], ATTENDANCE: ['Owner', 'Store Manager'], SHIFTS: ['Owner', 'Store Manager'], HR: ['Owner'], REPORTS: ['Owner', 'Store Manager'], EOM: ['Owner', 'Store Manager'], LOGIN_ACTIVITY: ['Owner'], TRAINING: ['Owner', 'Store Manager'], SETTINGS: ['Owner'] };
+const accessConfig = { TASKS: ['Owner', 'Store Manager'], EMPLOYEE: ['Owner'], STORES: ['Owner'], ATTENDANCE: ['Owner', 'Store Manager'], SHIFTS: ['Owner', 'Store Manager'], HR: ['Owner'], REPORTS: ['Owner', 'Store Manager'], LOGIN_ACTIVITY: ['Owner'], TRAINING: ['Owner', 'Store Manager'], SETTINGS: ['Owner'] };
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed.' });

@@ -30,7 +30,6 @@ const defaultAccessConfig = {
   SHIFTS: ['Owner', 'Store Manager'],
   HR: ['Owner'],
   REPORTS: ['Owner', 'Store Manager'],
-  EOM: ['Owner', 'Store Manager'],
   LOGIN_ACTIVITY: ['Owner'],
   TRAINING: ['Owner', 'Store Manager'],
   SETTINGS: ['Owner'],

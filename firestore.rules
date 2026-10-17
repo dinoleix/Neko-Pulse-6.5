@@ -43,8 +43,7 @@ service cloud.firestore {
     function canManagePeople() { return hasManagerAccess('EMPLOYEE'); }
     function canReadCrew() {
       return canManagePeople() || hasManagerAccess('TASKS') || hasManagerAccess('SHIFTS') ||
-        hasManagerAccess('HR') || hasManagerAccess('REPORTS') || hasManagerAccess('ATTENDANCE') ||
-        hasManagerAccess('EOM');
+        hasManagerAccess('HR') || hasManagerAccess('REPORTS') || hasManagerAccess('ATTENDANCE');
     }
     function canReadReportsData() { return hasManagerAccess('REPORTS'); }
     // Store Managers are trusted training managers in the current two-outlet
@@ -193,14 +192,6 @@ service cloud.firestore {
     match /settings/recipeConfig { allow read: if isCrew() || hasManagerAccess('RECIPE'); allow write: if hasManagerAccess('RECIPE'); }
     match /settings/hrTemplates { allow read, write: if hasManagerAccess('HR'); }
     match /settings/hrConfig { allow read, write: if hasManagerAccess('HR'); }
-
-    match /eom_cycles/{docId} { allow read: if isCrew() || hasManagerAccess('EOM'); allow write: if hasManagerAccess('EOM'); }
-    match /eom_votes/{voteId} {
-      allow read: if isCrew() || hasManagerAccess('EOM') || hasManagerAccess('SETTINGS');
-      allow create: if hasManagerAccess('EOM') || (isCrew() && isOwner('voterId') && voteId == request.resource.data.cycleId + '_' + request.auth.uid);
-      allow delete: if hasManagerAccess('SETTINGS');
-    }
-    match /eom_scores/{docId} { allow read: if isCrew() || hasManagerAccess('EOM'); allow write: if hasManagerAccess('EOM'); }
 
     match /recipes/{recipeId} {
       allow read: if hasManagerAccess('RECIPE') || (isCrew() && resource.data.isShared == true);

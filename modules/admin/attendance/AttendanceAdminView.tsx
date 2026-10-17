@@ -105,6 +105,9 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
    const [isSubmittingAdminLeave, setIsSubmittingAdminLeave] = useState(false);
 
    useEffect(() => { loadData(); }, []);
+   useEffect(() => {
+      if (selectedEmployee !== 'ALL' && !crew.some(c => c.id === selectedEmployee && c.active !== false && !c.dateOfLeaving)) setSelectedEmployee('ALL');
+   }, [crew, selectedEmployee]);
    useEffect(() => { const timer = setInterval(() => setClockTick(value => value + 1), 60000); return () => clearInterval(timer); }, []);
    useEffect(() => { if (activeTab === 'REPORT') generateReport(); }, [activeTab, reportFilter, selectedEmployee, logs, assignments, timezone, crew, leaves, clockTick, loadingError]);
 
@@ -356,10 +359,9 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
        }
    };
 
-   const crewWithOverrides = crew.filter(c => c.leaveBalanceOverride !== undefined && c.leaveBalanceOverride !== null);
-
    // A member is inactive if explicitly marked or has a relieving date.
    const isInactiveMember = (c: CrewMember) => c.active === false || !!c.dateOfLeaving;
+   const crewWithOverrides = crew.filter(c => !isInactiveMember(c) && c.leaveBalanceOverride !== undefined && c.leaveBalanceOverride !== null);
    const inactiveBalanceCount = crew.filter(isInactiveMember).length;
    const balanceList = crew
       .filter(c => showInactiveBalance ? isInactiveMember(c) : !isInactiveMember(c))
@@ -571,7 +573,7 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
                         <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Employee</label>
                         <Select value={selectedEmployee} onChange={e => setSelectedEmployee(e.target.value)}>
                            <option value="ALL">All Employees</option>
-                           {crew.map(c => <option key={c.id} value={c.id}>{c.crewName}</option>)}
+                           {crew.filter(c => !isInactiveMember(c)).map(c => <option key={c.id} value={c.id}>{c.crewName}</option>)}
                         </Select>
                      </div>
                      <div className="w-full md:w-auto bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100 text-right min-w-[150px]">

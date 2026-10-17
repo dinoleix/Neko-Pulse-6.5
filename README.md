@@ -32,7 +32,6 @@ Smart, multi-modal attendance tracking designed for the floor:
 ### 👥 Employee & HR Suite
 - Full employee profiles: roles, contact info, outlet assignment, status
 - HR module handles leave requests, appraisals, and disciplinary records
-- End-of-Month (EOM) processing for payroll reconciliation
 
 ### 📈 Reports & Analytics
 - Visual dashboards powered by **Recharts** — daily/weekly/monthly breakdowns
@@ -100,7 +99,6 @@ Neko-Pulse-6.5/
 │   ├── TaskModule.tsx         # Task assignment
 │   ├── OrderModule.tsx        # Purchase orders
 │   ├── StoreModule.tsx        # Store operations
-│   ├── EOMModule.tsx          # End-of-month processing
 │   ├── AccessControl.tsx      # Role-based routing
 │   ├── admin/                 # Admin-only views
 │   └── crew/                  # Crew-facing views

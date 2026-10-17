@@ -119,7 +119,6 @@ export const MODULE_IDS = {
   SHIFTS: 'SHIFTS',
   HR: 'HR',
   REPORTS: 'REPORTS',
-  EOM: 'EOM',
   RECIPE: 'RECIPE',
   LOGIN_ACTIVITY: 'LOGIN_ACTIVITY',
   TRAINING: 'TRAINING',
@@ -130,7 +129,6 @@ export const MODULE_IDS = {
   CREW_ORDERS: 'CREW_ORDERS',
   CREW_TASKS: 'CREW_TASKS',
   CREW_SHIFTS: 'CREW_SHIFTS',
-  CREW_EOM: 'CREW_EOM',
   CREW_RECIPE: 'CREW_RECIPE',
   CREW_TRAINING: 'CREW_TRAINING',
   CREW_DEVELOPMENT: 'CREW_DEVELOPMENT'
@@ -312,7 +310,7 @@ export interface CrewMember {
 }
 
 // Public-safe subset of CrewMember, mirrored into /crewDirectory (doc ID =
-// crew doc ID) so crew-facing features (birthday banner, EOM nominees) can
+// crew doc ID) so crew-facing features (birthday banner) can
 // list coworkers without read access to /crew, which holds login codes and
 // HR fields. Synced by employeeService on save/delete and self-healed when
 // an admin opens the Employees tab.
@@ -592,45 +590,6 @@ export interface LeaveRequest {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   appliedAt: any;
   tenantId?: string;
-}
-
-// --- MODULE: EMPLOYEE OF THE MONTH (EOM) ---
-export interface EOMCycle {
-  id: string; // YYYY-MM
-  tenantId?: string;
-  monthName: string;
-  status: 'OPEN' | 'VOTING' | 'SCORING' | 'COMPLETED';
-  winnerId?: string;
-  winnerName?: string;
-  calculatedAt?: any;
-}
-
-export interface EOMVote {
-  id?: string;
-  tenantId?: string;
-  cycleId: string;
-  voterId: string;
-  nomineeId: string;
-  timestamp: any;
-}
-
-export interface EOMScore {
-  id?: string;
-  tenantId?: string;
-  cycleId: string;
-  nomineeId: string;
-  score: number; // 1-10
-  managerId: string;
-}
-
-export interface EOMResult {
-  nomineeId: string;
-  nomineeName: string;
-  voteCount: number;
-  voteScoreNormalized: number;
-  mgmtScoreRaw: number;
-  mgmtScoreNormalized: number;
-  finalScore: number;
 }
 
 // --- MODULE: LOGIN ACTIVITY ---

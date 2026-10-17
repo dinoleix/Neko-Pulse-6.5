@@ -62,7 +62,6 @@ export const AccessAdminView: React.FC = () => {
       MODULE_IDS.HR,
       MODULE_IDS.RECIPE, // Kitchen Recipes (AdminLayout gates the card on this ID)
       MODULE_IDS.REPORTS,
-      MODULE_IDS.EOM, 
       MODULE_IDS.ATTENDANCE,
       MODULE_IDS.STORES,
       MODULE_IDS.SETTINGS,
@@ -75,7 +74,6 @@ export const AccessAdminView: React.FC = () => {
       MODULE_IDS.CREW_TASKS,
       MODULE_IDS.CREW_RECIPE, // Recipe viewer tab in the crew app
       MODULE_IDS.CREW_SHIFTS,
-      MODULE_IDS.CREW_EOM,
       MODULE_IDS.CREW_TRAINING,
       MODULE_IDS.CREW_DEVELOPMENT
    ];
@@ -90,7 +88,6 @@ export const AccessAdminView: React.FC = () => {
       MODULE_IDS.EMPLOYEE,
       MODULE_IDS.STORES,
       MODULE_IDS.SHIFTS,
-      MODULE_IDS.EOM,
       MODULE_IDS.ATTENDANCE
    ];
 
