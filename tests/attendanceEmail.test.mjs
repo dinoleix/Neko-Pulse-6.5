@@ -55,3 +55,19 @@ test('selected outlet excludes other-store staff, including historical scanned s
   const result = buildAttendanceEmail({ crew: [...crew, { id: 'c', crewName: 'Other', outletId: 'SFD', active: true }], stores, logs: [{ crewId: 'c', outletId: 'SFD', type: 'CHECK_IN', timestamp: new Date('2026-10-17T03:30Z') }], assignments: [], leaves: [] }, '2026-10-17', 'Asia/Kolkata');
   assert.ok(!result.rows.some(r => r.employee === 'Other'));
 });
+test('COUNTER roles are excluded from scanned, unscanned, unscheduled rows and summary totals', () => {
+  const counters = [
+    { id: 'counter-1', authUid: 'counter-auth-1', crewName: 'Scanned counter', role: 'COUNTER', active: true, outletId: 'B6' },
+    { id: 'counter-2', crewName: 'Unscanned counter', role: ' counter ', active: true, outletId: 'B6' },
+    { id: 'counter-3', crewName: 'Tablet counter', role: 'Counter', active: true, outletId: 'B6' },
+  ];
+  const assignments = ['counter-auth-1', 'counter-2', 'b'].map(crewId => ({ crewId, date: '2026-10-17', startTime: '09:00', outletId: 'B6' }));
+  const logs = [{ crewId: 'counter-auth-1', type: 'CHECK_IN', outletId: 'B6', timestamp: new Date('2026-10-17T03:30Z') }];
+  const data = { crew: [...crew, ...counters], stores, logs, assignments, leaves: [] };
+  const r = buildAttendanceEmail(data, '2026-10-17', 'Asia/Kolkata', new Date('2026-10-18T02:00Z'));
+  assert.equal(r.rows.length, 2);
+  assert.match(r.text, /1 scheduled employee\/store assignments · 0 checked in/);
+  assert.match(r.text, /1 not scanned/);
+  for (const counter of counters) { assert.ok(!r.text.includes(counter.crewName)); assert.ok(!r.html.includes(counter.crewName)); }
+  assert.equal(data.crew.length, 5); assert.equal(data.assignments.length, 3);
+});

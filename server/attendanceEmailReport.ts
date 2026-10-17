@@ -29,6 +29,10 @@ export function validateEmailSettings(input: any, outletIds: string[]) {
 }
 const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 export function buildAttendanceEmail(data: { crew: any[]; logs: any[]; assignments: any[]; leaves: any[]; stores: any[] }, date: string, timezone: string, now = new Date()) {
+  // Counter accounts (including outlet tablets) do not belong in staff emails.
+  // Remove their assignments too so summary totals agree with the visible rows.
+  const counterIds = new Set(data.crew.filter(person => String(person.role || '').trim().toLowerCase() === 'counter').flatMap(person => [person.id, person.authUid]).filter(Boolean));
+  data = { ...data, crew: data.crew.filter(person => String(person.role || '').trim().toLowerCase() !== 'counter'), assignments: data.assignments.filter(a => !counterIds.has(a.crewId)) };
   const missing = notScannedAttendance(data.assignments, data.logs, data.crew, data.leaves, date, date, timezone, now);
   const time = (d?: Date) => d ? new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d) + (businessDate(d, timezone) !== date ? ' (+1 day)' : '') : '—';
   const rows: any[] = [];

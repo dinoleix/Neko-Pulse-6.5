@@ -14,6 +14,8 @@ Save recipients (up to ten), selected active outlets (empty means all), and enab
 
 ## Reliability and privacy
 
+COUNTER roles are excluded from all email rows and summary counts, including scanned attendance and Not Scanned. Role matching ignores casing and surrounding spaces. This applies to preview, test and newly generated daily emails; already accepted emails and frozen retry payloads retain their original snapshot.
+
 Settings in `attendanceEmailSettings/{tenantId}` include updatedBy/updatedAt. Attempts in `attendanceEmailDeliveries/{tenantId}_{date}` (test has `_test`) contain actor, status, timestamps and a frozen payload for stable provider idempotency. Each recipient gets a private email. Transactions lease delivery for two minutes; provider idempotency protects same-day manual retries within 24 hours, and old ambiguous attempts require investigation. Provider acceptance does not confirm inbox delivery. Test attempts have a one-minute cooldown. Failed daily attempts can be retried with Send now that same report day; daily cron does not retry previous report days. No webhooks/bounce tracking are included. Delivery payloads contain attendance PII; add a retention policy before large-scale rollout. Current scheduler processes enabled tenants sequentially with a five-minute function budget; a queue is needed at larger scale.
 
 Plain Vite cannot serve these API routes; use the full Vercel development runtime for integration testing. Automated tests cover calculations and policy, not live mail delivery or Firebase enforcement.
