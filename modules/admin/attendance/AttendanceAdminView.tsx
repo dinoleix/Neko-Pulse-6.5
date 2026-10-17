@@ -8,6 +8,7 @@ import { Zap, Settings, Check, X, Trash2, LogIn, LogOut, AlertCircle, Calendar, 
 import { format, endOfDay, differenceInMinutes, isSameDay, differenceInDays } from 'date-fns';
 import { formatInTimeZone, getShiftedDate, DEFAULT_TIMEZONE } from '../../../utils/dateFormatter';
 import { db, firebase } from '../../../firebaseConfig';
+import { notScannedAttendance } from '../../../utils/notScannedAttendance';
 
 // --- HELPERS ---
 // @fix: Implemented local parseISO helper to handle YYYY-MM-DD strings
@@ -75,6 +76,8 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
    const [isSavingKiosk, setIsSavingKiosk] = useState(false);
    const [loadingError, setLoadingError] = useState<string | null>(null);
    const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
+   const [notScanned, setNotScanned] = useState<ShiftAssignment[]>([]);
+   const [clockTick, setClockTick] = useState(0);
    
    // Leave History Filter State
    const [historyEmployeeFilter, setHistoryEmployeeFilter] = useState<string>('ALL');
@@ -102,7 +105,8 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
    const [isSubmittingAdminLeave, setIsSubmittingAdminLeave] = useState(false);
 
    useEffect(() => { loadData(); }, []);
-   useEffect(() => { if (activeTab === 'REPORT') generateReport(); }, [activeTab, reportFilter, selectedEmployee, logs, assignments, timezone]);
+   useEffect(() => { const timer = setInterval(() => setClockTick(value => value + 1), 60000); return () => clearInterval(timer); }, []);
+   useEffect(() => { if (activeTab === 'REPORT') generateReport(); }, [activeTab, reportFilter, selectedEmployee, logs, assignments, timezone, crew, leaves, clockTick, loadingError]);
 
    const loadData = async () => {
       setLoadingError(null);
@@ -120,7 +124,9 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
 
           const [appConfig, logsData, leavesData, crewData, shiftData, attConfig] = await Promise.all([
               attendanceService.getAppConfig(),
-              attendanceService.getAllLogs(1000, reportBound),
+              // Include a timezone boundary buffer so an early business-day
+              // scan cannot fall outside the browser-local report window.
+              attendanceService.getAllLogs(1000, subDays(reportBound, 1)),
               attendanceService.getAllLeaves(),
               attendanceService.getCrew(),
               attendanceService.getAllShifts(format(reportBound, 'yyyy-MM-dd')),
@@ -150,6 +156,13 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
 
    const generateReport = () => {
       const now = new Date();
+      const businessNow = getShiftedDate(now, timezone);
+      let missingStart = businessNow;
+      if (reportFilter === 'YESTERDAY') missingStart = subDays(businessNow, 1);
+      else if (reportFilter === 'WEEK') missingStart = startOfWeek(businessNow);
+      else if (reportFilter === 'MONTH') missingStart = startOfMonth(businessNow);
+      // Capped reads cannot establish that a person has no attendance record.
+      setNotScanned(logs.length >= 1000 || leaves.length >= 1000 || loadingError ? [] : notScannedAttendance(assignments, logs, crew, leaves, format(missingStart, 'yyyy-MM-dd'), format(reportFilter === 'YESTERDAY' ? missingStart : businessNow, 'yyyy-MM-dd'), timezone, now, selectedEmployee));
       let start = startOfDay(now);
       let end = endOfDay(now);
       if (reportFilter === 'YESTERDAY') {
@@ -569,6 +582,9 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
                </Card>
 
                <Card title="Attendance Logs" className="overflow-hidden">
+                  <Button variant="secondary" className="!w-auto m-4" onClick={loadData}>Refresh attendance</Button>
+                  <p className="px-4 py-3 text-xs text-slate-500">Not Scanned means an assigned shift has started with no attendance event recorded for that day. It is not a confirmed absence. Approved leave and days off are excluded.</p>
+                  {(logs.length >= 1000 || leaves.length >= 1000) && <p role="alert" className="px-4 pb-3 text-sm text-amber-800">Not Scanned entries are unavailable because the data limit was reached.</p>}
                   <div className="overflow-x-auto">
                      <table className="w-full text-sm">
                         <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs">
@@ -582,6 +598,13 @@ export const AttendanceAdminView: React.FC<{ launchKiosk: () => void }> = ({ lau
                            </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
+                           {notScanned.map(assignment => <tr key={`not-scanned-${assignment.crewId}-${assignment.date}`} className="bg-amber-50/50">
+                              <td className="p-4 whitespace-nowrap">{format(parseISO(assignment.date), 'MMM d, yyyy')}</td>
+                              <td className="p-4 font-medium">{assignment.crewName}<div className="text-xs text-slate-500">{assignment.outletId}</div></td>
+                              <td className="p-4 text-center">—<div className="text-xs text-slate-500">Sch: {assignment.startTime}</div></td>
+                              <td className="p-4 text-center">—</td><td className="p-4 text-center">—</td>
+                              <td className="p-4 text-center"><Badge variant="danger">Not Scanned</Badge></td>
+                           </tr>)}
                            {shifts.map(shift => (
                               <tr key={shift.id} className="hover:bg-slate-50">
                                  <td className="p-4 font-bold text-slate-700 whitespace-nowrap">{formatInTimeZone(shift.date, 'MMM d, yyyy', timezone)}</td>
