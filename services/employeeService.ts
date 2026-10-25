@@ -1,5 +1,5 @@
 
-import { db, storage, firebase, firebaseConfig } from '../firebaseConfig';
+import { auth, db, storage, firebase, firebaseConfig } from '../firebaseConfig';
 import { CrewMember, CrewDirectoryEntry, RoleDef } from '../types';
 import { getSettingsCollectionRef } from './configCache';
 import { currentTenantContext, currentTenantId, isTenantWideMember, tenantPayload, withTenant } from './tenantScope';
@@ -116,6 +116,14 @@ const healCrewDirectory = async (crew: CrewMember[]) => {
 };
 
 export const employeeService = {
+    staffCreation: async (employee?: Partial<CrewMember>) => {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) throw new Error('Please sign in again.');
+        const response = await fetch('/api/employee-admin', { method: employee ? 'POST' : 'GET', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...(employee ? { body: JSON.stringify({ employee }) } : {}) });
+        const result = await response.json().catch(() => ({ error: 'Employee service unavailable.' }));
+        if (!response.ok) throw new Error(result.error || 'Employee service unavailable.');
+        return result;
+    },
     repairAuthUidRecords: async (): Promise<number> => {
         const [crew, managers] = await Promise.all([employeeService.getAllCrew(), employeeService.getAllManagers()]);
         const entries = [...crew.map(item => ['crew', item] as const), ...managers.map(item => ['managers', item] as const)]

@@ -12,6 +12,7 @@ import { Button, Card, Input, Select, Badge, Checkbox } from '../../../component
 // @fix: Added ShieldAlert to imports
 import { Trash2, Edit, X, Loader2, Calendar, Globe, Lock, RefreshCcw, Users, ShieldCheck, Search, UserPlus, Info, ChevronRight, MapPin, Shield, Unlock, ShieldAlert, UserX, UserCheck, Camera, Upload } from 'lucide-react';
 import { format } from 'date-fns';
+import { staffRoleAllowed } from '../../../server/employeeCreationPolicy';
 
 interface EmployeeAdminViewProps {
    currentUser: CurrentUser;
@@ -25,6 +26,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    const [stores, setStores] = useState<Store[]>([]);
    const [attConfig, setAttConfig] = useState<AttendanceConfig | null>(null);
    const [isLoading, setIsLoading] = useState(true);
+   const [staffCreationAllowed, setStaffCreationAllowed] = useState(false);
    const [searchQuery, setSearchQuery] = useState('');
    const [showInactive, setShowInactive] = useState(false);
    
@@ -79,6 +81,9 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
          setRoles(rData);
          setStores(sData);
          setAttConfig(configData);
+         if (isTenantModeEnabled && currentUser.tenantId && !canManagePeople) {
+             employeeService.staffCreation().then(result => setStaffCreationAllowed(result.canCreateStaff === true)).catch(() => setStaffCreationAllowed(false));
+         }
       } catch (err) {
          console.error("Load error", err);
       } finally {
@@ -116,11 +121,11 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    const canManageManagerOutletAccess = isTenantModeEnabled && !!currentUser.tenantId
       && ['owner', 'administrator', 'admin', 'super admin'].includes((currentUser.accessRole || '').trim().toLowerCase());
 
-   // Team visibility is useful to an outlet manager; identity and role
-   // administration is not. This guard is deliberately independent of the
-   // visible controls because the final tenant rules enforce the same boundary.
+   // Existing identities and roles remain owner/admin-managed. Managers use
+   // a separately authorised server endpoint for limited new staff creation.
    const canManagePeople = ['owner', 'administrator', 'admin', 'super admin', 'system admin']
       .includes((currentUser.accessRole || '').trim().toLowerCase());
+   const canAddCurrent = canManagePeople || (activeTab === 'CREW' && staffCreationAllowed);
 
    // --- ACTIONS ---
    const addRole = async () => {
@@ -307,7 +312,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    };
 
    const handleSave = async (forceResetAuth = false) => {
-      if (!canManagePeople) {
+      if (!canManagePeople && !(staffCreationAllowed && activeTab === 'CREW' && !editingId && !forceResetAuth)) {
          alert('Only an owner or administrator can create or edit team accounts.');
          return;
       }
@@ -350,6 +355,12 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       setIsSavingCrew(true);
 
       try {
+         if (!canManagePeople) {
+             await employeeService.staffCreation(newCrew);
+             setCrew(await employeeService.getAllCrew());
+             cancelEdit();
+             return;
+         }
          const list = activeTab === 'CREW' ? crew : managers;
          let authUid = editingId ? (list.find(c => c.id === editingId)?.authUid) : undefined;
          
@@ -537,9 +548,9 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                      {showInactive ? <UserCheck className="w-5 h-5"/> : <UserX className="w-5 h-5"/>}
                      {showInactive ? 'Show Active' : `Inactive${inactiveCount > 0 ? ` (${inactiveCount})` : ''}`}
                   </button>
-                  {canManagePeople && (
+                  {canAddCurrent && (
                      <Button className="!w-auto !rounded-3xl" onClick={() => setIsCreating(true)}>
-                        <UserPlus className="w-5 h-5 mr-2"/> Add New
+                        <UserPlus className="w-5 h-5 mr-2"/> {activeTab === 'CREW' ? 'Add Employee' : 'Add Manager'}
                      </Button>
                   )}
                </div>
@@ -618,7 +629,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
             </div>
 
             {/* FORM SECTION */}
-            <div className={`lg:col-span-5 ${canManagePeople ? (!isCreating ? 'hidden lg:block' : 'block') : 'hidden'}`}>
+            <div className={`lg:col-span-5 ${canAddCurrent ? (!isCreating ? 'hidden lg:block' : 'block') : 'hidden'}`}>
                <Card 
                   title={editingId ? "Edit Profile" : "Add Profile"} 
                   className={`sticky top-6 border-t-8 shadow-2xl ${activeTab === 'CREW' ? 'border-t-emerald-500' : 'border-t-indigo-500'}`}
@@ -690,7 +701,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                         <div className="grid grid-cols-2 gap-4">
                            <Select value={newCrew.role} onChange={e => setNewCrew({...newCrew, role: e.target.value})} disabled={!!editingId && isAccountProtected(managers.find(m => m.id === editingId) || crew.find(c => c.id === editingId))}>
                               <option value="">Select Role *</option>
-                              {roles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                              {roles.filter(r => canManagePeople || staffRoleAllowed(r.name)).map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
                            </Select>
                            <Select value={newCrew.outletId} onChange={e => setNewCrew({...newCrew, outletId: e.target.value})}>
                               <option value="">Select Store *</option>
@@ -714,14 +725,14 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                                     placeholder="Reset balance to..." 
                                     type="number" 
                                     value={newCrew.leaveBalanceOverride ?? ''} 
-                                    disabled={isOverrideLocked}
+                                    disabled={isOverrideLocked || !canManagePeople}
                                     onChange={e => {
                                        const val = e.target.value;
                                        setNewCrew({...newCrew, leaveBalanceOverride: val === '' ? undefined : Number(val)});
                                     }} 
                                     className={`!py-2 !text-sm ${isOverrideLocked ? 'opacity-60 bg-slate-100 border-dashed border-slate-300' : ''}`} 
                                  />
-                                 {isOverrideLocked ? (
+                                 {!canManagePeople ? <p className="text-xs text-slate-500">Only an owner or administrator can set a leave balance override.</p> : isOverrideLocked ? (
                                     <p className="text-[8px] text-amber-600 mt-1 italic leading-tight flex items-center gap-1">
                                        <ShieldAlert size={8}/> Safety Lock: Manage this in Attendance Settings.
                                     </p>
@@ -778,7 +789,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
 
                         <div className="flex items-center justify-between px-1">
                            <span className="text-xs font-bold text-slate-600">Mobile Employee (Any Store)</span>
-                           <Checkbox checked={newCrew.isMobile || false} onChange={e => setNewCrew({...newCrew, isMobile: e.target.checked})} />
+                           <Checkbox disabled={!canManagePeople} checked={newCrew.isMobile || false} onChange={e => setNewCrew({...newCrew, isMobile: e.target.checked})} />
                         </div>
                      </div>
 
@@ -792,7 +803,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                            </div>
                            <div className="space-y-1">
                               <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Relieving Date</label>
-                              <Input type="date" value={newCrew.dateOfLeaving || ''} onChange={e => setNewCrew({...newCrew, dateOfLeaving: e.target.value})} />
+                              <Input type="date" disabled={!canManagePeople} value={newCrew.dateOfLeaving || ''} onChange={e => setNewCrew({...newCrew, dateOfLeaving: e.target.value})} />
                            </div>
                         </div>
                      </div>
