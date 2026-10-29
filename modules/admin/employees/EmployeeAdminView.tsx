@@ -121,11 +121,13 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    const canManageManagerOutletAccess = isTenantModeEnabled && !!currentUser.tenantId
       && ['owner', 'administrator', 'admin', 'super admin'].includes((currentUser.accessRole || '').trim().toLowerCase());
 
-   // Existing identities and roles remain owner/admin-managed. Managers use
-   // a separately authorised server endpoint for limited new staff creation.
+   // Managers use a trusted endpoint for scoped staff creation/profile edits.
    const canManagePeople = ['owner', 'administrator', 'admin', 'super admin', 'system admin']
       .includes((currentUser.accessRole || '').trim().toLowerCase());
    const canAddCurrent = canManagePeople || (activeTab === 'CREW' && staffCreationAllowed);
+   const canEditStaff = (member: CrewMember) => activeTab === 'CREW' && staffCreationAllowed
+      && !!member.authUid && member.authUid !== currentUser.uid
+      && staffRoleAllowed(member.role || '') && stores.some(store => store.outletId === member.outletId);
 
    // --- ACTIONS ---
    const addRole = async () => {
@@ -166,8 +168,8 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    };
 
    const startEdit = (member: CrewMember) => {
-      if (!canManagePeople) {
-          alert('Only an owner or administrator can edit team accounts.');
+      if (!canManagePeople && !canEditStaff(member)) {
+          alert('You can edit staff only in your assigned stores.');
           return;
       }
       if (!canModifyAccount(member)) {
@@ -312,7 +314,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    };
 
    const handleSave = async (forceResetAuth = false) => {
-      if (!canManagePeople && !(staffCreationAllowed && activeTab === 'CREW' && !editingId && !forceResetAuth)) {
+      if (!canManagePeople && !(staffCreationAllowed && activeTab === 'CREW' && !forceResetAuth)) {
          alert('Only an owner or administrator can create or edit team accounts.');
          return;
       }
@@ -356,7 +358,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
 
       try {
          if (!canManagePeople) {
-             await employeeService.staffCreation(newCrew);
+             await employeeService.staffCreation(newCrew, editingId || undefined);
              setCrew(await employeeService.getAllCrew());
              cancelEdit();
              return;
@@ -561,7 +563,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                      const accentColor = activeTab === 'CREW' ? 'emerald' : 'indigo';
                      const isSelf = c.id === currentUser.dbId || c.authUid === currentUser.uid;
                      const isProtected = isAccountProtected(c);
-                     const canMod = canManagePeople && canModifyAccount(c);
+                     const canMod = (canManagePeople && canModifyAccount(c)) || canEditStaff(c);
                      
                      return (
                         <div key={c.id} className={`bg-white p-4 rounded-3xl border shadow-sm flex items-center gap-4 group transition-all hover:shadow-md ${editingId === c.id ? `border-${accentColor}-500 ring-4 ring-${accentColor}-50` : isProtected ? 'border-amber-100 bg-amber-50/10' : 'border-slate-100'}`}>
@@ -592,15 +594,15 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                               </div>
                            </div>
 
-                           <div className="flex gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                           <div className={`flex gap-1 transition-opacity ${canManagePeople ? 'md:opacity-0 md:group-hover:opacity-100' : ''}`}>
                               {canMod ? (
                                   <>
-                                    <button onClick={() => startEdit(c)} className={`p-3 rounded-2xl text-slate-400 hover:bg-${accentColor}-50 hover:text-${accentColor}-600 transition-colors`}>
+                                    <button aria-label={`Edit ${c.crewName}`} onClick={() => startEdit(c)} className={`p-3 rounded-2xl text-slate-400 hover:bg-${accentColor}-50 hover:text-${accentColor}-600 transition-colors`}>
                                         <Edit className="w-5 h-5"/>
                                     </button>
-                                    <button onClick={(e) => deleteMember(e, c)} className="p-3 rounded-2xl text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                                    {canManagePeople && <button onClick={(e) => deleteMember(e, c)} className="p-3 rounded-2xl text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
                                         <Trash2 className="w-5 h-5"/>
-                                    </button>
+                                    </button>}
                                   </>
                               ) : (
                                   <div className="p-3 text-slate-200 cursor-not-allowed" title="System Protected">
@@ -712,7 +714,8 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                         {activeTab === 'CREW' ? (
                            <div className="space-y-4">
                               <div className="space-y-1">
-                                 <Input placeholder="Crew PIN (Min 4 digits) *" type="number" value={newCrew.crewCode} onChange={e => setNewCrew({...newCrew, crewCode: e.target.value})} />
+                                 <Input disabled={!!editingId && !canManagePeople} placeholder="Crew PIN (Min 4 digits) *" type="number" value={newCrew.crewCode} onChange={e => setNewCrew({...newCrew, crewCode: e.target.value})} />
+                                 {editingId && !canManagePeople && <p className="text-xs text-slate-500">PIN changes, login repairs, leave overrides and account access are managed by the owner or administrator.</p>}
                                  <p className="text-[9px] text-slate-400 ml-1 italic font-medium">This PIN will be used for both Kiosk and App access.</p>
                               </div>
                               <div className="bg-indigo-50/50 p-3 rounded-2xl border border-indigo-100/50">
@@ -814,7 +817,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                         </Button>
                         
                         <div className="flex gap-2">
-                           {editingId && activeTab === 'CREW' && (
+                           {canManagePeople && editingId && activeTab === 'CREW' && (
                               <button 
                                  onClick={() => handleSave(true)} 
                                  className="flex-1 py-3 rounded-2xl bg-white border border-slate-200 text-slate-500 text-xs font-bold hover:bg-slate-50 flex items-center justify-center gap-2"

@@ -34,3 +34,17 @@ export function staffCreationPayload(input: any, member: any, stores: any[], rol
     dateOfBirth, birthMMDD: dateOfBirth?.slice(5) || null, dateOfJoining: date('dateOfJoining'),
     dateOfLeaving: null, isMobile: false };
 }
+
+// Editing never changes credentials, account status, mobile access or leave balances.
+export function staffEditPayload(input: any, existing: any, targetMember: any, member: any, stores: any[], roles: string[], actorUid: string) {
+  if (!existing || existing.tenantId !== member.tenantId || !staffRoleAllowed(String(existing.role || ''))
+    || !existing.authUid || existing.authUid === actorUid
+    || targetMember?.tenantId !== member.tenantId || targetMember.uid !== existing.authUid
+    || targetMember.personType !== 'CREW' || !staffRoleAllowed(String(targetMember.role || ''))
+    || (member.allOutlets !== true && !member.outletIds?.includes(existing.outletId))) {
+    throw new Error('You can edit staff only in your assigned stores. Manager and protected accounts require an owner.');
+  }
+  const validated = staffCreationPayload({ ...existing, ...input, crewCode: '0000' }, member, stores, roles);
+  const { crewName, role, outletId, email, phoneNumber, photoUrl, gender, dateOfBirth, birthMMDD, dateOfJoining } = validated;
+  return { crewName, role, outletId, email, phoneNumber, photoUrl, gender, dateOfBirth, birthMMDD, dateOfJoining };
+}

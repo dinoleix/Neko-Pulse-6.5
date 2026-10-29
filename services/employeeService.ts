@@ -116,10 +116,10 @@ const healCrewDirectory = async (crew: CrewMember[]) => {
 };
 
 export const employeeService = {
-    staffCreation: async (employee?: Partial<CrewMember>) => {
+    staffCreation: async (employee?: Partial<CrewMember>, employeeId?: string) => {
         const token = await auth.currentUser?.getIdToken();
         if (!token) throw new Error('Please sign in again.');
-        const response = await fetch('/api/employee-admin', { method: employee ? 'POST' : 'GET', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...(employee ? { body: JSON.stringify({ employee }) } : {}) });
+        const response = await fetch('/api/employee-admin', { method: employeeId ? 'PATCH' : employee ? 'POST' : 'GET', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...(employee ? { body: JSON.stringify({ employee, employeeId }) } : {}) });
         const result = await response.json().catch(() => ({ error: 'Employee service unavailable.' }));
         if (!response.ok) throw new Error(result.error || 'Employee service unavailable.');
         return result;
