@@ -255,7 +255,7 @@ export const ProtectedFileLink: React.FC<{
   return <a href={src} target="_blank" rel="noreferrer" className={className}>{children}</a>;
 };
 
-export const ProtectedVideo: React.FC<{ fileRef?: string }> = ({ fileRef }) => {
+export const ProtectedVideo: React.FC<{ fileRef?: string; showPreview?: boolean }> = ({ fileRef, showPreview = false }) => {
   const [src, setSrc] = useState('');
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -275,7 +275,10 @@ export const ProtectedVideo: React.FC<{ fileRef?: string }> = ({ fileRef }) => {
   }, [fileRef, attempt]);
   if (error) return <div role="alert" className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900"><p>{error}</p><Button variant="secondary" className="!w-auto mt-3" onClick={() => setAttempt(value => value + 1)}>Retry video</Button></div>;
   if (!src) return <div className="h-40 rounded-xl bg-slate-100 animate-pulse" aria-label="Loading training video" />;
-  return <video key={src} src={src} className="w-full rounded-xl bg-black" controls playsInline preload="metadata" onError={() => setError('Playback stopped. The video link may have expired or the connection was interrupted. Tap Retry video to reconnect.')} />;
+  // A tiny media fragment asks mobile Safari to display an actual video frame
+  // instead of its otherwise blank, unplayed video rectangle. No autoplay.
+  const playbackSrc = showPreview && !src.includes('#') ? `${src}#t=0.1` : src;
+  return <video key={src} src={playbackSrc} className={`w-full rounded-xl bg-black${showPreview ? ' aspect-video object-contain' : ''}`} aria-label="Training video" controls playsInline preload="metadata" onError={() => setError('Playback stopped. The video link may have expired or the connection was interrupted. Tap Retry video to reconnect.')} />;
 };
 
 export const AudioRecorder: React.FC<{ onRecordingComplete: (blob: Blob) => void }> = ({ onRecordingComplete }) => {
