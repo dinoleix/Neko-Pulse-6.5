@@ -36,7 +36,7 @@ const defaultAccessConfig = {
 };
 
 export default async function handler(req: any, res: any) {
-  if (!['GET', 'POST'].includes(req.method)) return send(res, 405, { error: 'Method not allowed.' });
+  if (!['GET', 'POST', 'PATCH'].includes(req.method)) return send(res, 405, { error: 'Method not allowed.' });
 
   try {
     const rawToken = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '');
@@ -113,6 +113,36 @@ export default async function handler(req: any, res: any) {
       } catch { /* Never expose reset links or provider errors. */ }
       await audit.update({ result: accepted ? 'ACCEPTED' : 'FAILED', completedAt: FieldValue.serverTimestamp() });
       return accepted ? send(res, 200, { message: 'Firebase accepted the password-reset email request. Ask the owner to check inbox and spam; delivery is not confirmed.' }) : send(res, 503, { error: 'Reset email could not be requested. Please try later.' });
+    }
+
+    if (req.method === 'PATCH') {
+      const { tenantId, name, timezone } = req.body || {};
+      if (typeof tenantId !== 'string' || !/^[a-z0-9][a-z0-9-]{1,62}$/.test(tenantId)) {
+        return send(res, 400, { error: 'Invalid business identifier.' });
+      }
+      if (typeof name !== 'string' || !name.trim() || name.trim().length > 120) {
+        return send(res, 400, { error: 'Enter a business name of up to 120 characters.' });
+      }
+      if (typeof timezone !== 'string' || !timezone.trim() || timezone.length > 100) {
+        return send(res, 400, { error: 'Enter a valid time zone.' });
+      }
+      const cleanTimezone = timezone.trim();
+      try {
+        new Intl.DateTimeFormat('en', { timeZone: cleanTimezone });
+      } catch {
+        return send(res, 400, { error: 'Enter a valid time zone, such as Asia/Kolkata.' });
+      }
+
+      const tenantRef = db.collection('tenants').doc(tenantId);
+      const configRef = db.collection('tenantSettings').doc(tenantId).collection('config').doc('appConfig');
+      const updated = await db.runTransaction(async transaction => {
+        if (!(await transaction.get(tenantRef)).exists) return false;
+        transaction.update(tenantRef, { name: name.trim(), timezone: cleanTimezone, updatedAt: FieldValue.serverTimestamp() });
+        transaction.set(configRef, { timezone: cleanTimezone }, { merge: true });
+        return true;
+      });
+      if (!updated) return send(res, 404, { error: 'Business not found.' });
+      return send(res, 200, { name: name.trim(), timezone: cleanTimezone });
     }
 
     if (req.method === 'GET') {

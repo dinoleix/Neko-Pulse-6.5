@@ -47,6 +47,29 @@ export const PlatformAdminView: React.FC = () => {
     finally { setSupportLoading(false); }
   };
 
+  const [editing, setEditing] = useState<{ id: string; name: string; timezone: string } | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  const saveEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editing || editSaving) return;
+    setEditSaving(true);
+    setEditError('');
+    setMessage('');
+    try {
+      const { id, name, timezone } = editing;
+      const details = await platformTenantService.update(id, { name, timezone });
+      setTenants(current => current.map(tenant => tenant.id === id ? { ...tenant, ...details } : tenant));
+      setEditing(null);
+      setMessage(`Saved changes to ${details.name}.`);
+    } catch (reason) {
+      setEditError(reason instanceof Error ? reason.message : 'Could not save the business details.');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const load = async () => {
     setLoading(true);
     try { setTenants(await platformTenantService.list()); }
@@ -124,7 +147,31 @@ export const PlatformAdminView: React.FC = () => {
         </form>
       </Card>
       <Card title={`Businesses (${tenants.length})`}>
-        {loading ? <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-emerald-700" /></div> : tenants.length ? <div className="space-y-3">{tenants.map(tenant => <div key={tenant.id} className="border border-[#eeeae2] rounded-xl p-4 bg-[#faf9f6]"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-[#123229]">{tenant.name}</p><p className="text-xs text-slate-500 mt-1">{tenant.slug} · {tenant.timezone}</p></div><span className={`text-[10px] font-bold px-2 py-1 rounded-full ${tenant.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{tenant.status}</span></div><div className="flex gap-4 mt-3 text-xs text-slate-600"><span className="flex items-center gap-1"><Store className="w-3.5 h-3.5" />{tenant.outletCount ?? 0} outlets</span><span className="flex items-center gap-1"><Globe2 className="w-3.5 h-3.5" />{tenant.ownerEmail || 'Owner configured'}</span></div></div>)}</div> : <div className="py-10 text-center text-slate-500"><Building2 className="w-8 h-8 mx-auto mb-3 text-slate-300" />No businesses have been created yet.</div>}
+        {editing && <form onSubmit={saveEdit} className="mb-5 space-y-3 rounded-xl border border-[#eeeae2] p-4">
+          <h3 className="font-semibold">Edit business</h3>
+          <Field label="Business name">
+            <Input value={editing.name} maxLength={120} required disabled={editSaving}
+              onChange={event => setEditing({ ...editing, name: event.target.value })} />
+          </Field>
+          <Field label="Time zone">
+            <Input value={editing.timezone} placeholder="Asia/Kolkata" required disabled={editSaving}
+              onChange={event => setEditing({ ...editing, timezone: event.target.value })} />
+          </Field>
+          {editError && <p role="alert" className="text-sm text-red-700">{editError}</p>}
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" isLoading={editSaving} className="!w-auto">Save changes</Button>
+            <button type="button" disabled={editSaving} onClick={() => setEditing(null)} className="text-sm underline">Cancel</button>
+          </div>
+        </form>}
+        {loading ? <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-emerald-700" /></div> : tenants.length ? <div className="space-y-3">{tenants.map(tenant => <div key={tenant.id} className="border border-[#eeeae2] rounded-xl p-4 bg-[#faf9f6]"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-[#123229]">{tenant.name}</p><p className="text-xs text-slate-500 mt-1">{tenant.slug} · {tenant.timezone}</p></div><span className={`text-[10px] font-bold px-2 py-1 rounded-full ${tenant.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{tenant.status}</span></div><div className="flex gap-4 mt-3 text-xs text-slate-600"><span className="flex items-center gap-1"><Store className="w-3.5 h-3.5" />{tenant.outletCount ?? 0} outlets</span><span className="flex items-center gap-1"><Globe2 className="w-3.5 h-3.5" />{tenant.ownerEmail || 'Owner configured'}</span></div>
+          <button type="button" disabled={editSaving} aria-label={`Edit ${tenant.name}`}
+            onClick={() => {
+              setEditError('');
+              setEditing({ id: tenant.id, name: tenant.name, timezone: tenant.timezone || '' });
+            }} className="mt-3 text-sm font-semibold text-emerald-800 underline disabled:opacity-50">
+            Edit
+          </button>
+        </div>)}</div> : <div className="py-10 text-center text-slate-500"><Building2 className="w-8 h-8 mx-auto mb-3 text-slate-300" />No businesses have been created yet.</div>}
       </Card>
     </div>
   </main>;

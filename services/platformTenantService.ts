@@ -30,6 +30,12 @@ export const platformTenantService = {
   resetOwnerPassword: async (tenantId: string) => request('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'resetOwnerPassword', tenantId }) }),
   capability: async (): Promise<boolean> => (await request('?action=capability')).authorised === true,
   list: async (): Promise<PlatformTenant[]> => (await request()).tenants || [],
+  update: (tenantId: string, details: Pick<PlatformTenant, 'name' | 'timezone'>): Promise<Pick<PlatformTenant, 'name' | 'timezone'>> =>
+    request('', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tenantId, ...details }),
+    }),
   create: async (draft: PlatformTenantDraft): Promise<{ tenant: PlatformTenant; ownerAccountCreated: boolean }> =>
     request('', {
       method: 'POST',
