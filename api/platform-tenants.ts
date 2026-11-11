@@ -52,6 +52,51 @@ export default async function handler(req: any, res: any) {
     if (!authorised) return send(res, 403, { error: 'Platform administrator access is required.' });
     if (!tenantModeEnabled()) return send(res, 404, { error: 'Tenant mode is not enabled.' });
 
+    if (req.method === 'GET' && req.query?.action === 'summary') {
+      const tenantId = req.query.tenantId;
+      if (typeof tenantId !== 'string' || !/^[a-z0-9][a-z0-9-]{1,62}$/.test(tenantId)) {
+        return send(res, 400, { error: 'Invalid business identifier.' });
+      }
+      const tenant = (await db.collection('tenants').doc(tenantId).get()).data();
+      if (!tenant) return send(res, 404, { error: 'Business not found.' });
+
+      const [profiles, crew, stores] = await Promise.all([
+        db.collection('managers').where('tenantId', '==', tenantId).select('role', 'crewName', 'email', 'authUid').get(),
+        db.collection('crew').where('tenantId', '==', tenantId).count().get(),
+        db.collection('stores').where('tenantId', '==', tenantId).select('name', 'isActive').get(),
+      ]);
+      const owners = new Map<string, { name: string; email: string }>();
+      let managers = 0;
+      for (const doc of profiles.docs) {
+        const profile = doc.data();
+        const uid = profile.authUid || doc.id;
+        if (uid === tenant.ownerUid || String(profile.role || '').trim().toLowerCase() === 'owner') {
+          owners.set(uid, { name: profile.crewName || '', email: profile.email || '' });
+        } else {
+          managers += 1;
+        }
+      }
+      if (tenant.ownerUid || tenant.ownerEmail) {
+        const key = tenant.ownerUid || tenant.ownerEmail;
+        const primary = owners.get(key);
+        owners.set(key, { name: primary?.name || '', email: primary?.email || tenant.ownerEmail || '' });
+      }
+      const crewCount = crew.data().count;
+      return send(res, 200, {
+        summary: {
+          owners: [...owners.values()],
+          managers,
+          crew: crewCount,
+          staff: managers + crewCount,
+          stores: stores.docs.map(doc => ({
+            id: doc.id,
+            name: doc.get('name') || doc.id,
+            active: doc.get('isActive') !== false,
+          })),
+        },
+      });
+    }
+
     if (req.query?.action === 'details' || ['resetOwnerPassword', 'setOwnerPassword'].includes(req.body?.action)) {
       const tenantId = String(req.query?.tenantId || req.body?.tenantId || '');
       if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(tenantId)) return send(res, 400, { error: 'Invalid business identifier.' });

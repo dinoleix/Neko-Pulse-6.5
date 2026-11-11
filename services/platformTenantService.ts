@@ -12,6 +12,14 @@ export interface PlatformTenantDraft {
   outlets: Array<{ name: string; outletId?: string; address?: string }>;
 }
 
+export interface PlatformTenantSummary {
+  owners: Array<{ name: string; email: string }>;
+  managers: number;
+  crew: number;
+  staff: number;
+  stores: Array<{ id: string; name: string; active: boolean }>;
+}
+
 const request = async (path = '', init?: RequestInit) => {
   const token = await auth.currentUser?.getIdToken();
   if (!token) throw new Error('Please sign in again.');
@@ -28,6 +36,8 @@ export const platformTenantService = {
   setOwnerPassword: async (tenantId: string, confirmOwnerUid: string, password: string, confirmation: string) => request('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'setOwnerPassword', tenantId, confirmOwnerUid, password, confirmation, confirmed: true }) }),
   details: async (tenantId: string) => (await request(`?action=details&tenantId=${encodeURIComponent(tenantId)}`)).details,
   resetOwnerPassword: async (tenantId: string) => request('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'resetOwnerPassword', tenantId }) }),
+  summary: async (tenantId: string): Promise<PlatformTenantSummary> =>
+    (await request(`?action=summary&tenantId=${encodeURIComponent(tenantId)}`)).summary,
   capability: async (): Promise<boolean> => (await request('?action=capability')).authorised === true,
   list: async (): Promise<PlatformTenant[]> => (await request()).tenants || [],
   update: (tenantId: string, details: Pick<PlatformTenant, 'name' | 'timezone'>): Promise<Pick<PlatformTenant, 'name' | 'timezone'>> =>

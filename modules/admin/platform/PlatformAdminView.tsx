@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Building2, CheckCircle2, CirclePlus, Globe2, Loader2, ShieldCheck, Store } from 'lucide-react';
+import { Building2, CheckCircle2, CirclePlus, Globe2, Loader2, ShieldCheck } from 'lucide-react';
 import { Button, Card, Input } from '../../../components/SharedComponents';
 import { PlatformTenant } from '../../../types';
-import { platformTenantService } from '../../../services/platformTenantService';
+import { PlatformTenantSummary, platformTenantService } from '../../../services/platformTenantService';
 
 const emptyDraft = () => ({
   name: '', slug: '', timezone: 'Asia/Kolkata', ownerName: '', ownerEmail: '', ownerPassword: '',
@@ -16,6 +16,7 @@ export const PlatformAdminView: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [summaryId, setSummaryId] = useState<string | null>(null);
   const [details, setDetails] = useState<any>(null);
   const [supportLoading, setSupportLoading] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -163,7 +164,7 @@ export const PlatformAdminView: React.FC = () => {
             <button type="button" disabled={editSaving} onClick={() => setEditing(null)} className="text-sm underline">Cancel</button>
           </div>
         </form>}
-        {loading ? <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-emerald-700" /></div> : tenants.length ? <div className="space-y-3">{tenants.map(tenant => <div key={tenant.id} className="border border-[#eeeae2] rounded-xl p-4 bg-[#faf9f6]"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-[#123229]">{tenant.name}</p><p className="text-xs text-slate-500 mt-1">{tenant.slug} · {tenant.timezone}</p></div><span className={`text-[10px] font-bold px-2 py-1 rounded-full ${tenant.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{tenant.status}</span></div><div className="flex gap-4 mt-3 text-xs text-slate-600"><span className="flex items-center gap-1"><Store className="w-3.5 h-3.5" />{tenant.outletCount ?? 0} outlets</span><span className="flex items-center gap-1"><Globe2 className="w-3.5 h-3.5" />{tenant.ownerEmail || 'Owner configured'}</span></div>
+        {loading ? <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-emerald-700" /></div> : tenants.length ? <div className="space-y-3">{tenants.map(tenant => <div key={tenant.id} className="border border-[#eeeae2] rounded-xl p-4 bg-[#faf9f6]"><div className="flex items-start justify-between gap-3"><div><p className="font-bold text-[#123229]">{tenant.name}</p><p className="text-xs text-slate-500 mt-1">{tenant.slug} · {tenant.timezone}</p></div><span className={`text-[10px] font-bold px-2 py-1 rounded-full ${tenant.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{tenant.status}</span></div><div className="flex gap-4 mt-3 text-xs text-slate-600"><span className="flex items-center gap-1"><Globe2 className="w-3.5 h-3.5" />{tenant.ownerEmail || 'Owner configured'}</span></div>
           <button type="button" disabled={editSaving} aria-label={`Edit ${tenant.name}`}
             onClick={() => {
               setEditError('');
@@ -171,6 +172,12 @@ export const PlatformAdminView: React.FC = () => {
             }} className="mt-3 text-sm font-semibold text-emerald-800 underline disabled:opacity-50">
             Edit
           </button>
+          <button type="button" className="ml-4 text-sm font-semibold text-emerald-800 underline"
+            aria-expanded={summaryId === tenant.id}
+            onClick={() => setSummaryId(current => current === tenant.id ? null : tenant.id)}>
+            {summaryId === tenant.id ? 'Hide summary' : 'View summary'}
+          </button>
+          {summaryId === tenant.id && <TenantSummary tenantId={tenant.id} />}
         </div>)}</div> : <div className="py-10 text-center text-slate-500"><Building2 className="w-8 h-8 mx-auto mb-3 text-slate-300" />No businesses have been created yet.</div>}
       </Card>
     </div>
@@ -178,3 +185,41 @@ export const PlatformAdminView: React.FC = () => {
 };
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => <label className="block"><span className="text-xs font-bold tracking-wide uppercase text-slate-500 mb-2 block">{label}</span>{children}</label>;
+
+function TenantSummary({ tenantId }: { tenantId: string }) {
+  const [summary, setSummary] = useState<PlatformTenantSummary | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let mounted = true;
+    platformTenantService.summary(tenantId).then(result => {
+      if (mounted) setSummary(result);
+    }).catch(reason => {
+      if (mounted) setError(reason instanceof Error ? reason.message : 'Could not load tenant summary.');
+    });
+    return () => { mounted = false; };
+  }, [tenantId]);
+
+  if (error) return <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>;
+  if (!summary) return <p role="status" className="mt-3 text-sm">Loading tenant summary…</p>;
+  return <div className="mt-3 space-y-3 border-t border-[#eeeae2] pt-3 text-sm">
+    <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div><dt>Owners</dt><dd className="font-semibold">{summary.owners.length}</dd></div>
+      <div><dt>Managers</dt><dd className="font-semibold">{summary.managers}</dd></div>
+      <div><dt>Crew</dt><dd className="font-semibold">{summary.crew}</dd></div>
+      <div><dt>Staff (managers + crew)</dt><dd className="font-semibold">{summary.staff}</dd></div>
+      <div><dt>Stores listed</dt><dd className="font-semibold">{summary.stores.length}</dd></div>
+    </dl>
+    <div>
+      <h4 className="font-semibold">Owner details</h4>
+      {summary.owners.length ? <ul>{summary.owners.map((owner, index) =>
+        <li key={index}>{owner.name || 'Name unavailable'} · {owner.email || 'Email unavailable'}</li>
+      )}</ul> : <p>No owner listed.</p>}
+    </div>
+    <div>
+      <h4 className="font-semibold">Stores</h4>
+      {summary.stores.length ? <ul>{summary.stores.map(store =>
+        <li key={store.id}>{store.name} · {store.active ? 'Active' : 'Closed'}</li>
+      )}</ul> : <p>No stores listed.</p>}
+    </div>
+  </div>;
+}
