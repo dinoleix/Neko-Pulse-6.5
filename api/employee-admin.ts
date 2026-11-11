@@ -20,6 +20,9 @@ export default async function handler(req: any, res: any) {
     const memberships = await db.collection('tenantMemberships').where('uid', '==', actor.uid).where('active', '==', true).limit(2).get();
     if (memberships.size !== 1) return res.status(403).json({ error: 'An active business manager membership is required.' });
     const member = memberships.docs[0].data();
+    if ((await db.collection('tenants').doc(member.tenantId).get()).get('accessBlocked') === true) {
+      return res.status(403).json({ error: 'Business access is blocked.' });
+    }
     const [profile, access] = await Promise.all([
       db.collection('managers').doc(member.personId || actor.uid).get(),
       db.collection('tenantSettings').doc(member.tenantId).collection('config').doc('accessConfig').get(),

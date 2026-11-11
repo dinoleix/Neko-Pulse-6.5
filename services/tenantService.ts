@@ -44,6 +44,13 @@ export const tenantService = {
     const context = await activeMembershipFor(uid);
     if (!context) return null;
 
+    if (import.meta.env.VITE_TENANT_BLOCKING_ENABLED === 'true') {
+      const tenant = await db.collection('tenants').doc(context.tenantId).get();
+      if (tenant.data()?.accessBlocked === true) {
+        throw new Error('Access to this business is blocked. Contact Neko Pulse support.');
+      }
+    }
+
     const personCollection = context.personType === 'CREW' ? 'crew' : 'managers';
     const personSnapshot = await db.collection(personCollection).doc(context.personId).get();
     if (!personSnapshot.exists) {

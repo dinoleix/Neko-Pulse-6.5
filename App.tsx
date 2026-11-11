@@ -248,6 +248,16 @@ function App() {
     };
   }, [currentUser]);
 
+  useEffect(() => {
+    if (!currentUser?.tenantId || !isTenantModeEnabled || import.meta.env.VITE_TENANT_BLOCKING_ENABLED !== 'true') return;
+    return db.collection('tenants').doc(currentUser.tenantId).onSnapshot(snapshot => {
+      if (snapshot.data()?.accessBlocked === true) {
+        setCurrentUser(null);
+        void auth.signOut();
+      }
+    }, error => console.warn('Could not monitor business access:', error.code));
+  }, [currentUser?.tenantId]);
+
   const handleLogin = (user: CurrentUser) => setCurrentUser(user);
   
   const handleLogout = () => {

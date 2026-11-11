@@ -16,6 +16,11 @@ service cloud.firestore {
     }
 
     function activeMember(tenantId) {
+      return hasMembership(tenantId)
+        && get(/databases/$(database)/documents/tenants/$(tenantId)).data.get('accessBlocked', false) != true;
+    }
+
+    function hasMembership(tenantId) {
       return signedIn()
         && exists(/databases/$(database)/documents/tenantMemberships/$(tenantId + '_' + request.auth.uid))
         && membership(tenantId).data.active == true;
@@ -53,7 +58,7 @@ service cloud.firestore {
     }
 
     match /tenants/{tenantId} {
-      allow read: if activeMember(tenantId) || bootstrapOwner();
+      allow read: if hasMembership(tenantId) || bootstrapOwner();
       allow create, update: if bootstrapOwner();
       allow delete: if false;
     }

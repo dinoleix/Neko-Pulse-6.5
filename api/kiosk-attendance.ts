@@ -58,6 +58,10 @@ export default async function handler(req: any, res: any) {
       return send(res, 400, { error: 'This Time Clock needs a valid business configuration.' });
     }
 
+    if (tenantKioskMode && (await db.collection('tenants').doc(tenantId).get()).get('accessBlocked') === true) {
+      return send(res, 403, { error: 'Business access is blocked.' });
+    }
+
     if (action === 'config') {
       const [storesSnap, configSnap, appConfigSnap] = await Promise.all([
         (tenantKioskMode ? db.collection('stores').where('tenantId', '==', tenantId) : db.collection('stores')).get(),

@@ -32,6 +32,9 @@ export default async function handler(req: any, res: any) {
     const tenantId = String(assignment.tenantId || '');
     if (tenantMode) {
       if (!tenantId) return send(res, 403, { error: 'This training assignment is not linked to a business.' });
+      if ((await db.collection('tenants').doc(tenantId).get()).get('accessBlocked') === true) {
+        return send(res, 403, { error: 'Business access is blocked.' });
+      }
       const membership = await db.collection('tenantMemberships')
         .where('uid', '==', user.uid)
         .where('tenantId', '==', tenantId)

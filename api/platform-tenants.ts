@@ -1,6 +1,6 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { ownerResetEligible, passwordChangeError } from '../server/platformSupportPolicy.js';
 
 const getAdmin = () => {
@@ -60,10 +60,11 @@ export default async function handler(req: any, res: any) {
       const tenant = (await db.collection('tenants').doc(tenantId).get()).data();
       if (!tenant) return send(res, 404, { error: 'Business not found.' });
 
-      const [profiles, crew, stores] = await Promise.all([
+      const [profiles, crew, stores, subscription] = await Promise.all([
         db.collection('managers').where('tenantId', '==', tenantId).select('role', 'crewName', 'email', 'authUid').get(),
         db.collection('crew').where('tenantId', '==', tenantId).count().get(),
         db.collection('stores').where('tenantId', '==', tenantId).select('name', 'isActive').get(),
+        db.collection('tenantSubscriptions').doc(tenantId).get(),
       ]);
       const owners = new Map<string, { name: string; email: string }>();
       let managers = 0;
@@ -84,6 +85,14 @@ export default async function handler(req: any, res: any) {
       const crewCount = crew.data().count;
       return send(res, 200, {
         summary: {
+          billing: {
+            status: subscription.get('status') || tenant.subscriptionStatus || 'Not configured',
+            trialEnd: subscription.get('trialEndsAt')?.toDate?.().toISOString().slice(0, 10) || '',
+            paymentMethod: subscription.get('paymentMethod') || '',
+            paymentReference: subscription.get('paymentReference') || '',
+            blocked: tenant.accessBlocked === true,
+            canBlock: process.env.TENANT_BLOCKING_ENABLED === 'true',
+          },
           owners: [...owners.values()],
           managers,
           crew: crewCount,
@@ -158,6 +167,64 @@ export default async function handler(req: any, res: any) {
       } catch { /* Never expose reset links or provider errors. */ }
       await audit.update({ result: accepted ? 'ACCEPTED' : 'FAILED', completedAt: FieldValue.serverTimestamp() });
       return accepted ? send(res, 200, { message: 'Firebase accepted the password-reset email request. Ask the owner to check inbox and spam; delivery is not confirmed.' }) : send(res, 503, { error: 'Reset email could not be requested. Please try later.' });
+    }
+
+    if (req.method === 'PATCH' && req.body?.action === 'billing') {
+      const { tenantId, operation, trialEnd, method, reference } = req.body;
+      if (typeof tenantId !== 'string' || !/^[a-z0-9][a-z0-9-]{1,62}$/.test(tenantId)) {
+        return send(res, 400, { error: 'Invalid business identifier.' });
+      }
+      const tenantRef = db.collection('tenants').doc(tenantId);
+      const subscriptionRef = db.collection('tenantSubscriptions').doc(tenantId);
+      const now = FieldValue.serverTimestamp();
+      const changes: Record<string, unknown> = {};
+      const tenantChanges: Record<string, unknown> = {};
+      switch (operation) {
+        case 'trial': {
+          const date = typeof trialEnd === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(trialEnd)
+            ? new Date(trialEnd + 'T23:59:59.999Z') : new Date(NaN);
+          if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== trialEnd || date.getTime() <= Date.now()) {
+            return send(res, 400, { error: 'Choose a valid trial end date today or later.' });
+          }
+          Object.assign(changes, { status: 'TRIAL_ACTIVE', trialEndsAt: Timestamp.fromDate(date), planId: 'free_trial' });
+          break;
+        }
+        case 'no-expiry':
+          Object.assign(changes, { status: 'NO_EXPIRY', trialEndsAt: null, planId: 'free_no_expiry' });
+          break;
+        case 'paid':
+          if (!['UPI', 'MANUAL'].includes(method) || typeof reference !== 'string' || reference.length > 160) {
+            return send(res, 400, { error: 'Choose UPI or manual confirmation and use a reference of up to 160 characters.' });
+          }
+          Object.assign(changes, { status: 'PAID', paymentMethod: method, paymentReference: reference.trim(), paymentConfirmedAt: now });
+          break;
+        case 'unpaid':
+          changes.status = 'UNPAID';
+          break;
+        case 'block':
+        case 'unblock':
+          if (operation === 'block' && process.env.TENANT_BLOCKING_ENABLED !== 'true') {
+            return send(res, 503, { error: 'Tenant blocking is unavailable until access enforcement is enabled.' });
+          }
+          tenantChanges.accessBlocked = operation === 'block';
+          break;
+        default:
+          return send(res, 400, { error: 'Unknown billing action.' });
+      }
+      if ('status' in changes) tenantChanges.subscriptionStatus = changes.status;
+      if ('trialEndsAt' in changes) tenantChanges.trialEndsAt = changes.trialEndsAt;
+      if ('planId' in changes) tenantChanges.planId = changes.planId;
+      const auditRef = db.collection('platformBillingAudit').doc();
+      const updated = await db.runTransaction(async transaction => {
+        if (!(await transaction.get(tenantRef)).exists) return false;
+        transaction.update(tenantRef, { ...tenantChanges, updatedAt: now });
+        if (Object.keys(changes).length) {
+          transaction.set(subscriptionRef, { ...changes, tenantId, updatedAt: now }, { merge: true });
+        }
+        transaction.create(auditRef, { tenantId, actorUid: actor.uid, operation, changes: { ...changes, ...tenantChanges }, createdAt: now });
+        return true;
+      });
+      return updated ? send(res, 200, { saved: true }) : send(res, 404, { error: 'Business not found.' });
     }
 
     if (req.method === 'PATCH') {

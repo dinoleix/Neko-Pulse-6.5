@@ -33,6 +33,9 @@ export default async function handler(req: any, res: any) {
       // both checked below. A tenant-prefixed path must always agree with the
       // module record, preventing a swapped-path cross-tenant request.
       if (tenantPathMatch && tenantPathMatch[1] !== tenantId) return res.status(403).json({ error: 'Not authorised.' });
+      if (!tenantId || (await db.collection('tenants').doc(tenantId).get()).get('accessBlocked') === true) {
+        return res.status(403).json({ error: 'Business access is blocked.' });
+      }
       const membership = await db.collection('tenantMemberships').where('uid', '==', uid).where('tenantId', '==', tenantId).where('active', '==', true).limit(1).get();
       if (membership.empty) return res.status(403).json({ error: 'Not authorised.' });
     }

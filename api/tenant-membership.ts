@@ -42,6 +42,9 @@ export default async function handler(req: any, res: any) {
     const tenantId = String(actorMembership.tenantId || '');
     const targetUid = String(req.method === 'GET' ? req.query?.uid : req.body?.uid || '');
     if (!tenantId || !targetUid) return send(res, 400, { error: 'A manager is required.' });
+    if ((await db.collection('tenants').doc(tenantId).get()).get('accessBlocked') === true) {
+      return send(res, 403, { error: 'Business access is blocked.' });
+    }
     if (targetUid === actor.uid) return send(res, 403, { error: 'You cannot change your own outlet access.' });
 
     const targetRef = db.collection('tenantMemberships').doc(`${tenantId}_${targetUid}`);

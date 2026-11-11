@@ -13,6 +13,7 @@ export interface PlatformTenantDraft {
 }
 
 export interface PlatformTenantSummary {
+  billing: { status: string; trialEnd: string; paymentMethod: string; paymentReference: string; blocked: boolean; canBlock: boolean };
   owners: Array<{ name: string; email: string }>;
   managers: number;
   crew: number;
@@ -36,6 +37,12 @@ export const platformTenantService = {
   setOwnerPassword: async (tenantId: string, confirmOwnerUid: string, password: string, confirmation: string) => request('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'setOwnerPassword', tenantId, confirmOwnerUid, password, confirmation, confirmed: true }) }),
   details: async (tenantId: string) => (await request(`?action=details&tenantId=${encodeURIComponent(tenantId)}`)).details,
   resetOwnerPassword: async (tenantId: string) => request('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'resetOwnerPassword', tenantId }) }),
+  updateBilling: (tenantId: string, changes: { operation: string; trialEnd?: string; method?: string; reference?: string }) =>
+    request('', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'billing', tenantId, ...changes }),
+    }),
   summary: async (tenantId: string): Promise<PlatformTenantSummary> =>
     (await request(`?action=summary&tenantId=${encodeURIComponent(tenantId)}`)).summary,
   capability: async (): Promise<boolean> => (await request('?action=capability')).authorised === true,

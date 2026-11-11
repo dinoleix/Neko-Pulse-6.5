@@ -202,6 +202,7 @@ function TenantSummary({ tenantId }: { tenantId: string }) {
   if (error) return <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>;
   if (!summary) return <p role="status" className="mt-3 text-sm">Loading tenant summary…</p>;
   return <div className="mt-3 space-y-3 border-t border-[#eeeae2] pt-3 text-sm">
+    <TenantBilling tenantId={tenantId} initial={summary.billing} />
     <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
       <div><dt>Owners</dt><dd className="font-semibold">{summary.owners.length}</dd></div>
       <div><dt>Managers</dt><dd className="font-semibold">{summary.managers}</dd></div>
@@ -222,4 +223,69 @@ function TenantSummary({ tenantId }: { tenantId: string }) {
       )}</ul> : <p>No stores listed.</p>}
     </div>
   </div>;
+}
+
+function TenantBilling({ tenantId, initial }: { tenantId: string; initial: PlatformTenantSummary['billing'] }) {
+  const [billing, setBilling] = useState(initial);
+  const [date, setDate] = useState(initial.trialEnd);
+  const [method, setMethod] = useState(initial.paymentMethod || 'UPI');
+  const [reference, setReference] = useState(initial.paymentReference);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const save = async (operation: string) => {
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      await platformTenantService.updateBilling(tenantId, { operation, trialEnd: date, method, reference });
+      setMessage('Saved.');
+      setBilling((await platformTenantService.summary(tenantId)).billing);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not update billing.');
+    } finally {
+      setSaving(false);
+    }
+  };
+  const expired = billing.status === 'TRIAL_ACTIVE' && billing.trialEnd &&
+    Date.parse(billing.trialEnd + 'T23:59:59.999Z') <= Date.now();
+  const status = expired ? 'Trial expired' : ({
+    TRIAL_ACTIVE: 'Trial active', NO_EXPIRY: 'No expiry', PAID: 'Paid', UNPAID: 'Unpaid',
+  } as Record<string, string>)[billing.status] || billing.status;
+
+  return <section className="space-y-3 rounded-xl border border-slate-200 p-3">
+    <h4 className="font-semibold">Trial, payments and access</h4>
+    <p>{status} · {billing.blocked ? 'Access blocked' : 'Access open'}</p>
+    {billing.trialEnd && billing.status === 'TRIAL_ACTIVE' && <p>Trial ends {billing.trialEnd} (UTC)</p>}
+    {billing.status === 'PAID' && <p>Payment confirmed by {billing.paymentMethod === 'UPI' ? 'UPI' : 'manual confirmation'}{billing.paymentReference && ' · ' + billing.paymentReference}</p>}
+    <fieldset disabled={saving} className="space-y-3">
+      <form className="flex flex-wrap items-end gap-2" onSubmit={event => { event.preventDefault(); void save('trial'); }}>
+        <label className="grid gap-1">Trial end date (UTC)
+          <input required type="date" value={date} onChange={event => setDate(event.target.value)} className="rounded border p-2" />
+        </label>
+        <button className="rounded border px-3 py-2" type="submit">Set trial end</button>
+        <button className="rounded border px-3 py-2" type="button" onClick={() => void save('no-expiry')}>Grant no-expiry access</button>
+      </form>
+      <form className="flex flex-wrap items-end gap-2" onSubmit={event => { event.preventDefault(); void save('paid'); }}>
+        <label className="grid gap-1">Payment method
+          <select value={method} onChange={event => setMethod(event.target.value)} className="rounded border p-2">
+            <option value="UPI">UPI</option><option value="MANUAL">Manual confirmation</option>
+          </select>
+        </label>
+        <label className="grid gap-1">Payment reference (optional)
+          <input maxLength={160} value={reference} onChange={event => setReference(event.target.value)} className="rounded border p-2" />
+        </label>
+        <button className="rounded border px-3 py-2" type="submit">Mark paid</button>
+        <button className="rounded border px-3 py-2" type="button" onClick={() => void save('unpaid')}>Mark unpaid</button>
+      </form>
+      {(billing.canBlock || billing.blocked) && <button className="rounded border px-3 py-2" type="button" onClick={() => {
+        if (billing.blocked || window.confirm('Block this business from Neko Pulse?')) {
+          void save(billing.blocked ? 'unblock' : 'block');
+        }
+      }}>{billing.blocked ? 'Unblock access' : 'Block access'}</button>}
+    </fieldset>
+    {message && <p role="status">{message}</p>}
+    {error && <p role="alert" className="text-red-700">{error}</p>}
+  </section>;
 }
