@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -8,6 +7,32 @@
     <!-- PWA Settings -->
     <meta name="theme-color" content="#063b2c" />
     <meta name="description" content="Neko Pulse - Cafe Order Accuracy & Management System" />
+
+    <!-- NekoSuite GA4: report only the app origin/path, never query parameters or fragments. -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-3R2Z78HVS3"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){window.dataLayer.push(arguments);}
+      gtag('js', new Date());
+      const pulseAnalyticsUrl = window.location.origin + window.location.pathname;
+      let pulseAnalyticsReferrer = '';
+      try {
+        pulseAnalyticsReferrer = document.referrer ? new URL(document.referrer).origin : '';
+      } catch {
+        pulseAnalyticsReferrer = '';
+      }
+      gtag('config', 'G-3R2Z78HVS3', {
+        page_location: pulseAnalyticsUrl,
+        page_referrer: pulseAnalyticsReferrer,
+        page_title: 'Neko Pulse',
+        send_page_view: false
+      });
+      gtag('event', 'page_view', {
+        page_location: pulseAnalyticsUrl,
+        page_referrer: pulseAnalyticsReferrer,
+        page_title: 'Neko Pulse'
+      });
+    </script>
     
     <!-- IDs added here for Dynamic Branding script -->
     <link rel="manifest" id="app-manifest" href="/manifest.json">
