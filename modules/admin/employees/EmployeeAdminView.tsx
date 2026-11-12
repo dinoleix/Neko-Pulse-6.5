@@ -357,6 +357,20 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       setIsSavingCrew(true);
 
       try {
+         const originalCrew = crew.find(member => member.id === editingId);
+         if (isTenantModeEnabled && canManagePeople && activeTab === 'CREW' && editingId && originalCrew
+             && (newCrew.dateOfLeaving || '') !== (originalCrew.dateOfLeaving || '')) {
+             const otherChanges = Object.entries(newCrew).some(([key, value]) => key !== 'dateOfLeaving'
+                 && String(value ?? (key === 'isMobile' ? false : ''))
+                     !== String(originalCrew[key as keyof CrewMember] ?? (key === 'isMobile' ? false : '')));
+             if (otherChanges || forceResetAuth) {
+                 throw new Error('Save the relieving date on its own, then reopen the employee to make other changes.');
+             }
+             await employeeService.saveRelievingDate(editingId, newCrew.dateOfLeaving || null);
+             setCrew(await employeeService.getAllCrew());
+             cancelEdit();
+             return;
+         }
          if (!canManagePeople) {
              await employeeService.staffCreation(newCrew, editingId || undefined);
              setCrew(await employeeService.getAllCrew());

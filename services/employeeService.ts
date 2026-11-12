@@ -116,6 +116,17 @@ const healCrewDirectory = async (crew: CrewMember[]) => {
 };
 
 export const employeeService = {
+    saveRelievingDate: async (employeeId: string, dateOfLeaving: string | null) => {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) throw new Error('Please sign in again.');
+        const response = await fetch('/api/employee-admin', {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ employeeId, dateOfLeaving }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Could not save the relieving date.');
+    },
     staffCreation: async (employee?: Partial<CrewMember>, employeeId?: string) => {
         const token = await auth.currentUser?.getIdToken();
         if (!token) throw new Error('Please sign in again.');

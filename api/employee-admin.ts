@@ -5,7 +5,7 @@ import { canCreateOutletStaff, staffCreationPayload, staffEditPayload } from '..
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Cache-Control', 'no-store');
-  if (!['GET', 'POST', 'PATCH'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed.' });
+  if (!['GET', 'POST', 'PATCH', 'PUT'].includes(req.method)) return res.status(405).json({ error: 'Method not allowed.' });
   const token = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '');
   if (!token) return res.status(401).json({ error: 'Sign in required.' });
   if (!['enabled', 'sandbox'].includes(process.env.TENANT_MODE || '')) return res.status(403).json({ error: 'Tenant access is required.' });
@@ -22,6 +22,48 @@ export default async function handler(req: any, res: any) {
     const member = memberships.docs[0].data();
     if ((await db.collection('tenants').doc(member.tenantId).get()).get('accessBlocked') === true) {
       return res.status(403).json({ error: 'Business access is blocked.' });
+    }
+    if (req.method === 'PUT') {
+      const { employeeId, dateOfLeaving } = req.body || {};
+      if (typeof employeeId !== 'string' || !employeeId || employeeId.length > 150 || employeeId.includes('/') || ['.', '..'].includes(employeeId)) {
+        return res.status(400).json({ error: 'Select a valid employee.' });
+      }
+      if (dateOfLeaving !== null && (typeof dateOfLeaving !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateOfLeaving)
+        || !Number.isFinite(Date.parse(dateOfLeaving)) || new Date(dateOfLeaving).toISOString().slice(0, 10) !== dateOfLeaving)) {
+        return res.status(400).json({ error: 'Enter a valid relieving date.' });
+      }
+      const saved = await db.runTransaction(async transaction => {
+        const ref = db.collection('crew').doc(employeeId);
+        const [actorSnapshot, employeeSnapshot, tenantSnapshot] = await Promise.all([
+          transaction.get(memberships.docs[0].ref), transaction.get(ref),
+          transaction.get(db.collection('tenants').doc(member.tenantId)),
+        ]);
+        const owner = actorSnapshot.data();
+        const employee = employeeSnapshot.data();
+        if (!tenantSnapshot.exists || tenantSnapshot.get('accessBlocked') === true
+          || !owner || owner.uid !== actor.uid || owner.active !== true || owner.tenantId !== member.tenantId
+          || !['OWNER', 'ADMINISTRATOR'].includes(owner.personType) || !employee || employee.tenantId !== owner.tenantId
+          || employee.authUid === actor.uid) return false;
+
+        const membershipRef = employee.authUid
+          ? db.collection('tenantMemberships').doc(`${owner.tenantId}_${employee.authUid}`)
+          : null;
+        const linked = membershipRef ? (await transaction.get(membershipRef)).data() : undefined;
+        if (linked && (linked.uid !== employee.authUid || linked.tenantId !== owner.tenantId
+          || linked.personType !== 'CREW' || ![employeeId, employee.authUid].includes(linked.personId))) return false;
+
+        const active = dateOfLeaving === null;
+        transaction.update(ref, { dateOfLeaving, active });
+        if (linked && membershipRef) transaction.update(membershipRef, { active, updatedAt: FieldValue.serverTimestamp() });
+        transaction.set(db.collection('tenantSettings').doc(owner.tenantId).collection('crewDirectory').doc(employeeId),
+          { crewName: employee.crewName, role: employee.role || null, birthMMDD: employee.birthMMDD || null, active }, { merge: true });
+        transaction.create(db.collection('employeeAdministrationAudit').doc(), {
+          tenantId: owner.tenantId, actorUid: actor.uid, employeeId, action: 'STAFF_RELIEVING_DATE_UPDATED',
+          previousDate: employee.dateOfLeaving || null, dateOfLeaving, createdAt: FieldValue.serverTimestamp(),
+        });
+        return true;
+      });
+      return saved ? res.json({ id: employeeId }) : res.status(403).json({ error: 'Only an owner or administrator can update this employee’s relieving date.' });
     }
     const [profile, access] = await Promise.all([
       db.collection('managers').doc(member.personId || actor.uid).get(),
