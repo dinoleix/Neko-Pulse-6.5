@@ -12,7 +12,7 @@ import { Button, Card, Input, Select, Badge, Checkbox } from '../../../component
 // @fix: Added ShieldAlert to imports
 import { Trash2, Edit, X, Loader2, Calendar, Globe, Lock, RefreshCcw, Users, ShieldCheck, Search, UserPlus, Info, ChevronRight, MapPin, Shield, Unlock, ShieldAlert, UserX, UserCheck, Camera, Upload } from 'lucide-react';
 import { format } from 'date-fns';
-import { staffRoleAllowed } from '../../../server/employeeCreationPolicy';
+import { normalRole, staffRoleAllowed } from '../../../server/employeeCreationPolicy';
 
 interface EmployeeAdminViewProps {
    currentUser: CurrentUser;
@@ -128,6 +128,9 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    const canEditStaff = (member: CrewMember) => activeTab === 'CREW' && staffCreationAllowed
       && !!member.authUid && member.authUid !== currentUser.uid
       && staffRoleAllowed(member.role || '') && stores.some(store => store.outletId === member.outletId);
+
+   const canEditRelievingDate = (member?: CrewMember) => canManagePeople
+      || (isTenantModeEnabled && normalRole(currentUser.accessRole) === 'store manager' && !!member && canEditStaff(member));
 
    // --- ACTIONS ---
    const addRole = async () => {
@@ -358,7 +361,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
 
       try {
          const originalCrew = crew.find(member => member.id === editingId);
-         if (isTenantModeEnabled && canManagePeople && activeTab === 'CREW' && editingId && originalCrew
+         if (isTenantModeEnabled && activeTab === 'CREW' && editingId && originalCrew && canEditRelievingDate(originalCrew)
              && (newCrew.dateOfLeaving || '') !== (originalCrew.dateOfLeaving || '')) {
              const otherChanges = Object.entries(newCrew).some(([key, value]) => key !== 'dateOfLeaving'
                  && String(value ?? (key === 'isMobile' ? false : ''))
@@ -820,7 +823,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                            </div>
                            <div className="space-y-1">
                               <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Relieving Date</label>
-                              <Input type="date" disabled={!canManagePeople} value={newCrew.dateOfLeaving || ''} onChange={e => setNewCrew({...newCrew, dateOfLeaving: e.target.value})} />
+                              <Input type="date" disabled={!canEditRelievingDate(crew.find(member => member.id === editingId))} value={newCrew.dateOfLeaving || ''} onChange={e => setNewCrew({...newCrew, dateOfLeaving: e.target.value})} />
                            </div>
                         </div>
                      </div>

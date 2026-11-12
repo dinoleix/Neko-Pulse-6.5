@@ -1,7 +1,7 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { canCreateOutletStaff, staffCreationPayload, staffEditPayload } from '../server/employeeCreationPolicy.js';
+import { canCreateOutletStaff, normalRole, staffCreationPayload, staffEditPayload, staffRoleAllowed } from '../server/employeeCreationPolicy.js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Cache-Control', 'no-store');
@@ -38,32 +38,43 @@ export default async function handler(req: any, res: any) {
           transaction.get(memberships.docs[0].ref), transaction.get(ref),
           transaction.get(db.collection('tenants').doc(member.tenantId)),
         ]);
-        const owner = actorSnapshot.data();
+        const editor = actorSnapshot.data();
         const employee = employeeSnapshot.data();
         if (!tenantSnapshot.exists || tenantSnapshot.get('accessBlocked') === true
-          || !owner || owner.uid !== actor.uid || owner.active !== true || owner.tenantId !== member.tenantId
-          || !['OWNER', 'ADMINISTRATOR'].includes(owner.personType) || !employee || employee.tenantId !== owner.tenantId
+          || !editor || editor.uid !== actor.uid || editor.active !== true || editor.tenantId !== member.tenantId
+          || !employee || employee.tenantId !== editor.tenantId
           || employee.authUid === actor.uid) return false;
 
         const membershipRef = employee.authUid
-          ? db.collection('tenantMemberships').doc(`${owner.tenantId}_${employee.authUid}`)
+          ? db.collection('tenantMemberships').doc(`${editor.tenantId}_${employee.authUid}`)
           : null;
         const linked = membershipRef ? (await transaction.get(membershipRef)).data() : undefined;
-        if (linked && (linked.uid !== employee.authUid || linked.tenantId !== owner.tenantId
+        if (linked && (linked.uid !== employee.authUid || linked.tenantId !== editor.tenantId
           || linked.personType !== 'CREW' || ![employeeId, employee.authUid].includes(linked.personId))) return false;
+
+        if (!['OWNER', 'ADMINISTRATOR'].includes(editor.personType)) {
+          const [profile, access] = await Promise.all([
+            transaction.get(db.collection('managers').doc(editor.personId || actor.uid)),
+            transaction.get(db.collection('tenantSettings').doc(editor.tenantId).collection('config').doc('accessConfig')),
+          ]);
+          if (normalRole(profile.get('role')) !== 'store manager'
+            || !canCreateOutletStaff(editor, profile.data(), access.data())
+            || !linked || !staffRoleAllowed(String(employee.role || '')) || !staffRoleAllowed(String(linked.role || ''))
+            || (editor.allOutlets !== true && !editor.outletIds?.includes(employee.outletId))) return false;
+        }
 
         const active = dateOfLeaving === null;
         transaction.update(ref, { dateOfLeaving, active });
         if (linked && membershipRef) transaction.update(membershipRef, { active, updatedAt: FieldValue.serverTimestamp() });
-        transaction.set(db.collection('tenantSettings').doc(owner.tenantId).collection('crewDirectory').doc(employeeId),
+        transaction.set(db.collection('tenantSettings').doc(editor.tenantId).collection('crewDirectory').doc(employeeId),
           { crewName: employee.crewName, role: employee.role || null, birthMMDD: employee.birthMMDD || null, active }, { merge: true });
         transaction.create(db.collection('employeeAdministrationAudit').doc(), {
-          tenantId: owner.tenantId, actorUid: actor.uid, employeeId, action: 'STAFF_RELIEVING_DATE_UPDATED',
+          tenantId: editor.tenantId, actorUid: actor.uid, employeeId, action: 'STAFF_RELIEVING_DATE_UPDATED',
           previousDate: employee.dateOfLeaving || null, dateOfLeaving, createdAt: FieldValue.serverTimestamp(),
         });
         return true;
       });
-      return saved ? res.json({ id: employeeId }) : res.status(403).json({ error: 'Only an owner or administrator can update this employee’s relieving date.' });
+      return saved ? res.json({ id: employeeId }) : res.status(403).json({ error: 'You do not have permission to update this employee’s relieving date.' });
     }
     const [profile, access] = await Promise.all([
       db.collection('managers').doc(member.personId || actor.uid).get(),
