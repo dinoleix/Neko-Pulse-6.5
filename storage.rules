@@ -50,11 +50,6 @@ service firebase.storage {
       allow create, update: if hasManagerAccess('EMPLOYEE') && isImageUnder(10);
       allow delete: if hasManagerAccess('EMPLOYEE');
     }
-    match /recipes/{fileName} {
-      allow read: if isCrew() || hasManagerAccess('RECIPE');
-      allow create, update: if hasManagerAccess('RECIPE') && isImageUnder(10);
-      allow delete: if hasManagerAccess('RECIPE');
-    }
     match /stores/certs/{fileName} {
       allow read: if isCrew() || hasManagerAccess('STORES');
       allow create, update: if hasManagerAccess('STORES') && request.resource.size < 20 * 1024 * 1024;
