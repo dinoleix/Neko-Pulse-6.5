@@ -14,6 +14,7 @@ export const PlatformAdminView: React.FC = () => {
   const [draft, setDraft] = useState(emptyDraft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [summaryId, setSummaryId] = useState<string | null>(null);
@@ -96,6 +97,7 @@ export const PlatformAdminView: React.FC = () => {
       setTenants(current => [result.tenant, ...current]);
       setMessage(`${result.tenant.name} is ready. The owner can now sign in using the usual Neko Pulse URL.`);
       setDraft(emptyDraft());
+      setShowCreateForm(false);
     } catch (reason: any) { setError(reason.message || 'Tenant creation failed.'); }
     finally { setSaving(false); }
   };
@@ -135,18 +137,25 @@ export const PlatformAdminView: React.FC = () => {
       </div>}
     </Card>
 
-    <div className="grid lg:grid-cols-[1.15fr_.85fr] gap-6 items-start">
-      <Card title="Create a new business">
-        <form className="space-y-5" onSubmit={create}>
-          <div className="grid md:grid-cols-2 gap-4"><Field label="Business name"><Input value={draft.name} onChange={e => update('name', e.target.value)} placeholder="Example Café" required /></Field><Field label="Tenant identifier"><Input value={draft.slug} onChange={e => update('slug', e.target.value.toLowerCase())} placeholder="example-cafe" required /></Field></div>
-          <Field label="Timezone"><Input value={draft.timezone} onChange={e => update('timezone', e.target.value)} placeholder="Asia/Kolkata" required /></Field>
-          <div className="pt-2 border-t border-[#eeeae2]"><p className="text-sm font-bold text-[#123229]">First business owner</p><p className="text-xs text-slate-500 mt-1">This is the owner inside the new business—not a platform administrator.</p></div>
-          <div className="grid md:grid-cols-2 gap-4"><Field label="Owner name"><Input value={draft.ownerName} onChange={e => update('ownerName', e.target.value)} required /></Field><Field label="Owner email"><Input type="email" value={draft.ownerEmail} onChange={e => update('ownerEmail', e.target.value)} required /></Field></div>
-          <Field label="Temporary password for a new account"><Input type="password" value={draft.ownerPassword} onChange={e => update('ownerPassword', e.target.value)} minLength={12} placeholder="At least 12 characters" /><p className="text-xs text-slate-500 mt-1">Required only if this email does not already have a Neko Pulse account. Share it securely; it is never shown again.</p></Field>
-          <Field label="Outlets"><textarea className="w-full px-4 py-3 rounded-xl bg-[#faf9f6] border border-[#e7e2d9] focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-900/10 focus:border-[#0b6b4d] min-h-28" value={draft.outletsText} onChange={e => update('outletsText', e.target.value)} placeholder={'One outlet per line\nB6 Market | Deer Park, New Delhi\nSafdarjung | Safdarjung Enclave, New Delhi'} required /><p className="text-xs text-slate-500 mt-1">Write one outlet per line. Add an address after a <code>|</code> if useful.</p></Field>
-          <Button isLoading={saving} disabled={!parsedOutlets.length}><CirclePlus className="w-4 h-4" /> Create tenant</Button>
-        </form>
-      </Card>
+    <Button type="button" className="!w-auto" aria-expanded={showCreateForm}
+      aria-controls="create-business-form" disabled={saving}
+      onClick={() => setShowCreateForm(open => !open)}>
+      <CirclePlus className="w-4 h-4" /> {showCreateForm ? 'Hide new business form' : 'Create a new business'}
+    </Button>
+    <div className={showCreateForm ? 'grid lg:grid-cols-[1.15fr_.85fr] gap-6 items-start' : undefined}>
+      <div id="create-business-form" hidden={!showCreateForm}>
+        {showCreateForm && <Card title="Create a new business">
+          <form className="space-y-5" onSubmit={create}>
+            <div className="grid md:grid-cols-2 gap-4"><Field label="Business name"><Input value={draft.name} onChange={e => update('name', e.target.value)} placeholder="Example Café" required /></Field><Field label="Tenant identifier"><Input value={draft.slug} onChange={e => update('slug', e.target.value.toLowerCase())} placeholder="example-cafe" required /></Field></div>
+            <Field label="Timezone"><Input value={draft.timezone} onChange={e => update('timezone', e.target.value)} placeholder="Asia/Kolkata" required /></Field>
+            <div className="pt-2 border-t border-[#eeeae2]"><p className="text-sm font-bold text-[#123229]">First business owner</p><p className="text-xs text-slate-500 mt-1">This is the owner inside the new business—not a platform administrator.</p></div>
+            <div className="grid md:grid-cols-2 gap-4"><Field label="Owner name"><Input value={draft.ownerName} onChange={e => update('ownerName', e.target.value)} required /></Field><Field label="Owner email"><Input type="email" value={draft.ownerEmail} onChange={e => update('ownerEmail', e.target.value)} required /></Field></div>
+            <Field label="Temporary password for a new account"><Input type="password" value={draft.ownerPassword} onChange={e => update('ownerPassword', e.target.value)} minLength={12} placeholder="At least 12 characters" /><p className="text-xs text-slate-500 mt-1">Required only if this email does not already have a Neko Pulse account. Share it securely; it is never shown again.</p></Field>
+            <Field label="Outlets"><textarea className="w-full px-4 py-3 rounded-xl bg-[#faf9f6] border border-[#e7e2d9] focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-900/10 focus:border-[#0b6b4d] min-h-28" value={draft.outletsText} onChange={e => update('outletsText', e.target.value)} placeholder={'One outlet per line\nB6 Market | Deer Park, New Delhi\nSafdarjung | Safdarjung Enclave, New Delhi'} required /><p className="text-xs text-slate-500 mt-1">Write one outlet per line. Add an address after a <code>|</code> if useful.</p></Field>
+            <Button isLoading={saving} disabled={!parsedOutlets.length}><CirclePlus className="w-4 h-4" /> Create business</Button>
+          </form>
+        </Card>}
+      </div>
       <Card title={`Businesses (${tenants.length})`}>
         {editing && <form onSubmit={saveEdit} className="mb-5 space-y-3 rounded-xl border border-[#eeeae2] p-4">
           <h3 className="font-semibold">Edit business</h3>
