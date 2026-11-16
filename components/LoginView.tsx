@@ -106,6 +106,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         role: UserRole.CREW,
         uid: uid,
         name: userProfile.crewName,
+        photoUrl: userProfile.photoUrl,
         outletId: userProfile.outletId,
         accessRole: userProfile.role,
         dbId: dbId
@@ -142,7 +143,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
             // Its capability is checked server-side, then it enters a shell
             // containing only the platform-administration workspace.
             if (await platformTenantService.capability()) {
-              onLogin({ role: UserRole.ADMIN, uid, name: userCredential.user.email || 'Platform administrator', accessRole: 'Platform Administrator', platformAdmin: true });
+              onLogin({ role: UserRole.ADMIN, uid, photoUrl: userCredential.user.photoURL, name: userCredential.user.email || 'Platform administrator', accessRole: 'Platform Administrator', platformAdmin: true });
               return;
             }
             await auth.signOut();
@@ -197,6 +198,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
           role: UserRole.ADMIN,
           uid: uid,
           name: managerData.crewName || userCredential.user.email || 'Admin',
+          photoUrl: managerData.photoUrl,
           outletId: managerData.outletId,
           accessRole: managerData.role,
           dbId: managerDoc.id

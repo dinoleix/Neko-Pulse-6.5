@@ -72,6 +72,7 @@ function App() {
         let accessRole = undefined;
         let outletId = undefined;
         let name = user.email || 'Staff';
+        let photoUrl: string | null | undefined;
         let dbId = undefined;
 
         try {
@@ -82,7 +83,7 @@ function App() {
                     // business. The trusted API verifies the allow-list; this
                     // fallback creates a platform-only shell with no tenantId.
                     if (await platformTenantService.capability()) {
-                        setCurrentUser({ role: UserRole.ADMIN, uid: user.uid, name: user.email || 'Platform administrator', accessRole: 'Platform Administrator', platformAdmin: true });
+                        setCurrentUser({ role: UserRole.ADMIN, uid: user.uid, photoUrl: user.photoURL, name: user.email || 'Platform administrator', accessRole: 'Platform Administrator', platformAdmin: true });
                         setInit(false);
                         return;
                     }
@@ -156,6 +157,7 @@ function App() {
                 accessRole = userProfile.role;
                 outletId = userProfile.outletId;
                 name = userProfile.crewName;
+                photoUrl = userProfile.photoUrl;
                 dbId = docId;
 
                 // A closed outlet cannot continue operating through a cached
@@ -205,6 +207,7 @@ function App() {
             role: determinedRole, 
             uid: user.uid, 
             name: name,
+            photoUrl,
             outletId: outletId,
             accessRole: accessRole,
             dbId: dbId

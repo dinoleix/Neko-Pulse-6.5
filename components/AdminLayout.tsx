@@ -1,4 +1,5 @@
 
+import { ProfileAvatar } from './ProfileAvatar';
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '../firebaseConfig';
 import { Button } from './SharedComponents';
@@ -111,9 +112,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
                 {currentUser.accessRole && <span className="bg-[#e6f0e9] text-[#063b2c] text-xs font-bold px-2.5 py-1 rounded-full ml-2">{currentUser.accessRole}</span>}
              </p>
           </div>
-          <Button variant="secondary" className="!w-auto" onClick={onLogout}>
-             <LogOut className="w-4 h-4 mr-2"/> Logout
-          </Button>
+          <div className="flex shrink-0 items-center gap-3">
+             <ProfileAvatar user={currentUser} />
+             <Button variant="secondary" className="!w-auto" onClick={onLogout}>
+                <LogOut className="w-4 h-4 mr-2"/> Logout
+             </Button>
+          </div>
         </header>
         {currentUser.accessRole === 'Owner' && <details className="max-w-6xl mx-auto mb-6"><summary className="cursor-pointer min-h-11 py-3 font-semibold text-[#123229]">Getting started · Setup checklist & phone installation</summary><WorkspaceWelcome key={`${currentUser.tenantId}:${currentUser.uid}`} storageKey={`neko_setup:${currentUser.tenantId}:${currentUser.uid}`} onOpenModule={module => { if (hasAccess(module)) setActiveModule(module); }} /></details>}
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -168,7 +172,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentUser, onLogout 
              <BrandMark variant="black" className="w-9 h-9"/>
              <h1 className="font-bold text-xl">{activeModule === 'DAILY_OVERVIEW' ? 'Today’s Overview' : activeModule === 'PLATFORM_ADMIN' ? 'Platform Administration' : activeModule === MODULE_IDS.LOGIN_ACTIVITY ? 'Login Activity' : activeModule === MODULE_IDS.TRAINING ? 'Training' : activeModule === MODULE_IDS.DEVELOPMENT ? 'Employee Development' : activeModule}</h1>
           </div>
-          <Button variant="secondary" className="!w-auto !text-xs" onClick={onLogout}>Logout</Button>
+          <div className="flex shrink-0 items-center gap-3">
+             <ProfileAvatar user={currentUser} />
+             <Button variant="secondary" className="!w-auto !text-xs" onClick={onLogout}>Logout</Button>
+          </div>
        </nav>
        <div className="animate-in fade-in">
           {activeModule === MODULE_IDS.ACCURACY && <OrderAdminView />}

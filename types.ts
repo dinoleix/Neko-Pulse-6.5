@@ -18,6 +18,7 @@ export interface CurrentUser {
   // access to the platform workspace, never to a tenant's operational data.
   platformAdmin?: boolean;
   name?: string;
+  photoUrl?: string | null;
   outletId?: string;
   // Specific role from the Crew table (e.g. "Manager", "HR") used for Admin Matrix checks
   accessRole?: string; 

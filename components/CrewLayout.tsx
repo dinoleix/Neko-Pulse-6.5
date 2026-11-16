@@ -1,4 +1,5 @@
 
+import { ProfileAvatar } from './ProfileAvatar';
 import React, { useState, useEffect } from 'react';
 import { CurrentUser, MODULE_IDS, AccessConfig, CrewMember, ShiftAssignment } from '../types';
 import { db, firebase } from '../firebaseConfig';
@@ -206,7 +207,10 @@ export const CrewLayout: React.FC<CrewLayoutProps> = ({ currentUser, onLogout })
              <div className="flex items-center gap-1.5 mb-1"><BrandMark className="w-10 h-8"/><p className="neko-eyebrow mb-0">Neko Pulse · {currentUser.outletId}</p></div>
              <h3 className="text-2xl font-semibold text-[#123229]">Hello, {currentUser.name?.split(' ')[0]}</h3>
           </div>
-          <button onClick={onLogout} className="text-xs font-bold text-[#063b2c] border border-[#d9d5cb] bg-[#fffdf9] px-3 py-2 rounded-xl hover:bg-[#e6f0e9]">Exit</button>
+          <div className="flex shrink-0 items-center gap-3">
+             <ProfileAvatar user={currentUser} />
+             <button onClick={onLogout} className="text-xs font-bold text-[#063b2c] border border-[#d9d5cb] bg-[#fffdf9] px-3 py-2 rounded-xl hover:bg-[#e6f0e9]">Exit</button>
+          </div>
        </div>
 
        {/* BIRTHDAY BANNER */}

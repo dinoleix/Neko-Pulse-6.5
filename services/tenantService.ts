@@ -70,6 +70,7 @@ export const tenantService = {
       membershipId: context.membershipId,
       dbId: personSnapshot.id,
       name: profile.crewName || fallbackEmail || 'Staff',
+      photoUrl: profile.photoUrl,
       outletId: profile.outletId,
       accessRole: profile.role || context.role,
     };
