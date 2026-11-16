@@ -127,6 +127,20 @@ export const employeeService = {
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || 'Could not save the relieving date.');
     },
+    savePeerManagerProfile: async (employeeId: string, collection: 'crew' | 'managers', employee: Partial<CrewMember>, photo?: string | null) => {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) throw new Error('Please sign in again.');
+        const { crewName, gender, phoneNumber, dateOfBirth, dateOfJoining } = employee;
+        const response = await fetch('/api/employee-admin', {
+            method: 'PATCH',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'editManagerProfile', employeeId, collection,
+                employee: { crewName, gender, phoneNumber, dateOfBirth, dateOfJoining }, photo }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Could not save the manager profile.');
+    },
+
     staffCreation: async (employee?: Partial<CrewMember>, employeeId?: string) => {
         const token = await auth.currentUser?.getIdToken();
         if (!token) throw new Error('Please sign in again.');

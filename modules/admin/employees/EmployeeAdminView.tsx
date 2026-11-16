@@ -12,7 +12,7 @@ import { Button, Card, Input, Select, Badge, Checkbox } from '../../../component
 // @fix: Added ShieldAlert to imports
 import { Trash2, Edit, X, Loader2, Calendar, Globe, Lock, RefreshCcw, Users, ShieldCheck, Search, UserPlus, Info, ChevronRight, MapPin, Shield, Unlock, ShieldAlert, UserX, UserCheck, Camera, Upload } from 'lucide-react';
 import { format } from 'date-fns';
-import { normalRole, staffRoleAllowed } from '../../../server/employeeCreationPolicy';
+import { isPeerManagerRole, normalRole, staffRoleAllowed } from '../../../server/employeeCreationPolicy';
 
 interface EmployeeAdminViewProps {
    currentUser: CurrentUser;
@@ -26,6 +26,9 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    const [stores, setStores] = useState<Store[]>([]);
    const [attConfig, setAttConfig] = useState<AttendanceConfig | null>(null);
    const [isLoading, setIsLoading] = useState(true);
+   const [peerProfileAccess, setPeerProfileAccess] = useState(false);
+   const [managerProfileGrant, setManagerProfileGrant] = useState(false);
+   const [isSavingProfileGrant, setIsSavingProfileGrant] = useState(false);
    const [staffCreationAllowed, setStaffCreationAllowed] = useState(false);
    const [searchQuery, setSearchQuery] = useState('');
    const [showInactive, setShowInactive] = useState(false);
@@ -82,7 +85,13 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
          setStores(sData);
          setAttConfig(configData);
          if (isTenantModeEnabled && currentUser.tenantId && !canManagePeople) {
-             employeeService.staffCreation().then(result => setStaffCreationAllowed(result.canCreateStaff === true)).catch(() => setStaffCreationAllowed(false));
+             employeeService.staffCreation().then(result => {
+                 setStaffCreationAllowed(result.canCreateStaff === true);
+                 setPeerProfileAccess(result.canEditManagerProfiles === true);
+             }).catch(() => {
+                 setStaffCreationAllowed(false);
+                 setPeerProfileAccess(false);
+             });
          }
       } catch (err) {
          console.error("Load error", err);
@@ -132,6 +141,11 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    const canEditRelievingDate = (member?: CrewMember) => canManagePeople
       || (isTenantModeEnabled && normalRole(currentUser.accessRole) === 'store manager' && !!member && canEditStaff(member));
 
+   const canEditPeerProfile = (member: CrewMember) => !canManagePeople && peerProfileAccess
+      && isPeerManagerRole(member.role) && stores.some(store => store.outletId === member.outletId);
+   const editingMember = rawList.find(member => member.id === editingId);
+   const editingPeerProfile = !!editingMember && canEditPeerProfile(editingMember);
+
    // --- ACTIONS ---
    const addRole = async () => {
       if (!canManagePeople) {
@@ -171,7 +185,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    };
 
    const startEdit = (member: CrewMember) => {
-      if (!canManagePeople && !canEditStaff(member)) {
+      if (!canManagePeople && !canEditStaff(member) && !canEditPeerProfile(member)) {
           alert('You can edit staff only in your assigned stores.');
           return;
       }
@@ -199,6 +213,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       setNewManagerPassword(''); 
       setEditingId(member.id!);
       setIsCreating(true);
+      setManagerProfileGrant(false);
       setManagerAllOutlets(false);
       setManagerOutletIds([]);
       setManagerResetPassword('');
@@ -206,6 +221,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
          setIsLoadingManagerAccess(true);
          tenantMembershipService.getManagerOutletAccess(member.authUid)
             .then(access => {
+               setManagerProfileGrant(access.canEditManagerProfiles === true);
                setManagerAllOutlets(access.allOutlets);
                setManagerOutletIds(access.outletIds.length ? access.outletIds : (member.outletId ? [member.outletId] : []));
             })
@@ -298,6 +314,19 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       });
    };
 
+   const saveManagerProfileGrant = async (enabled: boolean) => {
+      if (!editingMember?.authUid) return;
+      setIsSavingProfileGrant(true);
+      try {
+         const result = await tenantMembershipService.setManagerProfileAccess(editingMember.authUid, enabled);
+         setManagerProfileGrant(result.canEditManagerProfiles);
+      } catch (error) {
+         alert(error instanceof Error ? error.message : 'Could not update manager profile access.');
+      } finally {
+         setIsSavingProfileGrant(false);
+      }
+   };
+
    const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -305,7 +334,12 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       try {
          // Optimize: resize to max 1024px and re-encode as JPEG before upload.
          const compressed = await compressImage(file, 0.6);
-         const url = await employeeService.uploadPhoto(compressed);
+         const url = editingPeerProfile ? await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(compressed);
+         }) : await employeeService.uploadPhoto(compressed);
          setNewCrew(prev => ({ ...prev, photoUrl: url }));
       } catch (err) {
          console.error("Photo upload failed:", err);
@@ -317,7 +351,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
    };
 
    const handleSave = async (forceResetAuth = false) => {
-      if (!canManagePeople && !(staffCreationAllowed && activeTab === 'CREW' && !forceResetAuth)) {
+      if (!canManagePeople && !editingPeerProfile && !(staffCreationAllowed && activeTab === 'CREW' && !forceResetAuth)) {
          alert('Only an owner or administrator can create or edit team accounts.');
          return;
       }
@@ -335,7 +369,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
           }
       }
 
-      if (activeTab === 'CREW' && (!newCrew.crewCode || newCrew.crewCode.length < 4)) {
+      if (!editingPeerProfile && activeTab === 'CREW' && (!newCrew.crewCode || newCrew.crewCode.length < 4)) {
           alert("Crew Code must be at least 4 digits for staff.");
           return;
       }
@@ -343,7 +377,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       // Codes must be unique across crew AND managers: the kiosk resolves the
       // first match, and reusing a code would silently link the new profile to
       // the existing account's auth user (the "recover" fallback below succeeds).
-      if (newCrew.crewCode) {
+      if (!editingPeerProfile && newCrew.crewCode) {
           const codeTaken = [...crew, ...managers].some(m =>
               m.id !== editingId && m.crewCode && m.crewCode === newCrew.crewCode);
           if (codeTaken) {
@@ -360,6 +394,17 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       setIsSavingCrew(true);
 
       try {
+         if (editingPeerProfile && editingId && editingMember) {
+             const url = newCrew.photoUrl || '';
+             const photo = url.startsWith('data:image/jpeg;base64,') ? url.split(',')[1]
+                 : !url && editingMember.photoUrl ? null : undefined;
+             const collection = activeTab === 'CREW' ? 'crew' : 'managers';
+             await employeeService.savePeerManagerProfile(editingId, collection, newCrew, photo);
+             if (activeTab === 'CREW') setCrew(await employeeService.getAllCrew());
+             else setManagers(await employeeService.getAllManagers());
+             cancelEdit();
+             return;
+         }
          const originalCrew = crew.find(member => member.id === editingId);
          if (isTenantModeEnabled && activeTab === 'CREW' && editingId && originalCrew && canEditRelievingDate(originalCrew)
              && (newCrew.dateOfLeaving || '') !== (originalCrew.dateOfLeaving || '')) {
@@ -580,7 +625,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                      const accentColor = activeTab === 'CREW' ? 'emerald' : 'indigo';
                      const isSelf = c.id === currentUser.dbId || c.authUid === currentUser.uid;
                      const isProtected = isAccountProtected(c);
-                     const canMod = (canManagePeople && canModifyAccount(c)) || canEditStaff(c);
+                     const canMod = (canManagePeople && canModifyAccount(c)) || canEditStaff(c) || canEditPeerProfile(c);
                      
                      return (
                         <div key={c.id} className={`bg-white p-4 rounded-3xl border shadow-sm flex items-center gap-4 group transition-all hover:shadow-md ${editingId === c.id ? `border-${accentColor}-500 ring-4 ring-${accentColor}-50` : isProtected ? 'border-amber-100 bg-amber-50/10' : 'border-slate-100'}`}>
@@ -714,7 +759,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                      </div>
 
                      {/* GROUP 2: Login & Role */}
-                     <div className="p-5 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                     {!editingPeerProfile && <div className="p-5 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
                         <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Lock className="w-3 h-3"/> Authentication & Access</h4>
                         
                         <div className="grid grid-cols-2 gap-4">
@@ -792,6 +837,13 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                                        {isLoadingManagerAccess ? 'Loading access…' : isSavingManagerAccess ? 'Saving access…' : 'Save store access'}
                                     </button>
                                  </div>
+                                 {normalRole(editingMember?.role) === 'store manager' && editingMember?.authUid && editingMember.authUid !== currentUser.uid && (
+                                    <label className="flex items-center gap-3 rounded-xl border border-indigo-100 bg-white p-3 text-xs font-semibold">
+                                       <Checkbox checked={managerProfileGrant} disabled={isLoadingManagerAccess || isSavingProfileGrant}
+                                          onChange={event => void saveManagerProfileGrant(event.target.checked)} />
+                                       Allow editing Store Manager and PR Manager profiles
+                                    </label>
+                                 )}
                                  <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4 space-y-3">
                                     <div>
                                        <p className="text-xs font-bold text-amber-950">Reset manager password</p>
@@ -811,7 +863,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                            <span className="text-xs font-bold text-slate-600">Mobile Employee (Any Store)</span>
                            <Checkbox disabled={!canManagePeople} checked={newCrew.isMobile || false} onChange={e => setNewCrew({...newCrew, isMobile: e.target.checked})} />
                         </div>
-                     </div>
+                     </div>}
 
                      {/* GROUP 3: Employment */}
                      <div>
@@ -829,7 +881,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
                      </div>
 
                      <div className="flex flex-col gap-3 pt-4">
-                        <Button onClick={() => handleSave(false)} isLoading={isSavingCrew} className="!py-4 shadow-xl">
+                        <Button onClick={() => handleSave(false)} disabled={isUploadingPhoto} isLoading={isSavingCrew} className="!py-4 shadow-xl">
                            {editingId ? 'Save Changes' : `Add ${activeTab === 'CREW' ? 'Staff' : 'Manager'}`}
                         </Button>
                         

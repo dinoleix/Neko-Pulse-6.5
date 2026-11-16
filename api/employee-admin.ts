@@ -1,7 +1,9 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { randomUUID } from 'node:crypto';
+import { getDownloadURL, getStorage } from 'firebase-admin/storage';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { canCreateOutletStaff, normalRole, staffCreationPayload, staffEditPayload, staffRoleAllowed } from '../server/employeeCreationPolicy.js';
+import { canCreateOutletStaff, isPeerManagerRole, managerProfilePatch, normalRole, staffCreationPayload, staffEditPayload, staffRoleAllowed } from '../server/employeeCreationPolicy.js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Cache-Control', 'no-store');
@@ -81,7 +83,72 @@ export default async function handler(req: any, res: any) {
       db.collection('tenantSettings').doc(member.tenantId).collection('config').doc('accessConfig').get(),
     ]);
     if (!canCreateOutletStaff(member, profile.data(), access.data())) return res.status(403).json({ error: 'Employee access must be granted by the owner.' });
-    if (req.method === 'GET') return res.json({ canCreateStaff: true, canEditStaff: true });
+    const canEditManagerProfiles = member.canEditManagerProfiles === true && normalRole(profile.get('role')) === 'store manager';
+    if (req.method === 'GET') return res.json({ canCreateStaff: true, canEditStaff: true, canEditManagerProfiles });
+    if (req.method === 'PATCH' && req.body?.action === 'editManagerProfile') {
+      if (!canEditManagerProfiles) return res.status(403).json({ error: 'Manager profile editing must be granted by your owner.' });
+      const { employeeId, collection, employee, photo } = req.body;
+      if (typeof employeeId !== 'string' || !employeeId || employeeId.length > 150 || employeeId.includes('/')
+        || ['.', '..'].includes(employeeId) || !['crew', 'managers'].includes(collection)) {
+        return res.status(400).json({ error: 'Select a valid manager profile.' });
+      }
+      let patch;
+      try { patch = managerProfilePatch(employee); }
+      catch (error) { return res.status(400).json({ error: (error as Error).message }); }
+      let jpeg: Buffer | undefined;
+      if (photo !== undefined && photo !== null) {
+        if (typeof photo !== 'string' || photo.length > 1_400_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(photo)) {
+          return res.status(400).json({ error: 'Upload a JPEG photo under 1 MB.' });
+        }
+        jpeg = Buffer.from(photo, 'base64');
+        if (jpeg.length > 1_048_576 || jpeg.length < 4 || jpeg.readUInt16BE(0) !== 0xffd8
+          || jpeg.readUInt16BE(jpeg.length - 2) !== 0xffd9) {
+          return res.status(400).json({ error: 'Upload a JPEG photo under 1 MB.' });
+        }
+      }
+
+      let upload: Promise<string> | undefined;
+      const saved = await db.runTransaction(async transaction => {
+        const targetRef = db.collection(collection).doc(employeeId);
+        const [editorSnap, profileSnap, accessSnap, tenantSnap, targetSnap] = await Promise.all([
+          transaction.get(memberships.docs[0].ref), transaction.get(profile.ref), transaction.get(access.ref),
+          transaction.get(db.collection('tenants').doc(member.tenantId)), transaction.get(targetRef),
+        ]);
+        const editor = editorSnap.data();
+        const target = targetSnap.data();
+        if (!tenantSnap.exists || tenantSnap.get('accessBlocked') === true || editor?.uid !== actor.uid
+          || editor.tenantId !== member.tenantId || (editor.personId || actor.uid) !== profile.id
+          || editor.canEditManagerProfiles !== true || normalRole(profileSnap.get('role')) !== 'store manager'
+          || !canCreateOutletStaff(editor, profileSnap.data(), accessSnap.data())
+          || !target || target.tenantId !== editor.tenantId || !isPeerManagerRole(target.role)
+          || (editor.allOutlets !== true && !editor.outletIds?.includes(target.outletId))) return false;
+
+        if (target.authUid) {
+          const linkedTarget = await transaction.get(db.collection('tenantMemberships').doc(`${editor.tenantId}_${target.authUid}`));
+          if (['OWNER', 'ADMINISTRATOR'].includes(linkedTarget.get('personType'))) return false;
+        }
+
+        if (jpeg && !upload) {
+          const bucketName = process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET;
+          if (!bucketName) throw new Error('Employee photo storage is not configured.');
+          const file = getStorage().bucket(bucketName).file(`employees/${member.tenantId}/${randomUUID()}_photo.jpg`);
+          upload = file.save(jpeg, { resumable: false, metadata: {
+            contentType: 'image/jpeg', metadata: { firebaseStorageDownloadTokens: randomUUID() },
+          } }).then(() => getDownloadURL(file));
+        }
+        const photoUrl = upload ? await upload : photo === null ? null : undefined;
+        transaction.update(targetRef, {
+          ...patch, ...(photoUrl !== undefined ? { photoUrl } : {}),
+          updatedBy: actor.uid, updatedAt: FieldValue.serverTimestamp(),
+        });
+        if (collection === 'crew') {
+          transaction.set(db.collection('tenantSettings').doc(editor.tenantId).collection('crewDirectory').doc(employeeId),
+            { crewName: patch.crewName, birthMMDD: patch.birthMMDD }, { merge: true });
+        }
+        return true;
+      });
+      return saved ? res.json({ id: employeeId }) : res.status(403).json({ error: 'You cannot edit this manager profile.' });
+    }
     const [stores, roles] = await Promise.all([
       db.collection('stores').where('tenantId', '==', member.tenantId).get(),
       db.collection('tenantSettings').doc(member.tenantId).collection('roles').get(),

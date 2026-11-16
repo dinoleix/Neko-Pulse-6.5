@@ -48,3 +48,28 @@ export function staffEditPayload(input: any, existing: any, targetMember: any, m
   const { crewName, role, outletId, email, phoneNumber, photoUrl, gender, dateOfBirth, birthMMDD, dateOfJoining } = validated;
   return { crewName, role, outletId, email, phoneNumber, photoUrl, gender, dateOfBirth, birthMMDD, dateOfJoining };
 }
+
+export const isPeerManagerRole = (role: unknown) => ['store manager', 'pr manager'].includes(normalRole(role));
+
+export function managerProfilePatch(input: any) {
+  const field = (key: string, limit: number) => {
+    const value = input?.[key];
+    if (typeof value !== 'string' && value != null) throw new Error('Invalid profile details.');
+    const trimmed = value?.trim() || '';
+    if (trimmed.length > limit) throw new Error('One of the profile fields is too long.');
+    return trimmed || null;
+  };
+  const date = (key: string) => {
+    const value = field(key, 10);
+    if (value && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value))
+      || new Date(value).toISOString().slice(0, 10) !== value)) throw new Error('Enter a valid profile date.');
+    return value;
+  };
+  const crewName = field('crewName', 150);
+  if (!crewName) throw new Error('Enter a name.');
+  const gender = field('gender', 12);
+  if (gender && !['Male', 'Female', 'Others'].includes(gender)) throw new Error('Select a valid gender.');
+  const dateOfBirth = date('dateOfBirth');
+  return { crewName, gender, phoneNumber: field('phoneNumber', 50), dateOfBirth,
+    birthMMDD: dateOfBirth?.slice(5) || null, dateOfJoining: date('dateOfJoining') };
+}

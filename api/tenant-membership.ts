@@ -1,5 +1,6 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { normalRole } from '../server/employeeCreationPolicy.js';
 import { getAuth } from 'firebase-admin/auth';
 
 const getAdmin = () => {
@@ -59,8 +60,29 @@ export default async function handler(req: any, res: any) {
       return send(res, 200, {
         uid: targetUid,
         allOutlets: target.allOutlets === true,
+        canEditManagerProfiles: target.canEditManagerProfiles === true,
         outletIds: Array.isArray(target.outletIds) ? target.outletIds : [],
       });
+    }
+
+    if (req.body?.action === 'setManagerProfileAccess') {
+      const { enabled } = req.body;
+      if (typeof enabled !== 'boolean') return send(res, 400, { error: 'Invalid profile permission.' });
+      const updated = await db.runTransaction(async transaction => {
+        const [ownerSnap, managerSnap] = await Promise.all([
+          transaction.get(actorMemberships.docs[0].ref), transaction.get(targetRef),
+        ]);
+        const manager = managerSnap.data();
+        if (!isTenantAdministrator(ownerSnap.data()) || ownerSnap.get('tenantId') !== tenantId
+          || manager?.tenantId !== tenantId || manager.uid !== targetUid
+          || manager.personType !== 'MANAGER' || manager.active !== true) return false;
+        const profile = await transaction.get(db.collection('managers').doc(manager.personId || targetUid));
+        if (profile.get('tenantId') !== tenantId || (enabled && normalRole(profile.get('role')) !== 'store manager')) return false;
+        transaction.update(targetRef, { canEditManagerProfiles: enabled, updatedAt: FieldValue.serverTimestamp() });
+        return true;
+      });
+      return updated ? send(res, 200, { canEditManagerProfiles: enabled })
+        : send(res, 403, { error: 'This permission can only be granted to a store manager in your business.' });
     }
 
     if (req.body?.action === 'resetPassword') {

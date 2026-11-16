@@ -3,6 +3,7 @@ import { auth } from '../firebaseConfig';
 export interface ManagerOutletAccess {
   uid: string;
   allOutlets: boolean;
+  canEditManagerProfiles?: boolean;
   outletIds: string[];
 }
 
@@ -28,6 +29,13 @@ export const tenantMembershipService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'setOutletAccess', uid, allOutlets, outletIds }),
     }) as Promise<ManagerOutletAccess>,
+
+  setManagerProfileAccess: (uid: string, enabled: boolean) =>
+    authorisedRequest('/api/tenant-membership', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'setManagerProfileAccess', uid, enabled }),
+    }) as Promise<{ canEditManagerProfiles: boolean }>,
 
   resetManagerPassword: (uid: string, password: string) =>
     authorisedRequest('/api/tenant-membership', {
