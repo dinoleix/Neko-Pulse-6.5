@@ -82,11 +82,16 @@ export default async function handler(req: any, res: any) {
       db.collection('managers').doc(member.personId || actor.uid).get(),
       db.collection('tenantSettings').doc(member.tenantId).collection('config').doc('accessConfig').get(),
     ]);
-    if (!canCreateOutletStaff(member, profile.data(), access.data())) return res.status(403).json({ error: 'Employee access must be granted by the owner.' });
+    const canManageStaff = canCreateOutletStaff(member, profile.data(), access.data());
+    const editProfile = req.method === 'PATCH' && req.body?.action === 'editManagerProfile';
+    const isTenantAdmin = ['OWNER', 'ADMINISTRATOR'].includes(member.personType);
+    if (!canManageStaff && !(editProfile && isTenantAdmin)) {
+      return res.status(403).json({ error: 'Employee access must be granted by the owner.' });
+    }
     const canEditManagerProfiles = member.canEditManagerProfiles === true && normalRole(profile.get('role')) === 'store manager';
     if (req.method === 'GET') return res.json({ canCreateStaff: true, canEditStaff: true, canEditManagerProfiles });
-    if (req.method === 'PATCH' && req.body?.action === 'editManagerProfile') {
-      if (!canEditManagerProfiles) return res.status(403).json({ error: 'Manager profile editing must be granted by your owner.' });
+    if (editProfile) {
+      if (!isTenantAdmin && !canEditManagerProfiles) return res.status(403).json({ error: 'Manager profile editing must be granted by your owner.' });
       const { employeeId, collection, employee, photo } = req.body;
       if (typeof employeeId !== 'string' || !employeeId || employeeId.length > 150 || employeeId.includes('/')
         || ['.', '..'].includes(employeeId) || !['crew', 'managers'].includes(collection)) {
@@ -117,15 +122,21 @@ export default async function handler(req: any, res: any) {
         const editor = editorSnap.data();
         const target = targetSnap.data();
         if (!tenantSnap.exists || tenantSnap.get('accessBlocked') === true || editor?.uid !== actor.uid
-          || editor.tenantId !== member.tenantId || (editor.personId || actor.uid) !== profile.id
+          || editor.active !== true || editor.tenantId !== member.tenantId || !target || target.tenantId !== editor.tenantId) return false;
+
+        const tenantAdmin = ['OWNER', 'ADMINISTRATOR'].includes(editor.personType);
+        if (!tenantAdmin && ((editor.personId || actor.uid) !== profile.id
           || editor.canEditManagerProfiles !== true || normalRole(profileSnap.get('role')) !== 'store manager'
           || !canCreateOutletStaff(editor, profileSnap.data(), accessSnap.data())
-          || !target || target.tenantId !== editor.tenantId || !isPeerManagerRole(target.role)
-          || (editor.allOutlets !== true && !editor.outletIds?.includes(target.outletId))) return false;
+          || !isPeerManagerRole(target.role)
+          || (editor.allOutlets !== true && !editor.outletIds?.includes(target.outletId)))) return false;
 
-        if (target.authUid) {
-          const linkedTarget = await transaction.get(db.collection('tenantMemberships').doc(`${editor.tenantId}_${target.authUid}`));
-          if (['OWNER', 'ADMINISTRATOR'].includes(linkedTarget.get('personType'))) return false;
+        if (target.authUid !== actor.uid && employeeId !== editor.personId) {
+          const linkedTarget = target.authUid
+            ? await transaction.get(db.collection('tenantMemberships').doc(`${editor.tenantId}_${target.authUid}`))
+            : undefined;
+          if (['OWNER', 'ADMINISTRATOR'].includes(linkedTarget?.get('personType'))
+            || ['owner', 'administrator', 'admin', 'super admin', 'system admin'].includes(normalRole(target.role))) return false;
         }
 
         if (jpeg && !upload) {
@@ -137,17 +148,18 @@ export default async function handler(req: any, res: any) {
           } }).then(() => getDownloadURL(file));
         }
         const photoUrl = upload ? await upload : photo === null ? null : undefined;
+        const savedProfile = { ...patch, ...(photoUrl !== undefined ? { photoUrl } : {}) };
         transaction.update(targetRef, {
-          ...patch, ...(photoUrl !== undefined ? { photoUrl } : {}),
+          ...savedProfile,
           updatedBy: actor.uid, updatedAt: FieldValue.serverTimestamp(),
         });
         if (collection === 'crew') {
           transaction.set(db.collection('tenantSettings').doc(editor.tenantId).collection('crewDirectory').doc(employeeId),
             { crewName: patch.crewName, birthMMDD: patch.birthMMDD }, { merge: true });
         }
-        return true;
+        return savedProfile;
       });
-      return saved ? res.json({ id: employeeId }) : res.status(403).json({ error: 'You cannot edit this manager profile.' });
+      return saved ? res.json({ id: employeeId, profile: saved }) : res.status(403).json({ error: 'You cannot edit this manager profile.' });
     }
     const [stores, roles] = await Promise.all([
       db.collection('stores').where('tenantId', '==', member.tenantId).get(),

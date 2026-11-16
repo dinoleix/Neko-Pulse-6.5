@@ -138,7 +138,8 @@ export const employeeService = {
                 employee: { crewName, gender, phoneNumber, dateOfBirth, dateOfJoining }, photo }),
         });
         const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || 'Could not save the manager profile.');
+        if (!response.ok || !result.profile) throw new Error(result.error || 'Could not confirm the manager profile save.');
+        return result.profile as Partial<CrewMember>;
     },
 
     staffCreation: async (employee?: Partial<CrewMember>, employeeId?: string) => {

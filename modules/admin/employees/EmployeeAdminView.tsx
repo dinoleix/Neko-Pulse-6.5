@@ -334,7 +334,7 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       try {
          // Optimize: resize to max 1024px and re-encode as JPEG before upload.
          const compressed = await compressImage(file, 0.6);
-         const url = editingPeerProfile ? await new Promise<string>((resolve, reject) => {
+         const url = (editingPeerProfile || (isTenantModeEnabled && canManagePeople && editingId)) ? await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => resolve(String(reader.result));
             reader.onerror = () => reject(reader.error);
@@ -394,14 +394,18 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
       setIsSavingCrew(true);
 
       try {
-         if (editingPeerProfile && editingId && editingMember) {
+         const accountFields = ['role', 'outletId', 'crewCode', 'email', 'isMobile', 'dateOfLeaving', 'leaveBalanceOverride', 'leaveBalanceOverrideDate'] as const;
+         const ownerProfileOnly = isTenantModeEnabled && canManagePeople && editingMember && !forceResetAuth
+             && accountFields.every(key => String(newCrew[key] ?? (key === 'isMobile' ? false : ''))
+                 === String(editingMember[key] ?? (key === 'isMobile' ? false : '')));
+         if ((editingPeerProfile || ownerProfileOnly) && editingId && editingMember) {
              const url = newCrew.photoUrl || '';
              const photo = url.startsWith('data:image/jpeg;base64,') ? url.split(',')[1]
                  : !url && editingMember.photoUrl ? null : undefined;
              const collection = activeTab === 'CREW' ? 'crew' : 'managers';
-             await employeeService.savePeerManagerProfile(editingId, collection, newCrew, photo);
-             if (activeTab === 'CREW') setCrew(await employeeService.getAllCrew());
-             else setManagers(await employeeService.getAllManagers());
+             const profile = await employeeService.savePeerManagerProfile(editingId, collection, newCrew, photo);
+             const updateProfiles = collection === 'crew' ? setCrew : setManagers;
+             updateProfiles(current => current.map(member => member.id === editingId ? { ...member, ...profile } : member));
              cancelEdit();
              return;
          }
@@ -485,12 +489,16 @@ export const EmployeeAdminView: React.FC<EmployeeAdminViewProps> = ({ currentUse
              ? Number(leaveVal) 
              : firebase.firestore.FieldValue.delete();
 
+         const draftPhoto = newCrew.photoUrl || '';
+         const photoUrl = draftPhoto.startsWith('data:image/jpeg;base64,')
+             ? await employeeService.uploadPhoto(await (await fetch(draftPhoto)).blob())
+             : draftPhoto;
          const payload = {
             crewName: newCrew.crewName,
             crewCode: newCrew.crewCode || '',
             email: newCrew.email || null,
             phoneNumber: newCrew.phoneNumber || null,
-            photoUrl: newCrew.photoUrl || null,
+            photoUrl: photoUrl || null,
             role: newCrew.role,
             gender: newCrew.gender || null,
             outletId: newCrew.outletId,
